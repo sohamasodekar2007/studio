@@ -24,12 +24,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge'; // Import Badge
 
 // --- Profile Form Schema ---
-// Allow updating name, phone, and class. Model/expiry are read-only here.
+// Allow updating name, phone. Class, model, expiry are read-only here.
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   phone: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }),
-  // Assuming class is editable, add validation if needed (e.g., using academicStatuses enum)
-  // class: z.enum(academicStatuses), // Example if making class editable via form
+  // class is not editable here
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
@@ -38,6 +37,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [fullUserProfile, setFullUserProfile] = useState<UserProfile | null>(null); // State to hold the full profile
 
   // --- Profile Form Initialization ---
   const profileForm = useForm<ProfileFormValues>({
@@ -45,63 +45,86 @@ export default function SettingsPage() {
     defaultValues: {
       name: "",
       phone: "",
-      // class: undefined, // Initialize if class becomes editable
     },
   });
 
+  // Effect to fetch the full user profile from local storage or JSON
+  // This ensures we have all fields needed for saving, not just the ones in the auth context
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/auth/login');
-      toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
-    } else if (user) {
-      // Populate profile form once user data is available
-      profileForm.reset({
-        name: user.displayName || "",
-        phone: user.phone || "",
-        // class: user.className || undefined, // Populate if class becomes editable
-      });
+    const fetchFullProfile = async () => {
+        if (user && user.email) {
+            try {
+                // Attempt to get from local storage first (might be slightly stale but faster)
+                const storedUserJson = localStorage.getItem('loggedInUser');
+                if (storedUserJson) {
+                    const parsedProfile = JSON.parse(storedUserJson);
+                    if (parsedProfile.email === user.email) {
+                         setFullUserProfile(parsedProfile);
+                         // Populate form with data from the full profile
+                         profileForm.reset({
+                            name: parsedProfile.name || "",
+                            phone: parsedProfile.phone || "",
+                         });
+                         return; // Exit if found in local storage
+                    }
+                }
+                // If not in local storage or email mismatch, fetch from server action
+                const profile = await findUserByEmail(user.email);
+                setFullUserProfile(profile);
+                 // Populate form with data from the fetched profile
+                 profileForm.reset({
+                    name: profile?.name || "",
+                    phone: profile?.phone || "",
+                 });
+            } catch (error) {
+                console.error("Failed to fetch full user profile:", error);
+                toast({ title: 'Error', description: 'Could not load full profile details.', variant: 'destructive' });
+            }
+        }
+    };
+
+    if (!loading && user) {
+        fetchFullProfile();
+    } else if (!loading && !user) {
+        router.push('/auth/login');
+        toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
     }
-  }, [user, loading, profileForm, router, toast]);
+     // Add profileForm to dependency array to reset form when profile data changes
+  }, [user, loading, router, toast, profileForm]);
+
 
   // --- Profile Update Logic ---
   const onProfileSubmit = async (data: ProfileFormValues) => {
-    if (!user || !user.id || !user.email) { // Need ID and email
-      toast({ title: 'Error', description: 'User session is invalid. Please log in again.', variant: 'destructive' });
+    if (!user || !fullUserProfile || !fullUserProfile.id || !fullUserProfile.email) { // Check fullUserProfile now
+      toast({ title: 'Error', description: 'User session or profile data is invalid. Please log in again.', variant: 'destructive' });
       await logout(); // Log out user if session is bad
       router.push('/auth/login');
       return;
     }
     setIsLoadingProfile(true);
     try {
-      // 1. Find the *full* existing user profile from JSON to get all fields
-      //    (needed for fields not included in the form like model, expiry, etc.)
-      //    We use findUserByEmail as we don't need password check here.
-      const existingUserProfile = await findUserByEmail(user.email);
 
-      if (!existingUserProfile) {
-        throw new Error("Could not find existing user data to update. Please log in again.");
-      }
+      // Construct the updated profile object using existing full profile and form data
+       const updatedProfile: UserProfile = {
+         ...fullUserProfile, // Start with the existing full profile
+         name: data.name,    // Update name from form
+         phone: data.phone, // Update phone from form
+         // Keep other fields like email, class, model, expiry, password, createdAt etc. from fullUserProfile
+       };
 
-      // 2. Update the user data in users.json via Server Action
-      //    Pass the updated fields from the form and existing fields from the profile.
-      const updateResult = await saveUserToJson(
-        existingUserProfile.id, // Use the ID from the found profile
-        data.name, // Updated name from form
-        existingUserProfile.email!, // Keep existing email
-        data.phone, // Updated phone from form
-        existingUserProfile.class!, // Keep existing class (assuming not editable here)
-        existingUserProfile.model, // Keep existing model
-        existingUserProfile.expiry_date // Keep existing expiry date
-      );
+
+      // Save the *entire* updated UserProfile object via Server Action
+      const updateResult = await saveUserToJson(updatedProfile);
 
       if (!updateResult.success) {
         throw new Error(updateResult.message || "Failed to save profile updates locally.");
       }
 
-      // 3. **Crucially, update the Auth Context state**
-      // Re-login simulation fetches the *updated* full profile from JSON
-      await login(user.email, localStorage.getItem('simulatedPassword') || undefined); // Re-fetch updated data via login simulation
-      // Note: Storing password in localStorage is highly insecure, used only for this specific simulation flow.
+      // **Crucially, update the Auth Context state** by re-simulating login
+      // This fetches the *updated* full profile from JSON via findUserByCredentials
+      // It assumes the password is correct (or stored/retrieved securely if implemented)
+      // For this simulation, we retrieve the stored password from local storage (INSECURE)
+      await login(fullUserProfile.email, localStorage.getItem('simulatedPassword') || undefined);
 
       toast({
         title: "Profile Updated",
@@ -145,7 +168,7 @@ export default function SettingsPage() {
 
 
   // --- Loading State ---
-  if (loading) {
+  if (loading || (!user && !loading)) { // Show skeleton while auth loading or if user is null initially
     return (
       <div className="space-y-6 max-w-3xl mx-auto">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -186,11 +209,12 @@ export default function SettingsPage() {
     );
   }
 
-  // --- Not Logged In State ---
-  if (!user) {
+  // --- Not Logged In State (Should be handled by redirect in useEffect) ---
+   if (!user) {
     // This should ideally be handled by the useEffect redirect, but acts as a fallback
-    return <div className="text-center p-8">Please log in to view settings. Redirecting...</div>;
-  }
+    return <div className="text-center p-8">Redirecting to login...</div>;
+   }
+
 
   // --- Logged In View ---
   return (
@@ -208,11 +232,10 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
+                   {/* Use unique ID or email for avatar generation */}
                    <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
-                  <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
+                   <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
                 </Avatar>
-                {/* Picture change functionality disabled */}
-                 {/* <Button type="button" variant="outline" disabled>Change Picture (Coming Soon)</Button> */}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
@@ -248,9 +271,8 @@ export default function SettingsPage() {
                 </div>
                  <div className="space-y-2">
                   <Label htmlFor="class">Academic Status</Label>
+                   {/* Display class from the auth context user */}
                    <Input id="class" value={user.className || "N/A"} disabled />
-                   {/* If class becomes editable, replace Input with a Select component */}
-                   {/* <Select disabled>...</Select> */}
                    <p className="text-xs text-muted-foreground">Contact support to change.</p>
                 </div>
               </div>
@@ -339,7 +361,7 @@ export default function SettingsPage() {
             <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
               <span>In-App Notifications</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                Show notifications within the ExamPrep Hub platform.
+                Show notifications within the STUDY SPHERE platform.
               </span>
             </Label>
             <Switch id="in-app-notifications" defaultChecked disabled />

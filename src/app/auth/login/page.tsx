@@ -4,16 +4,14 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-// Remove Firebase Auth import
-// import { signInWithEmailAndPassword } from 'firebase/auth';
-// import { auth } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from 'next/navigation';
+// Removed useRouter import as redirection is now handled in AuthContext
+// import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 
@@ -25,7 +23,8 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter();
+  // Removed router initialization
+  // const router = useRouter();
   const { toast } = useToast();
   const { login } = useAuth(); // Get the login function from context
   const [isLoading, setIsLoading] = useState(false);
@@ -42,12 +41,14 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       // Call the simulated login function from context
+      // Redirection will be handled within the login function in AuthContext
       await login(data.email, data.password);
       toast({
         title: "Login Successful",
         description: "Welcome back!",
       });
-      router.push('/'); // Redirect to dashboard after successful login
+      // Removed redirection from here
+      // router.push('/'); // Redirect to dashboard after successful login
     } catch (error: any) {
       console.error("Login failed (simulated):", error);
       toast({
@@ -69,7 +70,7 @@ export default function LoginPage() {
             <GraduationCap className="h-10 w-10 text-primary" />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back!</CardTitle>
-          <CardDescription>Enter your email below to access your ExamPrep Hub account.</CardDescription>
+          <CardDescription>Enter your email below to access your STUDY SPHERE account.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>

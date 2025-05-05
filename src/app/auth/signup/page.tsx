@@ -5,9 +5,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-// Remove Firebase imports
-// import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-// import { auth } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,10 +12,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GraduationCap, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from 'next/navigation';
+// Remove useRouter import as redirection is handled in AuthContext
+// import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
-import { saveUserToJson } from '@/actions/user-actions'; // Corrected import path
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 // Updated schema with phone number
@@ -37,7 +34,8 @@ const signupSchema = z.object({
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
-  const router = useRouter();
+  // Removed router initialization
+  // const router = useRouter();
   const { toast } = useToast();
   const { signUpLocally } = useAuth(); // Get simulated signup function from context
   const [isLoading, setIsLoading] = useState(false);
@@ -57,51 +55,34 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormValues) => {
     setIsLoading(true);
     try {
-      // Generate a simple UID (e.g., based on email and timestamp) - NOT cryptographically secure
-      const simpleUid = `local_${data.email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+        // Prepare the user data object from the form values
+        // Note: We don't include `id` or `createdAt` here, those are handled by the action/context.
+        // We also don't need `referral` or `model`/`expiry_date` initially, they default or are set later.
+        const newUserFormData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null } = {
+            name: data.name,
+            email: data.email,
+            class: data.academicStatus, // Map form field to UserProfile field
+            phone: data.phoneNumber,
+        };
 
-      // 1. Save data to JSON file via Server Action
-      // WARNING: Storing data this way is insecure and not suitable for production.
-      const saveResult = await saveUserToJson(
-        simpleUid,
-        data.name,
-        data.email,
-        data.academicStatus,
-        data.phoneNumber
-        // Passwords are NOT saved to JSON for minimal security Theater
-      );
+        // Call the simulated signup function from context, passing the prepared data and password
+        // Redirection will be handled within the signUpLocally function in AuthContext
+        await signUpLocally(newUserFormData, data.password);
 
-      if (!saveResult.success) {
-        throw new Error(saveResult.message || "Could not save user details locally.");
-      }
-
-      console.log(`User data for ${data.email} saved to users.json`);
-
-      // 2. Update local auth state using the function from AuthContext
-      // Create a UserProfile object to pass to signUpLocally
-      const newUserProfile: UserProfile = {
-         uid: simpleUid,
-         name: data.name,
-         email: data.email,
-         phoneNumber: data.phoneNumber,
-         academicStatus: data.academicStatus,
-         createdAt: new Date().toISOString(), // Use current date
-      };
-      await signUpLocally(newUserProfile);
-
-      toast({
-        title: "Account Created (Locally)",
-        description: "You have successfully signed up!",
-      });
-      router.push('/'); // Redirect to dashboard after successful signup
+        toast({
+            title: "Account Created (Locally)",
+            description: "You have successfully signed up!",
+        });
+        // Removed redirection from here
+        // router.push('/'); // Redirect to dashboard after successful signup
 
     } catch (error: any) {
-      console.error("Signup failed (local simulation):", error);
-       toast({
-        variant: "destructive",
-        title: "Sign Up Failed",
-        description: error.message || "An unexpected error occurred. Please try again.",
-      });
+        console.error("Signup failed (local simulation):", error);
+        toast({
+            variant: "destructive",
+            title: "Sign Up Failed",
+            description: error.message || "An unexpected error occurred. Please try again.",
+        });
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +95,7 @@ export default function SignupPage() {
           <div className="flex justify-center mb-4">
             <GraduationCap className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Join ExamPrep Hub</CardTitle>
+          <CardTitle className="text-2xl font-bold">Join STUDY SPHERE</CardTitle>
           <CardDescription>Create your account to start practicing.</CardDescription>
         </CardHeader>
          <Form {...form}>

@@ -27,10 +27,25 @@ export async function readUsers(): Promise<UserProfile[]> {
     if (error.code === 'ENOENT') {
       console.warn('users.json not found. Creating an empty file.');
        try {
-           await fs.writeFile(usersFilePath, '[]', 'utf-8');
-           return [];
+           // Define default admin user structure
+           const defaultAdminUser: UserProfile = {
+               id: `local_admin_edunexus_com_${Date.now()}`, // Generate a somewhat unique ID
+               email: 'admin@edunexus.com',
+               password: 'Soham@1234', // Store plain text password (INSECURE)
+               name: 'Admin User',
+               phone: '1234567890',
+               referral: '',
+               class: 'Dropper', // Or null/default
+               model: 'combo', // Give admin highest access
+               expiry_date: '2099-12-31', // Long expiry
+               createdAt: new Date().toISOString()
+           };
+           // Write the file with the admin user in an array
+           await fs.writeFile(usersFilePath, JSON.stringify([defaultAdminUser], null, 2), 'utf-8');
+           console.log('Created users.json with default admin user.');
+           return [defaultAdminUser]; // Return the newly created admin user array
        } catch (writeError) {
-            console.error('Failed to create users.json:', writeError);
+            console.error('Failed to create users.json with admin user:', writeError);
             return [];
        }
     }
@@ -59,31 +74,31 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
  * Saves or updates user data in the local users.json file.
  * If a user with the same ID exists, it updates; otherwise, it adds.
  * WARNING: This method is insecure and not suitable for production environments.
- * It now stores the plain text password in the JSON file as requested for simulation.
+ * It stores the plain text password in the JSON file.
  *
- * @param userProfileData - An object containing the user profile data, including the plain text password.
+ * @param userProfileData - The full UserProfile object to save or update.
  * @returns A promise that resolves with success status and optional message.
  */
 export async function saveUserToJson(
-    userProfileData: Omit<UserProfile, 'createdAt'> & { password?: string } // Allow password to be passed
+    userProfileData: UserProfile
 ): Promise<{ success: boolean; message?: string }> {
     console.warn(
         'WARNING: Saving/Updating user data with plain text password in users.json is highly insecure and not recommended for production.'
     );
 
-    // Generate a local ID if one isn't provided (useful for new users during signup)
+    // Ensure all required fields are present, providing defaults if necessary
     const userToSave: UserProfile = {
-        id: userProfileData.id || `local_${userProfileData.email?.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`,
-        ...userProfileData,
-        createdAt: new Date().toISOString(), // Add or overwrite createdAt
+        id: userProfileData.id, // Use the provided ID
+        email: userProfileData.email,
+        password: userProfileData.password, // Ensure password is included
+        name: userProfileData.name ?? null,
+        phone: userProfileData.phone ?? null,
+        referral: userProfileData.referral ?? "",
+        class: userProfileData.class ?? null,
+        model: userProfileData.model ?? 'free',
+        expiry_date: userProfileData.expiry_date ?? null,
+        createdAt: userProfileData.createdAt || new Date().toISOString(), // Keep original or set new
     };
-
-    // Ensure all fields expected by UserProfile are present, providing defaults if necessary
-    userToSave.referral = userToSave.referral ?? "";
-    userToSave.model = userToSave.model ?? 'free';
-    userToSave.expiry_date = userToSave.expiry_date ?? null;
-    // Keep the password as passed in userProfileData
-
 
     try {
         let users = await readUsers();
@@ -91,17 +106,12 @@ export async function saveUserToJson(
         const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
         if (existingUserIndex !== -1) {
-            // Update existing user: merge new data, keep original createdAt if it existed
-            const existingUser = users[existingUserIndex];
-            users[existingUserIndex] = {
-                ...existingUser,          // Keep existing fields
-                ...userToSave,             // Overwrite with new data (including password)
-                createdAt: existingUser.createdAt || userToSave.createdAt, // Preserve original creation date
-            };
+            // Update existing user: replace the existing entry completely
+            users[existingUserIndex] = userToSave;
             console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated in users.json`);
         } else {
             // Add new user
-            users.push(userToSave); // Directly push the prepared user object
+            users.push(userToSave);
             console.log(`New user data for ${userToSave.email} (ID: ${userToSave.id}) added to users.json`);
         }
 
@@ -123,11 +133,13 @@ export async function saveUserToJson(
 /**
  * Adds a new user to the users.json file.
  * WARNING: Insecure. Stores plain text passwords.
+ * This function is now less necessary as saveUserToJson handles adding new users.
+ * Kept for potential specific use cases but usually saveUserToJson is preferred.
  * @param newUser The user profile object to add.
  * @returns A promise resolving with success status and optional message.
  */
 export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
-    console.warn("WARNING: Adding user with plain text password to users.json is insecure.");
+    console.warn("WARNING: Adding user with plain text password to users.json is insecure. Prefer using saveUserToJson.");
     try {
         let users = await readUsers();
 
@@ -164,7 +176,7 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
  * @param updatedData Partial user profile data to update.
  * @returns A promise resolving with success status and optional message.
  */
-export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>>): Promise<{ success: boolean; message?: string }> {
+export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id'>>): Promise<{ success: boolean; message?: string }> {
      console.warn("WARNING: Updating user data (potentially including password) in users.json is insecure.");
     try {
         let users = await readUsers();
@@ -174,11 +186,13 @@ export async function updateUserInJson(userId: string | number, updatedData: Par
             return { success: false, message: `User with ID ${userId} not found.` };
         }
 
-        // Merge existing data with updated data
+        // Merge existing data with updated data, ensuring ID and original createdAt are preserved
+        const existingUser = users[userIndex];
         users[userIndex] = {
-            ...users[userIndex], // Keep existing data
-            ...updatedData,      // Apply updates
-            id: userId,          // Ensure ID remains the same
+            ...existingUser, // Keep existing data
+            ...updatedData,   // Apply updates
+            id: userId,       // Ensure ID remains the same
+            createdAt: existingUser.createdAt, // Preserve original creation date
         };
 
         const success = await writeUsers(users);

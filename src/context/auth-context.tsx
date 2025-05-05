@@ -6,11 +6,13 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { UserProfile, UserModel, AcademicStatus } from '@/types'; // Use our UserProfile type
 import { Skeleton } from '@/components/ui/skeleton';
 import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions'; // Import actions to find user locally
+import { saveUserToJson } from '@/actions/user-actions'; // Import action to save user
+import { useRouter } from 'next/navigation'; // Import useRouter for redirection
 
 // Define simulated User type based on UserProfile, omitting sensitive/unused fields for context
 // This provides components with necessary display/logic info without exposing password.
 type SimulatedUser = {
-  id: string; // Use 'id' instead of 'uid'
+  id: string | number; // Use 'id' instead of 'uid'
   email: string | null;
   displayName: string | null;
   phone: string | null;
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SimulatedUser>(null);
   const [loading, setLoading] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
+  const router = useRouter(); // Initialize useRouter
 
   // Effect to load user state from local storage on mount (client-side only)
   useEffect(() => {
@@ -94,7 +97,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(loggedInUser);
         // Store the *full* UserProfile (excluding potentially sensitive parts if needed)
         localStorage.setItem('loggedInUser', JSON.stringify(foundUserProfile));
+        // Store password in local storage only for the simulation flow - INSECURE
+        if (password) {
+            localStorage.setItem('simulatedPassword', password);
+        }
         console.log(`User ${email} logged in (simulated).`);
+
+        // --- REDIRECT LOGIC ---
+        // Check if the logged-in user is the admin
+        if (foundUserProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+          router.push('/admin'); // Redirect to admin dashboard
+        } else {
+          router.push('/'); // Redirect regular users to home dashboard
+        }
+        // --- END REDIRECT LOGIC ---
+
       } else {
         throw new Error('Invalid email or password.'); // More specific error
       }
@@ -103,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLocalError(error.message || 'Login failed.');
       setUser(null);
       localStorage.removeItem('loggedInUser');
+      localStorage.removeItem('simulatedPassword');
       throw error; // Re-throw error so login page can catch it
     } finally {
       setLoading(false);
@@ -116,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(null);
       localStorage.removeItem('loggedInUser');
+      localStorage.removeItem('simulatedPassword'); // Clear simulated password on logout
       console.log("User logged out (simulated).");
     } catch (error: any) {
       console.error("Simulated logout failed:", error);
@@ -126,8 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Simulated Sign Up (now takes raw form data, generates ID, saves via action, then updates context)
-  const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => {
+  // Simulated Sign Up (now takes form data, saves via action, then updates context)
+   const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => {
     setLoading(true);
     setLocalError(null);
     try {
@@ -144,43 +163,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Generate a simple local ID (NOT secure or globally unique)
       const localId = `local_${userData.email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
 
-      // Save the user data (including plain text password) via the Server Action
-      const saveResult = await saveUserToJson(
-        localId,
-        userData.name || '', // Ensure name is string or empty
-        userData.email,
-        userData.phone || '', // Ensure phone is string or empty
-        userData.class!, // Assume class is provided
-        userData.model || 'free', // Default to free model if not specified
-        userData.expiry_date || null // Use provided or null
-        // Pass the plain text password to be stored in JSON (INSECURE)
-      );
-        // Note: The action needs to be updated to accept and store the password.
-        // Currently, user-actions.ts ignores the password parameter.
-        // We'll proceed assuming the action is updated or password storage isn't strictly needed *for this step*.
-        // **However, findUserByCredentials *will* need the password in JSON to work.**
-        // --> We need to update saveUserToJson to actually store the password.
+      // Prepare the full UserProfile object to be saved
+      const newUserProfile: UserProfile = {
+        id: localId,
+        email: userData.email,
+        password: password, // Include the password to be stored in JSON
+        name: userData.name || null,
+        phone: userData.phone || null,
+        referral: userData.referral || "",
+        class: userData.class || null,
+        model: userData.model || 'free',
+        expiry_date: userData.expiry_date || null,
+        createdAt: new Date().toISOString(), // Add creation timestamp
+      };
 
+
+      // Save the user data (including plain text password) via the Server Action
+      const saveResult = await saveUserToJson(newUserProfile);
 
       if (!saveResult.success) {
         throw new Error(saveResult.message || "Could not save user details locally.");
       }
 
        console.log(`User data for ${userData.email} saved to users.json`);
-
-      // Prepare the full UserProfile object as saved
-      const newUserProfile: UserProfile = {
-        id: localId,
-        email: userData.email,
-        password: password, // Include the password that *should* be stored
-        name: userData.name,
-        phone: userData.phone,
-        referral: userData.referral || "",
-        class: userData.class,
-        model: userData.model || 'free',
-        expiry_date: userData.expiry_date || null,
-        createdAt: new Date().toISOString(), // Add creation timestamp
-      };
 
       // Update context state with the new user (SimulatedUser shape)
       const newUserContextState: SimulatedUser = {
@@ -193,16 +198,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         expiry_date: newUserProfile.expiry_date,
       };
       setUser(newUserContextState);
-      // Store the full profile in local storage
-      localStorage.setItem('loggedInUser', JSON.stringify(newUserProfile));
+      // Store the full profile (excluding password for slightly better security theater)
+      const { password: _, ...profileToStore } = newUserProfile;
+      localStorage.setItem('loggedInUser', JSON.stringify(profileToStore));
+        // Store password in local storage only for the simulation flow - INSECURE
+      if (password) {
+          localStorage.setItem('simulatedPassword', password);
+      }
 
       console.log(`User ${userData.email} signed up and logged in (simulated).`);
+
+      // Redirect after signup
+       router.push('/'); // Redirect to home dashboard after signup
 
     } catch (error: any) {
       console.error("Simulated local signup failed:", error);
       setLocalError(error.message || 'Local signup failed.');
       setUser(null); // Clear user state on failure
       localStorage.removeItem('loggedInUser'); // Clear local storage on failure
+       localStorage.removeItem('simulatedPassword');
       throw error; // Re-throw error for the signup page
     } finally {
       setLoading(false);
