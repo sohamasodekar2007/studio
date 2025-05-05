@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import EditUserDialog from '@/components/admin/edit-user-dialog'; // Import dialog components
 import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
 import ChangeRoleDialog from '@/components/admin/change-role-dialog';
+import AddUserDialog from '@/components/admin/add-user-dialog'; // Import AddUserDialog
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +40,7 @@ export default function AdminUsersPage() {
 
   // State for managing dialogs
   const [dialogState, setDialogState] = useState<{
-    type: 'edit' | 'reset' | 'role' | null;
+    type: 'edit' | 'reset' | 'role' | 'add' | null; // Added 'add'
     user: UserProfile | null;
   }>({ type: null, user: null });
 
@@ -121,7 +122,7 @@ export default function AdminUsersPage() {
        }
    };
 
-   // Function to handle updates from dialogs
+   // Function to handle updates from Edit/Role dialogs
    const handleUserUpdate = (updatedUser: UserProfile) => {
      // Re-assign role based on email after potential update
      const role = updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
@@ -131,10 +132,20 @@ export default function AdminUsersPage() {
      closeDialog();
    };
 
+   // Function to handle adding a user from Add dialog
+   const handleUserAdded = (newUser: UserProfile) => {
+       // Add role info for display
+       const role = newUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
+       const userWithRole = { ...newUser, role };
+       setUsers(prevUsers => [userWithRole, ...prevUsers]); // Add new user to the beginning of the list
+       closeDialog();
+   }
+
    // Dialog handlers
    const openEditDialog = (user: UserProfile) => setDialogState({ type: 'edit', user });
    const openResetDialog = (user: UserProfile) => setDialogState({ type: 'reset', user });
    const openRoleDialog = (user: UserProfile) => setDialogState({ type: 'role', user });
+   const openAddDialog = () => setDialogState({ type: 'add', user: null }); // Open Add dialog
    const closeDialog = () => setDialogState({ type: null, user: null });
 
 
@@ -145,8 +156,8 @@ export default function AdminUsersPage() {
             <h1 className="text-3xl font-bold tracking-tight">Manage Users</h1>
             <p className="text-muted-foreground">View, create, edit, or delete platform users.</p>
          </div>
-         {/* TODO: Link Add User button to a creation form/modal */}
-         <Button disabled>
+         {/* Enable Add User button and link to openAddDialog */}
+         <Button onClick={openAddDialog}>
            <PlusCircle className="mr-2 h-4 w-4" /> Add New User
          </Button>
       </div>
@@ -312,6 +323,14 @@ export default function AdminUsersPage() {
           onUserUpdate={handleUserUpdate} // Role/Plan change also updates user data
         />
       )}
+       {/* Add User Dialog */}
+       {dialogState.type === 'add' && (
+        <AddUserDialog
+            isOpen={dialogState.type === 'add'}
+            onClose={closeDialog}
+            onUserAdded={handleUserAdded} // Pass callback to update list
+        />
+       )}
 
     </div>
   );
