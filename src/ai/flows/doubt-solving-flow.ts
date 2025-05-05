@@ -16,9 +16,11 @@ export const DoubtSolvingInputSchema = z.object({
   imageDataUri: z.string().optional().describe(
     "An image of the doubt, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Optional."
   ),
-}).refine(data => data.questionText || data.imageDataUri, {
-    message: "Either questionText or imageDataUri must be provided.",
 });
+// Removed refine as validation is handled client-side and in the flow logic.
+// .refine(data => data.questionText || data.imageDataUri, {
+//     message: "Either questionText or imageDataUri must be provided.",
+// });
 export type DoubtSolvingInput = z.infer<typeof DoubtSolvingInputSchema>;
 
 // Define the output schema using Zod
