@@ -2,7 +2,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { GraduationCap, User, Settings, LogOut } from 'lucide-react';
+import { GraduationCap, User, Settings, LogOut, HelpCircle } from 'lucide-react'; // Added HelpCircle
 import Link from 'next/link';
 
 export function AppHeader() {
@@ -25,13 +25,21 @@ export function AppHeader() {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </DropdownMenuItem>
-          <DropdownMenuItem>Support</DropdownMenuItem>
+          <DropdownMenuItem asChild>
+             <Link href="/settings">
+               <Settings className="mr-2 h-4 w-4" />
+               Settings
+             </Link>
+           </DropdownMenuItem>
+           <DropdownMenuItem asChild>
+             <Link href="/help">
+                <HelpCircle className="mr-2 h-4 w-4" />
+                Support
+             </Link>
+           </DropdownMenuItem>
           <DropdownMenuSeparator />
            <DropdownMenuItem asChild>
+             {/* Assuming logout redirects to login for now */}
              <Link href="/auth/login">
                <LogOut className="mr-2 h-4 w-4" />
                Logout

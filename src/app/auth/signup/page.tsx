@@ -67,6 +67,10 @@ export default function SignupPage() {
 
 
 // Override layout for auth pages to remove sidebar/header
-export function Layout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
-}
+// Note: Layout override might not be standard in App Router, consider Route Groups instead if needed.
+// export function Layout({ children }: { children: React.ReactNode }) {
+//   return <>{children}</>;
+// }
+
+// If a specific layout is needed for auth routes, it should be placed in src/app/auth/layout.tsx
+// The current src/app/auth/layout.tsx already achieves this minimal layout.

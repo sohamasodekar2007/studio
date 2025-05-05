@@ -3,6 +3,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, LifeBuoy, Mail } from "lucide-react";
+import Link from "next/link"; // Import Link
 
 export default function HelpPage() {
   return (
@@ -27,7 +28,9 @@ export default function HelpPage() {
             <AccordionItem value="item-1">
               <AccordionTrigger>How do I update my profile information?</AccordionTrigger>
               <AccordionContent>
-                You can update your profile information, including your name and profile picture, by navigating to the Settings page. Your email address cannot be changed.
+                You can update your profile information, including your name and profile picture, by navigating to the{' '}
+                <Link href="/settings" className="underline hover:text-primary">Settings page</Link>.
+                Your email address cannot be changed.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-2">
@@ -45,7 +48,9 @@ export default function HelpPage() {
              <AccordionItem value="item-4">
               <AccordionTrigger>Is my data secure?</AccordionTrigger>
               <AccordionContent>
-                We take data security seriously. Please refer to our Privacy Policy for detailed information on how we collect, use, and protect your data.
+                We take data security seriously. Please refer to our{' '}
+                 <Link href="/privacy" className="underline hover:text-primary">Privacy Policy</Link>
+                {' '}for detailed information on how we collect, use, and protect your data.
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -59,7 +64,7 @@ export default function HelpPage() {
           <CardDescription>Still need help? Reach out to our support team.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button size="lg">
+          <Button size="lg" disabled> {/* Disabled chat button as it's coming soon */}
             <LifeBuoy className="mr-2 h-5 w-5" />
             Chat with Support (Coming Soon)
           </Button>
