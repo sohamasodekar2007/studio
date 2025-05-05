@@ -26,11 +26,12 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     *   Under **Your apps**, register a new Web app.
     *   Copy the `firebaseConfig` object values.
 4.  **Set up Google AI:**
-    * Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+    *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 5.  **Configure Environment Variables:**
     *   Rename `.env.example` to `.env`.
-    *   **Crucially, fill in the Firebase configuration values** copied in step 3 into the `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file. An invalid or missing API key will cause authentication errors.
-    *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable.
+    *   **CRITICAL: Fill in the Firebase configuration values** copied in step 3 into the `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file.
+    *   **Ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is correct.** An invalid or missing API key will cause `auth/invalid-api-key` errors and prevent login/signup.
+    *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access. This email will see the "Admin Panel" link in the sidebar.
 6.  **Run the development server:**
     ```bash

@@ -17,6 +17,12 @@ const firebaseConfig = {
 // Initialize Firebase
 let app;
 if (!getApps().length) {
+  // Warn if the crucial API key is missing
+  if (!firebaseConfig.apiKey) {
+    console.warn(
+      "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is missing in environment variables. Firebase authentication will likely fail. Please check your .env file."
+    );
+  }
   app = initializeApp(firebaseConfig);
 } else {
   app = getApp();

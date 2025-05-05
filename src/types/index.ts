@@ -17,13 +17,14 @@ export const testStatuses = ["New", "Popular", ""] as const;
 export type TestStatus = typeof testStatuses[number];
 
 
-// Interface for User Data (potentially stored in Firestore)
+// Interface for User Data (potentially stored in Firestore or users.json)
 export interface UserProfile {
   uid: string;
   name: string | null;
   email: string | null;
+  phoneNumber: string | null; // Added phone number
   academicStatus: AcademicStatus | null;
-  createdAt: Date | string; // Store as ISO string or Timestamp in Firestore
+  createdAt: Date | string; // Store as ISO string or Timestamp in Firestore/JSON
   // Add other profile fields as needed (e.g., targetExams)
 }
 
