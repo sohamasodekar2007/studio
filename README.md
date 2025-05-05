@@ -29,10 +29,10 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 5.  **Configure Environment Variables:**
     *   Rename `.env.example` to `.env`.
-    *   **CRITICAL: Fill in the Firebase configuration values** copied in step 3 into the `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file.
-    *   **Ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is correct.** An invalid or missing API key will cause `auth/invalid-api-key` errors and prevent login/signup.
+    *   **CRITICAL: Fill in ALL Firebase configuration values** copied in step 3 into the corresponding `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file.
+    *   **Ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is correct.** An invalid or missing API key (or other missing `NEXT_PUBLIC_FIREBASE_*` variables) is the most common cause of setup problems and will likely result in `auth/invalid-api-key` errors, preventing login/signup. The application might show warnings or fail to load authentication features if these keys are missing or incorrect.
     *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
-    *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access. This email will see the "Admin Panel" link in the sidebar.
+    *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in.
 6.  **Run the development server:**
     ```bash
     npm run dev
@@ -43,6 +43,7 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     npm run genkit:watch
     ```
     This allows testing Genkit flows via the Genkit developer UI (usually at `http://localhost:4000`).
+8.  **Access Admin Panel:** Log in using the email address set in `NEXT_PUBLIC_ADMIN_EMAIL`. The "Admin Panel" link should appear in the sidebar.
 
 ## Project Structure
 
@@ -56,9 +57,11 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
 *   `src/hooks/`: Custom React hooks (`use-toast.ts`, `use-mobile.ts`).
 *   `src/ai/`: Genkit AI flows and configuration (`ai-instance.ts`, `dev.ts`, `flows/`).
 *   `src/types/`: TypeScript type definitions (`index.ts`).
+*   `src/data/`: Contains local data files like `users.json`. **Note:** `users.json` is used for demonstration and is not a secure or scalable way to store user data in production. Use Firestore instead.
+*   `src/actions/`: Server Actions (e.g., `save-user.ts`).
 *   `public/`: Static assets.
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
-*   `.env`: Local environment variables (ignored by Git).
+*   `.env`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY.**
 *   `.env.example`: Example environment variables file.
 
 ## Available Scripts
