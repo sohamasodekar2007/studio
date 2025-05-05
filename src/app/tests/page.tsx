@@ -1,9 +1,10 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ListChecks } from "lucide-react"; // Added ListChecks
+import { Search, Filter, ArrowRight } from "lucide-react"; // Added ArrowRight
 import Image from 'next/image';
-import { Badge } from "@/components/ui/badge"; // Import Badge
+import { Badge } from "@/components/ui/badge";
+import Link from 'next/link'; // Import Link
 
 // Example test series data (replace with actual data fetching)
 const testItems = [
@@ -58,11 +59,13 @@ export default function TestsPage() {
               <Badge variant="outline" className="w-fit mb-2">{item.exam}</Badge>
               <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.title}</CardTitle>
               <CardDescription className="text-sm mb-3">{item.type} - {item.subject}</CardDescription>
-              {/* Replace Button with Link to actual test page later */}
-              <Button variant="secondary" className="mt-auto w-full">
-                View Details
-                {/* <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" /> */}
-              </Button>
+              {/* Link the button to the dynamic test detail page */}
+               <Link href={`/tests/${item.id}`} passHref className="mt-auto">
+                 <Button variant="secondary" className="w-full">
+                    View Details
+                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                 </Button>
+               </Link>
             </CardContent>
           </Card>
         ))}

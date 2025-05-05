@@ -4,6 +4,7 @@ import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { AppLayout } from '@/components/layout/app-layout'; // Import AppLayout
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
+import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
 
 export const metadata: Metadata = {
   title: 'ExamPrep Hub - MHT-CET, JEE, NEET Test Series', // Updated title
@@ -18,10 +19,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className={`antialiased font-sans`}>
-        <AppLayout> {/* Wrap children with AppLayout */}
-          {children}
-        </AppLayout>
-        <Toaster /> {/* Add Toaster here for notifications */}
+         <AuthProvider> {/* Wrap with AuthProvider */}
+            <AppLayout> {/* Wrap children with AppLayout */}
+              {children}
+            </AppLayout>
+            <Toaster /> {/* Add Toaster here for notifications */}
+         </AuthProvider>
       </body>
     </html>
   );
