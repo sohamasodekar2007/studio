@@ -1,41 +1,71 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+.pnp.js
 
-# testing
+# Testing
 /coverage
 
-# next.js
+# Next.js build output
 /.next/
 /out/
 
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# vercel
-.vercel
-
-# typescript
+# TypeScript cache
 *.tsbuildinfo
 next-env.d.ts
 
-.genkit/*
-.env*
+# Mac files
+.DS_Store
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
+.env
+.env*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Debug log files
+*.log
+logs
+*.log.*.[0-9].gz
+
+# System files
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+
+# Compiled output
+dist
+dist-ssr
+
+# Firebase
+firebase-debug.log
+# Exclude file with secret information for accessing Firebase Admin SDK (usually for backend functions, not typically needed in frontend-focused Next.js app unless using server-side admin tasks directly)
+# serviceAccountKey.json
+
+# Genkit (optional, depending on usage)
+# genkit_trace.jsonl
+# .genkit-cache/
+# genkit-state.json
+
+# Turbo
+.turbo

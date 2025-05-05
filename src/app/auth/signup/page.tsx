@@ -11,16 +11,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label"; // Keep Label for structure if needed outside form context
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
+
+// Define academic statuses
+const academicStatuses = ["11th Class", "12th Class", "Dropper"] as const;
 
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
+  academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }), // Add academic status
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"], // path of error
@@ -40,6 +45,7 @@ export default function SignupPage() {
       email: "",
       password: "",
       confirmPassword: "",
+      academicStatus: undefined, // Initialize academic status
     },
   });
 
@@ -50,6 +56,10 @@ export default function SignupPage() {
       // Update profile with name
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: data.name });
+        // TODO: Store academicStatus (data.academicStatus) in Firestore or Realtime Database
+        // associated with the user's UID (userCredential.user.uid).
+        // This requires setting up Firestore/RTDB.
+        console.log("User created, academic status:", data.academicStatus);
       }
       toast({
         title: "Account Created",
@@ -132,6 +142,31 @@ export default function SignupPage() {
                     <FormControl>
                       <Input type="password" {...field} disabled={isLoading} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Academic Status Select */}
+              <FormField
+                control={form.control}
+                name="academicStatus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Academic Status</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {academicStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -11,12 +11,18 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Home, ListChecks, GraduationCap, LineChart, Settings, HelpCircle, Wand2 } from 'lucide-react'; // Added Wand2
+import { Home, ListChecks, GraduationCap, LineChart, Settings, HelpCircle, Wand2, ShieldCheck } from 'lucide-react'; // Added ShieldCheck
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth(); // Get user information
+
+  // Simple check for admin role (replace with actual role check)
+  // Example: Check if user email is in a predefined list of admin emails
+  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL; // Use an env variable for admin email
 
   const isActive = (href: string) => pathname === href;
    // Check if the path starts with the given href (for parent routes)
@@ -69,6 +75,17 @@ export function AppSidebar() {
             </Link>
            </SidebarMenuItem>
            */}
+           {/* Conditionally render Admin Panel link */}
+           {isAdmin && (
+             <SidebarMenuItem>
+               <Link href="/admin" legacyBehavior passHref>
+                 <SidebarMenuButton as="a" isActive={isActiveParent('/admin')} tooltip="Admin Panel">
+                   <ShieldCheck />
+                   <span>Admin Panel</span>
+                 </SidebarMenuButton>
+               </Link>
+             </SidebarMenuItem>
+           )}
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter className="mt-auto">
