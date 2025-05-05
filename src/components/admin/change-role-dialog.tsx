@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input"; // Keep Input for potential future use, though not needed for date/select
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar"; // Import Calendar
@@ -51,11 +51,21 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const onSubmit = async (data: ChangeRoleFormValues) => {
     setIsLoading(true);
     try {
-      const updatedData: Partial<Omit<UserProfile, 'id'>> = {
+       // Format expiry_date to ISO string or null BEFORE updating
+       const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
+
+      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>> = { // Exclude createdAt
         model: data.model,
-        // Convert date back to ISO string for storage, or set to null if 'free' or no date selected
-        expiry_date: data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null),
+        expiry_date: expiryDateString,
+         // Include other fields to ensure updateUserInJson has full context if needed
+         email: user.email,
+         password: user.password,
+         name: user.name,
+         phone: user.phone,
+         referral: user.referral,
+         class: user.class,
       };
+
 
       const result = await updateUserInJson(user.id, updatedData);
 
@@ -67,13 +77,15 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
         title: 'User Role/Plan Updated',
         description: `${user.email}'s plan has been updated to ${data.model}.`,
       });
-      // Pass the updated user back to the parent to update the state
-       onUserUpdate({
-         ...user,
-         ...updatedData,
-         // Ensure expiry_date in the callback data is also a string or null
-         expiry_date: updatedData.expiry_date
-       });
+      // Construct the fully updated user profile to pass back
+      const fullyUpdatedUser: UserProfile = {
+          ...user, // Start with original user data
+          ...updatedData, // Apply the changes from the form
+          // Ensure expiry_date in the callback data is also a string or null
+          expiry_date: updatedData.expiry_date
+      };
+       onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
+       // onClose(); // Close is handled by onUserUpdate which calls closeDialog in parent
 
     } catch (error: any) {
       console.error('Failed to update user role/plan:', error);
@@ -90,7 +102,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const currentModel = form.watch("model"); // Watch model field for conditional rendering
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Change Role/Plan for {user.email}</DialogTitle>

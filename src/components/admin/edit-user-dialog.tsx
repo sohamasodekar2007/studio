@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,11 @@ import { updateUserInJson } from '@/actions/user-actions';
 // Schema for editing user profile
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(10, { message: "Please enter a valid 10-digit phone number." }), // Assuming 10 digit Indian number
+  // Added stricter phone validation (example: Indian numbers)
+  phone: z.string()
+           .min(10, { message: "Phone number must be 10 digits." })
+           .max(10, { message: "Phone number must be 10 digits." })
+           .regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -43,9 +47,18 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
   const onSubmit = async (data: EditUserFormValues) => {
     setIsLoading(true);
     try {
-      const updatedData: Partial<Omit<UserProfile, 'id'>> = {
+      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>> = { // Exclude createdAt as well
         name: data.name,
         phone: data.phone,
+        // Explicitly include other fields that should NOT be changed by this form
+        // to ensure the update action has the full context if needed,
+        // although updateUserInJson only uses the provided partial data.
+        email: user.email,
+        password: user.password, // Keep existing password
+        referral: user.referral,
+        class: user.class,
+        model: user.model,
+        expiry_date: user.expiry_date,
       };
 
       const result = await updateUserInJson(user.id, updatedData);
@@ -58,8 +71,13 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
         title: 'User Updated',
         description: `${user.email}'s details have been updated.`,
       });
-      // Pass the updated user back to the parent to update the state
-      onUserUpdate({ ...user, ...updatedData });
+      // Construct the fully updated user profile to pass back
+      const fullyUpdatedUser: UserProfile = {
+        ...user, // Start with original user data
+        ...updatedData, // Apply the changes from the form
+      };
+      onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
+      // onClose(); // Close is handled by onUserUpdate which calls closeDialog in parent
 
     } catch (error: any) {
       console.error('Failed to update user:', error);
@@ -74,7 +92,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit User: {user.email}</DialogTitle>

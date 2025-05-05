@@ -16,12 +16,25 @@ import { useToast } from '@/hooks/use-toast';
 import EditUserDialog from '@/components/admin/edit-user-dialog'; // Import dialog components
 import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
 import ChangeRoleDialog from '@/components/admin/change-role-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false); // State for delete confirmation
 
   // State for managing dialogs
   const [dialogState, setDialogState] = useState<{
@@ -82,10 +95,9 @@ export default function AdminUsersPage() {
     }
   };
 
-   // Handle User Deletion
+   // Handle User Deletion with Confirmation
    const handleDeleteUser = async (userId: string | number) => {
-       // TODO: Add confirmation dialog here for safety
-
+       setIsDeleting(true); // Indicate deletion in progress (optional: disable delete button)
        const originalUsers = [...users];
        // Optimistic update
        setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
@@ -103,13 +115,17 @@ export default function AdminUsersPage() {
            console.error("Failed to delete user:", error);
            setUsers(originalUsers); // Revert
            toast({ variant: "destructive", title: "Error", description: "Could not delete user." });
+       } finally {
+           setIsDeleting(false); // Reset deletion state
        }
    };
 
    // Function to handle updates from dialogs
    const handleUserUpdate = (updatedUser: UserProfile) => {
+     // Re-assign role based on email after potential update
+     const role = updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
      setUsers(prevUsers =>
-       prevUsers.map(u => (u.id === updatedUser.id ? { ...u, ...updatedUser, role: updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User' } : u))
+       prevUsers.map(u => (u.id === updatedUser.id ? { ...u, ...updatedUser, role } : u))
      );
      closeDialog();
    };
@@ -175,7 +191,9 @@ export default function AdminUsersPage() {
                   </TableRow>
                 ))
               ) : filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
+                filteredUsers.map((user) => {
+                 const isCurrentUserAdmin = (user as any).role === 'Admin';
+                  return (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
                     <TableCell>{user.email || 'N/A'}</TableCell>
@@ -190,7 +208,7 @@ export default function AdminUsersPage() {
                       )}
                     </TableCell>
                      <TableCell>
-                       <Badge variant={(user as any).role === 'Admin' ? 'destructive' : 'secondary'}>
+                       <Badge variant={isCurrentUserAdmin ? 'destructive' : 'secondary'}>
                          {(user as any).role || 'User'}
                        </Badge>
                      </TableCell>
@@ -200,36 +218,56 @@ export default function AdminUsersPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
+                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={isCurrentUserAdmin}>
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Toggle menu</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                           {/* Add onClick handlers and ensure disabled logic is correct */}
-                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={(user as any).role === 'Admin'}>
+                           {/* Enable buttons and add onClick handlers */}
+                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={isCurrentUserAdmin}>
                              <Edit className="mr-2 h-4 w-4" /> Edit User
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={(user as any).role === 'Admin'}>
+                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserAdmin}>
                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                            </DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={(user as any).role === 'Admin'}>
+                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={isCurrentUserAdmin}>
                              <UserCheck className="mr-2 h-4 w-4" /> Change Role/Plan
                            </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={(user as any).role === 'Admin'} // Prevent deleting the admin for safety
-                            >
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete User
-                          </DropdownMenuItem>
+                           {/* Delete Confirmation Dialog Trigger */}
+                           <AlertDialog>
+                             <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
+                                  disabled={isCurrentUserAdmin || isDeleting} // Disable if admin or already deleting
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                                </Button>
+                             </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete the user account
+                                    for <span className="font-semibold">{user.email}</span> and remove their data.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-destructive hover:bg-destructive/90">
+                                      Yes, delete user
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                           </AlertDialog>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
+                )})
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center">
@@ -262,6 +300,7 @@ export default function AdminUsersPage() {
           user={dialogState.user}
           isOpen={dialogState.type === 'reset'}
           onClose={closeDialog}
+          // No onUserUpdate needed for password reset, as it doesn't change displayed data
         />
       )}
       {dialogState.type === 'role' && dialogState.user && (
@@ -276,4 +315,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

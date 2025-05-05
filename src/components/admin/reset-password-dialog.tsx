@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ interface ResetPasswordDialogProps {
   user: UserProfile;
   isOpen: boolean;
   onClose: () => void;
+  // No onUserUpdate needed as password change doesn't affect the displayed user list directly
 }
 
 export default function ResetPasswordDialog({ user, isOpen, onClose }: ResetPasswordDialogProps) {
@@ -71,7 +72,7 @@ export default function ResetPasswordDialog({ user, isOpen, onClose }: ResetPass
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Reset Password for {user.email}</DialogTitle>
