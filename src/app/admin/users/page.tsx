@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, UserCheck } from "lucide-react"; // Added Icons
 import { Skeleton } from "@/components/ui/skeleton";
-import { type UserProfile } from '@/types';
+import { type UserProfile, type UserModel } from '@/types';
 // Import the action to read users from JSON
-import { readUsers, deleteUserFromJson } from '@/actions/user-actions'; // Import read and delete actions
+import { readUsers, deleteUserFromJson, updateUserInJson, updateUserPasswordInJson } from '@/actions/user-actions'; // Import actions
 import { useToast } from '@/hooks/use-toast';
+import EditUserDialog from '@/components/admin/edit-user-dialog'; // Import dialog components
+import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
+import ChangeRoleDialog from '@/components/admin/change-role-dialog';
 
 // Remove client-side mock fetch
 
@@ -21,6 +24,12 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // State for managing dialogs
+  const [dialogState, setDialogState] = useState<{
+    type: 'edit' | 'reset' | 'role' | null;
+    user: UserProfile | null;
+  }>({ type: null, user: null });
 
   const fetchAllUsers = () => {
      setIsLoading(true);
@@ -46,7 +55,8 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchAllUsers();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only fetch on initial mount
 
   const filteredUsers = useMemo(() => {
     return users.filter(user =>
@@ -76,7 +86,7 @@ export default function AdminUsersPage() {
 
    // Handle User Deletion
    const handleDeleteUser = async (userId: string | number) => {
-       // Optional: Add confirmation dialog here
+       // TODO: Add confirmation dialog here for safety
 
        const originalUsers = [...users];
        // Optimistic update
@@ -97,6 +107,20 @@ export default function AdminUsersPage() {
            toast({ variant: "destructive", title: "Error", description: "Could not delete user." });
        }
    };
+
+   // Function to handle updates from dialogs
+   const handleUserUpdate = (updatedUser: UserProfile) => {
+     setUsers(prevUsers =>
+       prevUsers.map(u => (u.id === updatedUser.id ? { ...u, ...updatedUser, role: updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User' } : u))
+     );
+     closeDialog();
+   };
+
+   // Dialog handlers
+   const openEditDialog = (user: UserProfile) => setDialogState({ type: 'edit', user });
+   const openResetDialog = (user: UserProfile) => setDialogState({ type: 'reset', user });
+   const openRoleDialog = (user: UserProfile) => setDialogState({ type: 'role', user });
+   const closeDialog = () => setDialogState({ type: null, user: null });
 
 
   return (
@@ -133,6 +157,7 @@ export default function AdminUsersPage() {
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Model</TableHead>
+                 <TableHead>Expiry</TableHead>
                 <TableHead>Created At</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -146,6 +171,7 @@ export default function AdminUsersPage() {
                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                   </TableRow>
@@ -171,6 +197,7 @@ export default function AdminUsersPage() {
                        </Badge>
                      </TableCell>
                       <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
+                       <TableCell>{formatDate(user.expiry_date)}</TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -182,17 +209,15 @@ export default function AdminUsersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                          {/* TODO: Link Edit User button to an editing form/modal */}
-                          <DropdownMenuItem disabled>
+                           {/* Add onClick handlers */}
+                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={(user as any).role === 'Admin'}>
                              <Edit className="mr-2 h-4 w-4" /> Edit User
                           </DropdownMenuItem>
-                          {/* TODO: Implement Password Reset Functionality */}
-                          <DropdownMenuItem disabled>
+                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={(user as any).role === 'Admin'}>
                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                            </DropdownMenuItem>
-                           {/* TODO: Implement Role Change Functionality (if needed) */}
-                           <DropdownMenuItem disabled>
-                             <UserCheck className="mr-2 h-4 w-4" /> Change Role
+                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={(user as any).role === 'Admin'}>
+                             <UserCheck className="mr-2 h-4 w-4" /> Change Role/Plan
                            </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -209,8 +234,8 @@ export default function AdminUsersPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    No users found.
+                  <TableCell colSpan={8} className="h-24 text-center">
+                    No users found matching your criteria.
                   </TableCell>
                 </TableRow>
               )}
@@ -224,6 +249,33 @@ export default function AdminUsersPage() {
           {/* Optional: Add pagination controls here */}
         </CardFooter>
       </Card>
+
+       {/* Dialogs */}
+      {dialogState.type === 'edit' && dialogState.user && (
+        <EditUserDialog
+          user={dialogState.user}
+          isOpen={dialogState.type === 'edit'}
+          onClose={closeDialog}
+          onUserUpdate={handleUserUpdate}
+        />
+      )}
+       {dialogState.type === 'reset' && dialogState.user && (
+        <ResetPasswordDialog
+          user={dialogState.user}
+          isOpen={dialogState.type === 'reset'}
+          onClose={closeDialog}
+        />
+      )}
+      {dialogState.type === 'role' && dialogState.user && (
+        <ChangeRoleDialog
+          user={dialogState.user}
+          isOpen={dialogState.type === 'role'}
+          onClose={closeDialog}
+          onUserUpdate={handleUserUpdate} // Role/Plan change also updates user data
+        />
+      )}
+
     </div>
   );
 }
+
