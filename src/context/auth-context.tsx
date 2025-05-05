@@ -105,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // --- REDIRECT LOGIC ---
         // Check if the logged-in user is the admin
+        // Use NEXT_PUBLIC_ADMIN_EMAIL from environment variables
         if (foundUserProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
           router.push('/admin'); // Redirect to admin dashboard
         } else {
@@ -136,6 +137,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('loggedInUser');
       localStorage.removeItem('simulatedPassword'); // Clear simulated password on logout
       console.log("User logged out (simulated).");
+       // Redirect to login page after logout
+       router.push('/auth/login');
     } catch (error: any) {
       console.error("Simulated logout failed:", error);
       setLocalError(error.message || 'Logout failed.');
@@ -146,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Simulated Sign Up (now takes form data, saves via action, then updates context)
-   const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => {
+   const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
     setLoading(true);
     setLocalError(null);
     try {
@@ -170,10 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: password, // Include the password to be stored in JSON
         name: userData.name || null,
         phone: userData.phone || null,
-        referral: userData.referral || "",
+        referral: "", // Default referral
         class: userData.class || null,
-        model: userData.model || 'free',
-        expiry_date: userData.expiry_date || null,
+        model: 'free', // Default model for new signups
+        expiry_date: null, // Default expiry date
         createdAt: new Date().toISOString(), // Add creation timestamp
       };
 
