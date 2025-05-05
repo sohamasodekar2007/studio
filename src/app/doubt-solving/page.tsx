@@ -1,18 +1,23 @@
 // src/app/doubt-solving/page.tsx
 'use client';
 
-import { useState, type ChangeEvent, useRef } from 'react';
+import { useState, type ChangeEvent, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
-import { Loader2, Upload, X, MessageSquareText } from "lucide-react";
+import { Loader2, Upload, X, MessageSquareText, Info, AlertTriangle } from "lucide-react"; // Added Info, AlertTriangle
 import { useToast } from "@/hooks/use-toast";
-import { getDoubtAnswer, type DoubtSolvingInput } from '@/ai/flows/doubt-solving-flow'; // Import the new flow
+import { getDoubtAnswer, type DoubtSolvingInput } from '@/ai/flows/doubt-solving-flow';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip components
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function DoubtSolvingPage() {
+  const { user, loading: authLoading } = useAuth();
   const [questionText, setQuestionText] = useState<string>('');
   const [imageDataUri, setImageDataUri] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -20,6 +25,47 @@ export default function DoubtSolvingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isPremiumUser = user && user.model !== 'free';
+
+  // --- MathJax Integration ---
+  useEffect(() => {
+    const scriptId = 'mathjax-script';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+      script.async = true;
+      document.head.appendChild(script);
+
+      // Configure MathJax
+      (window as any).MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true,
+        },
+        svg: {
+          fontCache: 'global'
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        },
+      };
+    }
+  }, []); // Load MathJax script once on mount
+
+  useEffect(() => {
+    // Trigger MathJax typesetting when generatedAnswer changes and MathJax is loaded
+    if (generatedAnswer && (window as any).MathJax?.typesetPromise) {
+      const answerElement = document.getElementById('ai-answer-content');
+      if (answerElement) {
+        (window as any).MathJax.typesetPromise([answerElement])
+          .catch((err: any) => console.error('MathJax typesetting failed:', err));
+      }
+    }
+  }, [generatedAnswer]); // Re-run when answer changes
+  // --- End MathJax Integration ---
 
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -96,6 +142,48 @@ export default function DoubtSolvingPage() {
     }
   };
 
+  // Render Loading Skeleton if auth is loading
+  if (authLoading) {
+     return (
+        <div className="max-w-3xl mx-auto space-y-6">
+            <Skeleton className="h-8 w-1/2 mx-auto" />
+            <Skeleton className="h-6 w-3/4 mx-auto" />
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-6 w-1/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                 <CardContent className="space-y-4">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-10 w-1/3" />
+                 </CardContent>
+                 <CardFooter>
+                    <Skeleton className="h-10 w-28" />
+                 </CardFooter>
+            </Card>
+        </div>
+     );
+  }
+
+  // Render Premium Access Message if not a premium user
+  if (!isPremiumUser) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 text-center">
+         <h1 className="text-3xl font-bold tracking-tight">Doubt Solving</h1>
+         <Alert variant="default" className="text-left bg-primary/5 border-primary/20">
+           <AlertTriangle className="h-4 w-4 text-primary" />
+           <AlertTitle className="text-primary">Premium Feature</AlertTitle>
+           <AlertDescription>
+             AI Doubt Solving is available for premium users. Upgrade your plan to get instant answers to your questions from EduNexus by GODWIN.
+           </AlertDescription>
+           {/* Optional: Add an upgrade button */}
+           {/* <Button size="sm" className="mt-4">Upgrade Plan</Button> */}
+         </Alert>
+      </div>
+    );
+  }
+
+  // Render Doubt Solving Page for Premium Users
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-center">Doubt Solving</h1>
@@ -112,7 +200,7 @@ export default function DoubtSolvingPage() {
             <Label htmlFor="question-text">Type your question (optional if uploading image)</Label>
             <Textarea
               id="question-text"
-              placeholder="e.g., Explain the concept of hybridization..."
+              placeholder="e.g., Explain the concept of hybridization. Use $ E = mc^2 $ or $$ \\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2} $$ for math."
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
               rows={4}
@@ -171,12 +259,30 @@ export default function DoubtSolvingPage() {
       {/* Display Generated Answer */}
       {generatedAnswer && (
         <Card>
-          <CardHeader>
-            <CardTitle>EduNexus by GODWIN Says:</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+                 <CardTitle>EduNexus by GODWIN Says:</CardTitle>
+                 {/* Disclaimer Tooltip */}
+                 <TooltipProvider delayDuration={100}>
+                   <Tooltip>
+                     <TooltipTrigger asChild>
+                       <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                         <Info className="h-4 w-4" />
+                       </Button>
+                     </TooltipTrigger>
+                     <TooltipContent side="top" align="start" className="max-w-xs">
+                       <p className="text-xs">AI models can make mistakes. Verify critical information and use the answer as a guide, not a definitive solution.</p>
+                     </TooltipContent>
+                   </Tooltip>
+                 </TooltipProvider>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Use whitespace-pre-wrap to preserve line breaks from AI */}
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{generatedAnswer}</p>
+            {/* Container for MathJax rendering */}
+            <div id="ai-answer-content" className="text-sm text-muted-foreground prose dark:prose-invert max-w-none prose-sm">
+                {/* Render the answer text directly. MathJax will process it. */}
+                {generatedAnswer}
+            </div>
           </CardContent>
         </Card>
       )}
