@@ -19,8 +19,10 @@ import { User, Loader2, AlertTriangle } from "lucide-react"; // Added AlertTrian
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { saveUserToJson } from '@/actions/save-user'; // Import action to update user
+import { saveUserToJson } from '@/actions/user-actions'; // Corrected import path
+import { findUserByCredentials } from '@/actions/auth-actions'; // Need this for finding user
 import type { UserProfile } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // --- Profile Form ---
 const profileSchema = z.object({
