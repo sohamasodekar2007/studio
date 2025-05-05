@@ -1,3 +1,5 @@
+'use client'; // Add this directive
+
 import {
   Sidebar,
   SidebarContent,
