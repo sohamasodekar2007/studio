@@ -45,6 +45,14 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     This allows testing Genkit flows via the Genkit developer UI (usually at `http://localhost:4000`).
 8.  **Access Admin Panel:** Log in using the email address set in `NEXT_PUBLIC_ADMIN_EMAIL`. The "Admin Panel" link should appear in the sidebar.
 
+## Troubleshooting
+
+*   **`FirebaseError: Firebase: Error (auth/invalid-api-key).`**: This is the most common error during setup. It means the Firebase SDK could not authenticate with your Firebase project.
+    *   **Solution:** Double-check that **ALL** `NEXT_PUBLIC_FIREBASE_*` variables in your `.env` file exactly match the values from your Firebase project settings (Project Settings > General > Your Apps > Web App > Firebase SDK snippet > Config). Pay special attention to `NEXT_PUBLIC_FIREBASE_API_KEY`. Ensure there are no typos or extra spaces.
+    *   Make sure you have saved the `.env` file (not `.env.example`).
+    *   **Restart your development server (`npm run dev`)** after making changes to the `.env` file. Environment variables are typically loaded only at server start.
+*   **Login/Signup not working**: Often related to the `auth/invalid-api-key` error above. Ensure Firebase Authentication (Email/Password provider) is enabled in your Firebase project console (Build > Authentication > Sign-in method).
+
 ## Project Structure
 
 *   `src/app/`: Next.js App Router pages and layouts.
