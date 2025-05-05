@@ -33,22 +33,22 @@ export function AppSidebar() {
       <SidebarContent className="flex-1">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/">
-              <SidebarMenuButton isActive={isActive('/')} tooltip="Dashboard" asChild>
-                <div> {/* Wrap content in a div for asChild to work correctly */}
+            <Link href="/" legacyBehavior passHref>
+              <SidebarMenuButton asChild isActive={isActive('/')} tooltip="Dashboard">
+                <a> {/* Wrap content in an anchor tag for legacyBehavior */}
                     <Home />
                     <span>Dashboard</span>
-                </div>
+                </a>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-             <Link href="/tests">
-              <SidebarMenuButton isActive={isActive('/tests')} tooltip="Test Series" asChild>
-                 <div>
+             <Link href="/tests" legacyBehavior passHref>
+              <SidebarMenuButton asChild isActive={isActive('/tests')} tooltip="Test Series">
+                 <a>
                     <ListChecks /> {/* Updated icon */}
                     <span>Test Series</span> {/* Updated label */}
-                 </div>
+                 </a>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
@@ -70,22 +70,22 @@ export function AppSidebar() {
       <SidebarFooter className="mt-auto">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/settings">
-              <SidebarMenuButton isActive={isActive('/settings')} tooltip="Settings" asChild>
-                 <div>
+            <Link href="/settings" legacyBehavior passHref>
+              <SidebarMenuButton asChild isActive={isActive('/settings')} tooltip="Settings">
+                 <a>
                     <Settings />
                     <span>Settings</span>
-                 </div>
+                 </a>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-             <Link href="/help">
-              <SidebarMenuButton isActive={isActive('/help')} tooltip="Help & Support" asChild>
-                 <div>
+             <Link href="/help" legacyBehavior passHref>
+              <SidebarMenuButton asChild isActive={isActive('/help')} tooltip="Help & Support">
+                 <a>
                     <HelpCircle />
                     <span>Help & Support</span>
-                 </div>
+                 </a>
               </SidebarMenuButton>
              </Link>
           </SidebarMenuItem>
