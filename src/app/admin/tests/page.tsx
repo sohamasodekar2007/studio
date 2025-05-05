@@ -1,73 +1,165 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MoreHorizontal, PlusCircle, Search, Edit, Trash2, Eye, ToggleLeft, ToggleRight, Filter } from "lucide-react"; // Added Icons
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
-import type { Test } from '@/types'; // Use the actual Test type
-import { getTests } from '@/actions/get-tests'; // Import the server action
-
-// Remove mock data fetching function
-// async function fetchTests(): Promise<TestData[]> { ... }
+import type { Test, TestModel } from '@/types'; // Use the actual Test type and TestModel
+import { testModels } from '@/types'; // Import test model options
+import { getTests, updateTestInJson, deleteTestFromJson } from '@/actions/test-actions'; // Import actions
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminTestsPage() {
-  const [tests, setTests] = useState<Test[]>([]); // Use Test type
+  const { toast } = useToast();
+  const [tests, setTests] = useState<Test[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedModelFilter, setSelectedModelFilter] = useState<TestModel | 'all'>('all');
 
-  useEffect(() => {
+  const fetchAllTests = () => {
     setIsLoading(true);
-    // Fetch tests using the server action
     getTests()
       .then(data => {
         setTests(data);
       })
       .catch(error => {
          console.error("Failed to fetch tests:", error);
-         // Handle error appropriately, maybe show a toast
-         setTests([]); // Set to empty array on error
+         toast({ variant: "destructive", title: "Error", description: "Could not load tests." });
+         setTests([]);
       })
       .finally(() => {
         setIsLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchAllTests();
   }, []);
 
-  const filteredTests = tests.filter(test =>
-    test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    test.exam.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    test.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    test.model.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter tests based on search term and selected model
+  const filteredTests = useMemo(() => {
+    return tests.filter(test =>
+      (test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      test.exam.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      test.subject.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (selectedModelFilter === 'all' || test.model === selectedModelFilter)
+    );
+  }, [tests, searchTerm, selectedModelFilter]);
+
+  // Function to handle status toggle (Active/Inactive)
+  const handleToggleStatus = async (testId: string, currentStatus: boolean) => {
+     // Optimistic update
+     const originalTests = [...tests];
+     setTests(prevTests =>
+         prevTests.map(test =>
+             test.id === testId ? { ...test, published: !currentStatus } : test
+         )
+     );
+
+     try {
+         const result = await updateTestInJson(testId, { published: !currentStatus });
+         if (!result.success) {
+             // Revert optimistic update on failure
+             setTests(originalTests);
+             toast({ variant: "destructive", title: "Update Failed", description: result.message });
+         } else {
+              toast({ title: "Status Updated", description: `Test status changed to ${!currentStatus ? 'Active' : 'Inactive'}.` });
+              // No need to re-fetch, optimistic update succeeded
+         }
+     } catch (error) {
+         console.error("Failed to toggle test status:", error);
+         // Revert optimistic update on error
+         setTests(originalTests);
+         toast({ variant: "destructive", title: "Error", description: "Could not update test status." });
+     }
+  };
+
+  // Function to handle test deletion
+  const handleDeleteTest = async (testId: string) => {
+     // Optional: Add confirmation dialog here
+
+     const originalTests = [...tests];
+      // Optimistic update
+     setTests(prevTests => prevTests.filter(test => test.id !== testId));
+
+     try {
+        const result = await deleteTestFromJson(testId);
+        if (!result.success) {
+            // Revert optimistic update
+            setTests(originalTests);
+            toast({ variant: "destructive", title: "Delete Failed", description: result.message });
+        } else {
+            toast({ title: "Test Deleted", description: "The test has been removed." });
+            // Optimistic update succeeded
+        }
+     } catch (error) {
+         console.error("Failed to delete test:", error);
+          // Revert optimistic update
+         setTests(originalTests);
+         toast({ variant: "destructive", title: "Error", description: "Could not delete test." });
+     }
+  };
+
+  const formatTestModel = (model: TestModel) => {
+    switch (model) {
+      case 'chapterwise': return 'Chapterwise';
+      case 'full_length': return 'Full Length';
+      case 'topicwise': return 'Topicwise';
+      case 'combo': return 'Combo';
+      case 'DPP': return 'DPP';
+      default: return model;
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
          <div>
             <h1 className="text-3xl font-bold tracking-tight">Manage Tests</h1>
-            <p className="text-muted-foreground">Add, edit, or remove tests.</p>
+            <p className="text-muted-foreground">Add, edit, or remove tests (Chapterwise, Full Length, DPPs).</p>
          </div>
-         <Button disabled> {/* TODO: Implement Add Test functionality */}
+         {/* TODO: Link Add Test button to a creation form/modal */}
+         <Button disabled>
            <PlusCircle className="mr-2 h-4 w-4" /> Add New Test
          </Button>
       </div>
 
 
       <Card>
-        <CardHeader>
-            <div className="flex items-center gap-2">
-             <Search className="h-4 w-4 text-muted-foreground" />
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1 md:grow-0">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
              <Input
-               placeholder="Search by title, exam, subject, model..."
+               placeholder="Search by title, exam, subject..."
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
-               className="max-w-sm"
+               className="pl-10 w-full md:w-80"
              />
+           </div>
+           {/* Filter Dropdown */}
+           <div className="flex items-center gap-2">
+             <Filter className="h-4 w-4 text-muted-foreground" />
+             <Select onValueChange={(value) => setSelectedModelFilter(value as TestModel | 'all')} value={selectedModelFilter}>
+               <SelectTrigger className="w-full md:w-[180px]">
+                 <SelectValue placeholder="Filter by Type" />
+               </SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="all">All Test Types</SelectItem>
+                 {testModels.map((model) => (
+                   <SelectItem key={model} value={model}>
+                     {formatTestModel(model)}
+                   </SelectItem>
+                 ))}
+               </SelectContent>
+             </Select>
            </div>
         </CardHeader>
         <CardContent>
@@ -76,26 +168,26 @@ export default function AdminTestsPage() {
               <TableRow>
                 <TableHead>Title</TableHead>
                 <TableHead>Exam</TableHead>
-                <TableHead>Model</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Pricing</TableHead>
                 <TableHead>Questions</TableHead>
-                <TableHead>Duration (min)</TableHead>
+                <TableHead>Duration</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={`skeleton-${index}`}>
                     <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-12" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredTests.length > 0 ? (
@@ -103,25 +195,22 @@ export default function AdminTestsPage() {
                   <TableRow key={test.id}>
                     <TableCell className="font-medium">{test.title}</TableCell>
                     <TableCell>{test.exam}</TableCell>
-                    <TableCell className="capitalize">{test.model.replace('_', ' ')}</TableCell>
+                    <TableCell>{formatTestModel(test.model)}</TableCell>
                     <TableCell>
                        <Badge variant={test.pricing === 'free' ? 'default' : 'outline'}
-                         className={`capitalize ${test.pricing === 'free' ? 'bg-green-100 text-green-800' : ''}`}>
+                         className={`capitalize ${test.pricing === 'free' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}`}>
                         {test.pricing}
                       </Badge>
                     </TableCell>
-                    <TableCell>{test.questionsCount}</TableCell> {/* Updated field name */}
-                    <TableCell>{test.durationMinutes}</TableCell> {/* Updated field name */}
+                    <TableCell>{test.questionsCount}</TableCell>
+                    <TableCell>{test.durationMinutes} min</TableCell>
                     <TableCell>
-                      {test.status ? (
-                        <Badge variant={test.status === 'Popular' ? 'destructive' : 'secondary'}>
-                          {test.status}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                      <Badge variant={test.published ? 'secondary' : 'outline'}
+                       className={test.published ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'} >
+                        {test.published ? 'Active' : 'Inactive'}
+                      </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button aria-haspopup="true" size="icon" variant="ghost">
@@ -132,12 +221,25 @@ export default function AdminTestsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                            <DropdownMenuItem asChild>
-                               <Link href={`/tests/${test.id}`} target="_blank">View Test</Link>
+                               <Link href={`/tests/${test.id}`} target="_blank">
+                                <Eye className="mr-2 h-4 w-4" /> View Test
+                               </Link>
                            </DropdownMenuItem>
-                          <DropdownMenuItem disabled>Edit Test</DropdownMenuItem>
-                          <DropdownMenuItem disabled>Manage Questions</DropdownMenuItem>
-                          <DropdownMenuItem disabled>View Results</DropdownMenuItem>
-                          <DropdownMenuItem disabled className="text-destructive">Delete Test</DropdownMenuItem>
+                           {/* TODO: Link Edit button to an editing form/modal */}
+                          <DropdownMenuItem disabled>
+                             <Edit className="mr-2 h-4 w-4" /> Edit Test
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleStatus(test.id, test.published)}>
+                             {test.published ? <ToggleLeft className="mr-2 h-4 w-4" /> : <ToggleRight className="mr-2 h-4 w-4" />}
+                             Set {test.published ? 'Inactive' : 'Active'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled>
+                             Manage Questions
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDeleteTest(test.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Test
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -146,7 +248,7 @@ export default function AdminTestsPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center">
-                    No tests found.
+                    No tests found matching your criteria.
                   </TableCell>
                 </TableRow>
               )}
@@ -154,9 +256,8 @@ export default function AdminTestsPage() {
           </Table>
         </CardContent>
         <CardFooter>
-          {/* Optional: Add pagination controls */}
            <div className="text-xs text-muted-foreground">
-            Showing <strong>{filteredTests.length}</strong> of <strong>{tests.length}</strong> tests
+            Showing <strong>{filteredTests.length}</strong> of <strong>{tests.length}</strong> total tests.
           </div>
         </CardFooter>
       </Card>

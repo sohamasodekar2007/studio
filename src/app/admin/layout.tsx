@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google'; // Or another appropriate font
 import { AdminSidebar } from '@/components/admin/admin-sidebar'; // Adjust path as needed
 import { AdminHeader } from '@/components/admin/admin-header'; // Adjust path as needed
+import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
 // Import necessary providers if admin section needs separate context (e.g., auth checks)
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'ExamPrep Hub - Admin Panel',
-  description: 'Manage ExamPrep Hub content and users.',
+  title: 'STUDY SPHERE - Admin Panel', // Updated Title
+  description: 'Manage STUDY SPHERE content and users.', // Updated Description
 };
 
 export default function AdminLayout({
@@ -16,22 +17,20 @@ export default function AdminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // TODO: Add robust authentication and authorization check here.
-  // Redirect non-admins or show an unauthorized message.
-  // Example:
-  // const { user, isAdmin, loading } = useAdminAuth(); // Replace with your actual auth logic
-  // if (loading) return <div>Loading Admin Panel...</div>;
-  // if (!isAdmin) { router.push('/'); return null; } // Or show unauthorized
+  // Note: Actual admin role checking should happen within pages or middleware
+  // This layout structure assumes the user is authorized to see the admin UI frame.
 
   return (
-    <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
-      <AdminSidebar />
-      <div className="flex flex-col flex-1">
-        <AdminHeader />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-          {children}
-        </main>
+    <AuthProvider> {/* Ensure Auth context is available for header/sidebar checks */}
+      <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
+        <AdminSidebar />
+        <div className="flex flex-col flex-1">
+          <AdminHeader />
+          <main className="flex-1 p-4 md:p-6 lg:p-8">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }

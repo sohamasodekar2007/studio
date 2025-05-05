@@ -9,7 +9,7 @@ export const userModels = ["free", "chapterwise", "full_length", "combo"] as con
 export type UserModel = typeof userModels[number];
 
 // Define Test Model types
-export const testModels = ["chapterwise", "full_length", "topicwise", "combo"] as const;
+export const testModels = ["chapterwise", "full_length", "topicwise", "combo", "DPP"] as const; // Added DPP
 export type TestModel = typeof testModels[number];
 
 // Define Pricing types
@@ -26,8 +26,9 @@ export type Exam = typeof exams[number];
 
 
 // Interface for User Data (matching the example structure)
+// Updated to align with the provided example structure
 export interface UserProfile {
-  id: string; // Unique ID (previously uid)
+  id: string | number; // Allow number based on example
   email: string | null;
   password?: string; // Stored in JSON as per example, but NOT used for auth in this simulation
   name: string | null;
@@ -44,7 +45,7 @@ export interface Test {
   id: string; // document ID
   title: string;
   description?: string;
-  type: string; // e.g., Mock Test, Chapter Test
+  type: string; // e.g., Mock Test, Chapter Test, DPP
   exam: Exam; // MHT-CET, JEE Main, etc.
   subject: string; // Physics, PCM, Biology
   model: TestModel; // chapterwise, full_length, etc.

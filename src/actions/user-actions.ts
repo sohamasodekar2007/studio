@@ -39,83 +39,203 @@ export async function readUsers(): Promise<UserProfile[]> {
   }
 }
 
+/**
+ * Writes the users array to the users.json file.
+ * @param users The array of UserProfile to write.
+ * @returns A promise resolving to true on success, false on error.
+ */
+async function writeUsers(users: UserProfile[]): Promise<boolean> {
+    try {
+        await fs.writeFile(usersFilePath, JSON.stringify(users, null, 2), 'utf-8');
+        return true;
+    } catch (error) {
+        console.error('Failed to write users.json:', error);
+        return false;
+    }
+}
+
 
 /**
  * Saves or updates user data in the local users.json file.
  * If a user with the same ID exists, it updates; otherwise, it adds.
  * WARNING: This method is insecure and not suitable for production environments.
- * Passwords are NOT saved or updated by this function for simulation security.
+ * It now stores the plain text password in the JSON file as requested for simulation.
  *
- * @param id - The unique user ID.
- * @param name - The user's full name.
- * @param email - The user's email.
- * @param phone - The user's phone number.
- * @param className - The user's class (academic status). Note the parameter name change.
- * @param model - The user's subscription model.
- * @param expiry_date - The expiry date for the model (ISO string or null).
+ * @param userProfileData - An object containing the user profile data, including the plain text password.
  * @returns A promise that resolves with success status and optional message.
  */
 export async function saveUserToJson(
-    id: string,
-    name: string,
-    email: string,
-    phone: string,
-    className: AcademicStatus, // Renamed parameter for clarity
-    model: UserModel,
-    expiry_date: string | null
+    userProfileData: Omit<UserProfile, 'createdAt'> & { password?: string } // Allow password to be passed
 ): Promise<{ success: boolean; message?: string }> {
     console.warn(
-    'WARNING: Saving/Updating user data in users.json is insecure and not recommended for production. Passwords are ignored.'
-  );
+        'WARNING: Saving/Updating user data with plain text password in users.json is highly insecure and not recommended for production.'
+    );
 
-    // Construct the user object based on the new structure
-    const userToSave: Omit<UserProfile, 'password' | 'createdAt'> & { class: AcademicStatus | null } = { // Explicitly omit password
-        id,
-        name,
-        email,
-        phone,
-        class: className, // Use the renamed parameter
-        model,
-        expiry_date,
-        referral: "", // Add default referral if not provided
+    // Generate a local ID if one isn't provided (useful for new users during signup)
+    const userToSave: UserProfile = {
+        id: userProfileData.id || `local_${userProfileData.email?.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`,
+        ...userProfileData,
+        createdAt: new Date().toISOString(), // Add or overwrite createdAt
     };
+
+    // Ensure all fields expected by UserProfile are present, providing defaults if necessary
+    userToSave.referral = userToSave.referral ?? "";
+    userToSave.model = userToSave.model ?? 'free';
+    userToSave.expiry_date = userToSave.expiry_date ?? null;
+    // Keep the password as passed in userProfileData
 
 
     try {
-        let users = await readUsers(); // Use the readUsers function
+        let users = await readUsers();
 
-        const existingUserIndex = users.findIndex(u => u.id === id);
+        const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
         if (existingUserIndex !== -1) {
-            // Update existing user (merge new data, keep original createdAt, ignore password)
+            // Update existing user: merge new data, keep original createdAt if it existed
             const existingUser = users[existingUserIndex];
             users[existingUserIndex] = {
-                ...existingUser, // Keep existing fields
-                ...userToSave, // Overwrite with new data (excluding password)
-                password: existingUser.password, // *** Keep existing stored password (even if it's plain text) ***
-                createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date or set if missing
-             };
-            console.log(`User data for ${email} (ID: ${id}) updated in users.json`);
+                ...existingUser,          // Keep existing fields
+                ...userToSave,             // Overwrite with new data (including password)
+                createdAt: existingUser.createdAt || userToSave.createdAt, // Preserve original creation date
+            };
+            console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated in users.json`);
         } else {
             // Add new user
-            const newUserWithTimestamp: UserProfile = {
-                ...userToSave,
-                 password: "dummy_password_not_saved", // Add placeholder for structure, but it won't be saved securely
-                 createdAt: new Date().toISOString(),
-                 class: className, // Ensure class is set correctly for new user
-            };
-            users.push(newUserWithTimestamp);
-             console.log(`New user data for ${email} (ID: ${id}) added to users.json`);
+            users.push(userToSave); // Directly push the prepared user object
+            console.log(`New user data for ${userToSave.email} (ID: ${userToSave.id}) added to users.json`);
         }
 
-
         // Write the updated users array back to the file
-        await fs.writeFile(usersFilePath, JSON.stringify(users, null, 2), 'utf-8');
+        const writeSuccess = await writeUsers(users);
+        if (!writeSuccess) {
+             return { success: false, message: 'Failed to write user data to local file.' };
+        }
 
         return { success: true };
 
     } catch (error: any) {
         console.error('Failed to save/update user data in users.json:', error);
         return { success: false, message: 'Failed to save user data locally.' };
+    }
+}
+
+
+/**
+ * Adds a new user to the users.json file.
+ * WARNING: Insecure. Stores plain text passwords.
+ * @param newUser The user profile object to add.
+ * @returns A promise resolving with success status and optional message.
+ */
+export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
+    console.warn("WARNING: Adding user with plain text password to users.json is insecure.");
+    try {
+        let users = await readUsers();
+
+        // Check if email already exists
+        if (users.some(u => u.email === newUser.email)) {
+            return { success: false, message: 'User with this email already exists.' };
+        }
+         // Check if ID already exists
+         if (users.some(u => u.id === newUser.id)) {
+             return { success: false, message: `User with ID ${newUser.id} already exists.` };
+         }
+
+
+        // Add creation timestamp if not present
+        const userToAdd: UserProfile = {
+             ...newUser,
+             createdAt: newUser.createdAt || new Date().toISOString(),
+        };
+
+        users.push(userToAdd);
+
+        const success = await writeUsers(users);
+        return { success, message: success ? undefined : 'Failed to write users file.' };
+    } catch (error) {
+        console.error('Error adding user to JSON:', error);
+        return { success: false, message: 'Failed to add user.' };
+    }
+}
+
+/**
+ * Updates an existing user in the users.json file by ID.
+ * WARNING: Insecure. Updates potentially include plain text password.
+ * @param userId The ID of the user to update.
+ * @param updatedData Partial user profile data to update.
+ * @returns A promise resolving with success status and optional message.
+ */
+export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>>): Promise<{ success: boolean; message?: string }> {
+     console.warn("WARNING: Updating user data (potentially including password) in users.json is insecure.");
+    try {
+        let users = await readUsers();
+        const userIndex = users.findIndex(u => u.id === userId);
+
+        if (userIndex === -1) {
+            return { success: false, message: `User with ID ${userId} not found.` };
+        }
+
+        // Merge existing data with updated data
+        users[userIndex] = {
+            ...users[userIndex], // Keep existing data
+            ...updatedData,      // Apply updates
+            id: userId,          // Ensure ID remains the same
+        };
+
+        const success = await writeUsers(users);
+        return { success, message: success ? undefined : 'Failed to write users file.' };
+    } catch (error) {
+        console.error(`Error updating user ${userId} in JSON:`, error);
+        return { success: false, message: 'Failed to update user.' };
+    }
+}
+
+/**
+ * Deletes a user from the users.json file by ID.
+ * @param userId The ID of the user to delete.
+ * @returns A promise resolving with success status and optional message.
+ */
+export async function deleteUserFromJson(userId: string | number): Promise<{ success: boolean; message?: string }> {
+    try {
+        let users = await readUsers();
+        const initialLength = users.length;
+        users = users.filter(u => u.id !== userId);
+
+        if (users.length === initialLength) {
+            return { success: false, message: `User with ID ${userId} not found.` };
+        }
+
+        const success = await writeUsers(users);
+        return { success, message: success ? undefined : 'Failed to write users file.' };
+    } catch (error) {
+        console.error(`Error deleting user ${userId} from JSON:`, error);
+        return { success: false, message: 'Failed to delete user.' };
+    }
+}
+
+/**
+ * Updates the password for a user in the users.json file.
+ * WARNING: Highly insecure. Stores and updates plain text passwords.
+ * @param userId The ID of the user whose password needs updating.
+ * @param newPassword The new plain text password.
+ * @returns A promise resolving with success status and optional message.
+ */
+export async function updateUserPasswordInJson(userId: string | number, newPassword: string): Promise<{ success: boolean; message?: string }> {
+    console.warn("WARNING: Updating plain text password in users.json is highly insecure.");
+    try {
+        let users = await readUsers();
+        const userIndex = users.findIndex(u => u.id === userId);
+
+        if (userIndex === -1) {
+            return { success: false, message: `User with ID ${userId} not found.` };
+        }
+
+        // Update the password field
+        users[userIndex].password = newPassword;
+
+        const success = await writeUsers(users);
+        return { success, message: success ? undefined : 'Failed to write users file.' };
+    } catch (error) {
+        console.error(`Error updating password for user ${userId} in JSON:`, error);
+        return { success: false, message: 'Failed to update password.' };
     }
 }

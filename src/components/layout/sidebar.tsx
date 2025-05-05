@@ -34,7 +34,7 @@ export function AppSidebar() {
        <SidebarHeader className="flex items-center justify-between p-4">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
           <GraduationCap className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold">ExamPrep Hub</h1>
+          <h1 className="text-lg font-semibold">STUDY SPHERE</h1> {/* Updated Brand Name */}
         </div>
         <SidebarTrigger className="hidden sm:flex" />
       </SidebarHeader>

@@ -7,8 +7,8 @@ import { Toaster } from "@/components/ui/toaster"; // Import Toaster
 import { AuthProvider } from '@/context/auth-context'; // Import AuthProvider
 
 export const metadata: Metadata = {
-  title: 'ExamPrep Hub - MHT-CET, JEE, NEET Test Series', // Updated title
-  description: 'Practice tests and performance analysis for MHT-CET, JEE, and NEET aspirants.', // Updated description
+  title: 'STUDY SPHERE - MHT-CET, JEE, NEET Test Series', // Updated title
+  description: 'Your ultimate destination for MHT-CET, JEE, and NEET exam preparation. Practice tests, DPPs, performance analysis, and more.', // Updated description
 };
 
 export default function RootLayout({

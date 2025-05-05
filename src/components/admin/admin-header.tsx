@@ -5,14 +5,11 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Home, Users, BookOpen, Settings, PanelLeft, Search, ShieldCheck, LogOut, User, Loader2 } from 'lucide-react'; // Added Loader2
+import { Home, Users, BookOpen, Settings, PanelLeft, Search, ShieldCheck, LogOut, User, Loader2, Banknote, BarChart3, ClipboardList, FileText } from 'lucide-react'; // Added Loader2, Banknote, BarChart3, ClipboardList, FileText
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/context/auth-context'; // Use main auth context
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-// Remove Firebase imports
-// import { signOut } from 'firebase/auth';
-// import { auth } from '@/lib/firebase';
 import { useState } from 'react';
 
 // Define navigation items for the mobile admin sidebar
@@ -20,8 +17,10 @@ const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/tests', label: 'Tests', icon: BookOpen },
-  { href: '/admin/payments', label: 'Payments', icon: 'DollarSign' }, // Keep as string if icon missing temporarily
-  { href: '/admin/analytics', label: 'Analytics', icon: 'BarChart3' }, // Keep as string if icon missing temporarily
+  { href: '/admin/questions', label: 'Question Bank', icon: ClipboardList }, // New
+  { href: '/admin/notes', label: 'Short Notes', icon: FileText }, // New
+  { href: '/admin/payments', label: 'Payments', icon: Banknote }, // Updated Icon
+  { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -37,7 +36,7 @@ export function AdminHeader() {
       await logout(); // Call the simulated logout from context
       toast({ title: "Logged Out", description: "Admin session ended." });
        // AuthProvider might handle redirect, or do it manually if needed:
-       // router.push('/auth/login');
+       router.push('/auth/login'); // Redirect to login after admin logout
     } catch (error: any) {
       console.error("Admin Logout failed (simulated):", error);
       toast({ variant: "destructive", title: "Logout Failed", description: error.message });
@@ -54,19 +53,9 @@ export function AdminHeader() {
   }
 
   // Helper to render icons safely
-    const renderIcon = (icon: React.ElementType | string) => {
-    if (typeof icon === 'string') {
-        // Handle potential missing icons gracefully (e.g., return a default or null)
-        console.warn(`Icon "${icon}" might be missing.`);
-         switch(icon) {
-             case 'DollarSign': return <DollarSign className="h-5 w-5" />;
-             case 'BarChart3': return <BarChart3 className="h-5 w-5" />;
-             // Add other cases or a default
-             default: return <ShieldCheck className="h-5 w-5" />; // Default placeholder
-         }
-    }
-    const IconComponent = icon;
-    return <IconComponent className="h-5 w-5" />;
+    const renderIcon = (icon: React.ElementType) => {
+        const IconComponent = icon;
+        return <IconComponent className="h-5 w-5" />;
     };
 
 
@@ -87,7 +76,7 @@ export function AdminHeader() {
                 className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
               >
                 <ShieldCheck className="h-5 w-5 transition-all group-hover:scale-110" />
-                <span className="sr-only">ExamPrep Admin</span>
+                <span className="sr-only">Study Sphere Admin</span> {/* Updated Name */}
             </Link>
             {adminNavItems.map((item) => (
               <Link
@@ -110,7 +99,7 @@ export function AdminHeader() {
       {/* Admin User Dropdown */}
        {loading ? (
            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground ml-auto" />
-       ) : user && ( // Show only if admin user is logged in
+       ) : user && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? ( // Show only if admin user is logged in
          <DropdownMenu>
            <DropdownMenuTrigger asChild>
              <Button
@@ -120,7 +109,7 @@ export function AdminHeader() {
              >
                <Avatar className="h-8 w-8">
                    {/* Use placeholder avatar */}
-                  <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.uid}.png`} alt="Admin Avatar" />
+                  <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt="Admin Avatar" />
                   <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
               </Avatar>
              </Button>
@@ -147,7 +136,7 @@ export function AdminHeader() {
              </DropdownMenuItem>
            </DropdownMenuContent>
          </DropdownMenu>
-       )}
+       ): null /* Hide dropdown if not admin or loading */}
     </header>
   );
 }

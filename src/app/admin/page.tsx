@@ -1,17 +1,41 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Activity, Users, BookOpen, DollarSign } from "lucide-react";
+import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart } from "lucide-react"; // Added ClipboardList, FileText, LineChart
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { getTests } from "@/actions/test-actions";
+import { readUsers } from "@/actions/user-actions";
 
-// Placeholder data - replace with real data fetching
-const stats = {
-  totalUsers: 1250,
-  activeTests: 55,
-  recentSignups: 25,
-  totalRevenue: 500, // Example if paid tests exist
-};
+// Placeholder data fetching - replace with more robust fetching logic
+async function getStats() {
+    // In a real app, fetch this from a database or analytics service
+    try {
+        const [users, tests] = await Promise.all([readUsers(), getTests()]);
+        const totalUsers = users.length;
+        const activeTests = tests.filter(t => t.published).length;
+        // Placeholder for recent signups and revenue
+        const recentSignups = users.filter(u => u.createdAt && new Date(u.createdAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)).length;
+        const totalRevenue = 500; // Example
 
-export default function AdminDashboardPage() {
+        return {
+            totalUsers,
+            activeTests,
+            recentSignups,
+            totalRevenue,
+        };
+    } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+        return {
+            totalUsers: 0,
+            activeTests: 0,
+            recentSignups: 0,
+            totalRevenue: 0,
+        };
+    }
+}
+
+export default async function AdminDashboardPage() {
+    const stats = await getStats();
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
@@ -36,7 +60,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeTests}</div>
-            <p className="text-xs text-muted-foreground">Available tests</p>
+            <p className="text-xs text-muted-foreground">Published tests</p>
           </CardContent>
         </Card>
         <Card>
@@ -78,12 +102,26 @@ export default function AdminDashboardPage() {
                    <BookOpen className="h-4 w-4" /> Manage Tests
                </Button>
            </Link>
-           <Button variant="outline" className="w-full justify-start gap-2" disabled>
-             <Activity className="h-4 w-4" /> View Analytics (Coming Soon)
-           </Button>
-            <Button variant="outline" className="w-full justify-start gap-2" disabled>
-              <DollarSign className="h-4 w-4" /> Manage Payments (Coming Soon)
-           </Button>
+            <Link href="/admin/questions" passHref>
+               <Button variant="outline" className="w-full justify-start gap-2">
+                   <ClipboardList className="h-4 w-4" /> Question Bank
+               </Button>
+           </Link>
+            <Link href="/admin/notes" passHref>
+               <Button variant="outline" className="w-full justify-start gap-2">
+                   <FileText className="h-4 w-4" /> Short Notes
+               </Button>
+           </Link>
+           <Link href="/admin/analytics" passHref>
+                <Button variant="outline" className="w-full justify-start gap-2">
+                <LineChart className="h-4 w-4" /> View Analytics
+                </Button>
+            </Link>
+            <Link href="/admin/payments" passHref>
+                <Button variant="outline" className="w-full justify-start gap-2">
+                <DollarSign className="h-4 w-4" /> Manage Payments
+                </Button>
+           </Link>
            {/* Add more actions as needed */}
         </CardContent>
       </Card>
