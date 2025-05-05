@@ -11,13 +11,11 @@ import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, User
 import { Skeleton } from "@/components/ui/skeleton";
 import { type UserProfile, type UserModel } from '@/types';
 // Import the action to read users from JSON
-import { readUsers, deleteUserFromJson, updateUserInJson, updateUserPasswordInJson } from '@/actions/user-actions'; // Import actions
+import { readUsers, deleteUserFromJson, updateUserInJson } from '@/actions/user-actions'; // Import actions (updateUserPasswordInJson is used internally by ResetPasswordDialog)
 import { useToast } from '@/hooks/use-toast';
 import EditUserDialog from '@/components/admin/edit-user-dialog'; // Import dialog components
 import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
 import ChangeRoleDialog from '@/components/admin/change-role-dialog';
-
-// Remove client-side mock fetch
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
@@ -209,7 +207,7 @@ export default function AdminUsersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                           {/* Add onClick handlers */}
+                           {/* Add onClick handlers and ensure disabled logic is correct */}
                           <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={(user as any).role === 'Admin'}>
                              <Edit className="mr-2 h-4 w-4" /> Edit User
                           </DropdownMenuItem>
