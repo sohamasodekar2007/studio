@@ -1,0 +1,165 @@
+
+[
+  {
+    "id": "mht-cet-phy-1",
+    "title": "MHT-CET Physics Mock Test 1",
+    "type": "Mock Test",
+    "exam": "MHT-CET",
+    "subject": "Physics",
+    "imageHint": "physics formula atoms",
+    "status": "New",
+    "model": "full_length",
+    "pricing": "paid",
+    "questionsCount": 50,
+    "durationMinutes": 90,
+    "syllabus": [
+      "Rotational Dynamics",
+      "Mechanical Properties of Fluids",
+      "Thermal Properties of Matter"
+    ],
+    "published": true,
+    "createdAt": "2024-01-10T10:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/mht-cet-phy-1/400/200"
+  },
+  {
+    "id": "jee-main-full-3",
+    "title": "JEE Main Full Syllabus Test 3",
+    "type": "Full Syllabus Test",
+    "exam": "JEE Main",
+    "subject": "PCM",
+    "imageHint": "jee exam students writing",
+    "status": "Popular",
+    "model": "full_length",
+    "pricing": "paid",
+    "questionsCount": 90,
+    "durationMinutes": 180,
+    "syllabus": [
+      "Physics",
+      "Chemistry",
+      "Mathematics (Full Syllabus)"
+    ],
+    "published": true,
+    "createdAt": "2024-01-15T11:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/jee-main-full-3/400/200"
+  },
+  {
+    "id": "neet-bio-ch-cell",
+    "title": "NEET Biology: Cell Structure",
+    "type": "Chapter Test",
+    "exam": "NEET",
+    "subject": "Biology",
+    "imageHint": "biology cell microscope dna",
+    "status": "",
+    "model": "chapterwise",
+    "pricing": "free",
+    "questionsCount": 45,
+    "durationMinutes": 45,
+    "syllabus": [
+      "Cell: The Unit of Life",
+      "Biomolecules",
+      "Cell Cycle and Cell Division"
+    ],
+    "published": true,
+    "createdAt": "2024-02-01T09:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/neet-bio-ch-cell/400/200"
+  },
+  {
+    "id": "jee-adv-math-calc",
+    "title": "JEE Advanced Maths: Calculus",
+    "type": "Topic Test",
+    "exam": "JEE Advanced",
+    "subject": "Maths",
+    "imageHint": "mathematics calculus graph",
+    "status": "New",
+    "model": "topicwise",
+    "pricing": "paid",
+    "questionsCount": 30,
+    "durationMinutes": 120,
+    "syllabus": [
+      "Limits, Continuity and Differentiability",
+      "Integral Calculus",
+      "Differential Equations"
+    ],
+    "published": true,
+    "createdAt": "2024-02-10T14:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/jee-adv-math-calc/400/200"
+  },
+  {
+    "id": "mht-cet-chem-org",
+    "title": "MHT-CET Chemistry: Organic Basics",
+    "type": "Chapter Test",
+    "exam": "MHT-CET",
+    "subject": "Chemistry",
+    "imageHint": "chemistry beakers science lab",
+    "status": "",
+    "model": "chapterwise",
+    "pricing": "free",
+    "questionsCount": 50,
+    "durationMinutes": 60,
+    "syllabus": [
+      "Some Basic Concepts of Chemistry",
+      "Structure of Atom",
+      "Classification of Elements and Periodicity in Properties"
+    ],
+    "published": true,
+    "createdAt": "2024-02-20T10:30:00Z",
+    "imageUrl": "https://picsum.photos/seed/mht-cet-chem-org/400/200"
+  },
+  {
+    "id": "neet-phy-mock-2",
+    "title": "NEET Physics Mock Test 2",
+    "type": "Mock Test",
+    "exam": "NEET",
+    "subject": "Physics",
+    "imageHint": "physics concepts motion energy",
+    "status": "Popular",
+    "model": "full_length",
+    "pricing": "paid",
+    "questionsCount": 180,
+    "durationMinutes": 180,
+    "syllabus": [
+      "Full Physics Syllabus for NEET"
+    ],
+    "published": true,
+    "createdAt": "2024-03-01T12:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/neet-phy-mock-2/400/200"
+  },
+  {
+    "id": "jee-main-combo-1",
+    "title": "JEE Main Physics & Chem Combo",
+    "type": "Combo Test",
+    "exam": "JEE Main",
+    "subject": "Physics, Chemistry",
+    "imageHint": "physics chemistry combo equations",
+    "status": "",
+    "model": "combo",
+    "pricing": "paid",
+    "questionsCount": 60,
+    "durationMinutes": 120,
+    "syllabus": [
+      "Selected topics from Physics and Chemistry"
+    ],
+    "published": false,
+    "createdAt": "2024-03-10T16:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/jee-main-combo-1/400/200"
+  },
+  {
+    "id": "mht-cet-full-free",
+    "title": "MHT-CET Full Syllabus Free Mock",
+    "type": "Mock Test",
+    "exam": "MHT-CET",
+    "subject": "PCM",
+    "imageHint": "free exam access student",
+    "status": "Popular",
+    "model": "full_length",
+    "pricing": "free",
+    "questionsCount": 150,
+    "durationMinutes": 180,
+    "syllabus": [
+      "Complete MHT-CET Syllabus (PCM)"
+    ],
+    "published": true,
+    "createdAt": "2024-03-15T08:00:00Z",
+    "imageUrl": "https://picsum.photos/seed/mht-cet-full-free/400/200"
+  }
+]

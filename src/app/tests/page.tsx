@@ -1,57 +1,69 @@
-'use client'; // Add 'use client' for state and event handlers
+'use client';
 
-import { useState, useMemo } from 'react'; // Import useState and useMemo
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ArrowRight, Tag, BookOpen, CalendarDays, CheckSquare } from "lucide-react"; // Added icons
+import { Search, Filter, ArrowRight, Tag, BookOpen, CalendarDays, CheckSquare, Loader2 } from "lucide-react"; // Added Loader2
 import Image from 'next/image';
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Import Popover
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { Test, Exam, TestModel, PricingType } from '@/types'; // Import types
+import { getTests } from '@/actions/get-tests'; // Import the server action to fetch tests
+import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton
 
-// Extended example test series data
-const allTestItems = [
-  { id: "mht-cet-phy-1", title: "MHT-CET Physics Mock Test 1", type: "Mock Test", exam: "MHT-CET", subject: "Physics", imageHint: "physics formula atoms", status: "New", model: "full_length", pricing: "paid", questions: 50, duration: 90 },
-  { id: "jee-main-full-3", title: "JEE Main Full Syllabus Test 3", type: "Full Syllabus Test", exam: "JEE Main", subject: "PCM", imageHint: "jee exam students writing", status: "Popular", model: "full_length", pricing: "paid", questions: 90, duration: 180 },
-  { id: "neet-bio-ch-cell", title: "NEET Biology: Cell Structure", type: "Chapter Test", exam: "NEET", subject: "Biology", imageHint: "biology cell microscope dna", status: "", model: "chapterwise", pricing: "free", questions: 45, duration: 45 },
-  { id: "jee-adv-math-calc", title: "JEE Advanced Maths: Calculus", type: "Topic Test", exam: "JEE Advanced", subject: "Maths", imageHint: "mathematics calculus graph", status: "New", model: "topicwise", pricing: "paid", questions: 30, duration: 120 }, // Added topicwise
-  { id: "mht-cet-chem-org", title: "MHT-CET Chemistry: Organic Basics", type: "Chapter Test", exam: "MHT-CET", subject: "Chemistry", imageHint: "chemistry beakers science lab", status: "", model: "chapterwise", pricing: "free", questions: 50, duration: 60 },
-  { id: "neet-phy-mock-2", title: "NEET Physics Mock Test 2", type: "Mock Test", exam: "NEET", subject: "Physics", imageHint: "physics concepts motion energy", status: "Popular", model: "full_length", pricing: "paid", questions: 180, duration: 180 },
-  { id: "jee-main-combo-1", title: "JEE Main Physics & Chem Combo", type: "Combo Test", exam: "JEE Main", subject: "Physics, Chemistry", imageHint: "physics chemistry combo equations", status: "", model: "combo", pricing: "paid", questions: 60, duration: 120 }, // Added combo
-  { id: "mht-cet-full-free", title: "MHT-CET Full Syllabus Free Mock", type: "Mock Test", exam: "MHT-CET", subject: "PCM", imageHint: "free exam access student", status: "Popular", model: "full_length", pricing: "free", questions: 150, duration: 180 }, // Added free full test
-];
+// Remove static test data
+// const allTestItems = [ ... ];
 
-// Define types for filters
-type Exam = "MHT-CET" | "JEE Main" | "JEE Advanced" | "NEET";
-type Model = "chapterwise" | "full_length" | "topicwise" | "combo";
-type Pricing = "free" | "paid";
-
+// Extract filter options from types or define them
 const exams: Exam[] = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"];
-const models: Model[] = ["chapterwise", "full_length", "topicwise", "combo"];
-const pricings: Pricing[] = ["free", "paid"];
+const models: TestModel[] = ["chapterwise", "full_length", "topicwise", "combo"];
+const pricings: PricingType[] = ["free", "paid"];
 
 export default function TestsPage() {
+  const [allTestItems, setAllTestItems] = useState<Test[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedExams, setSelectedExams] = useState<Exam[]>([]);
-  const [selectedModels, setSelectedModels] = useState<Model[]>([]);
-  const [selectedPricing, setSelectedPricing] = useState<Pricing | 'all'>('all');
+  const [selectedModels, setSelectedModels] = useState<TestModel[]>([]);
+  const [selectedPricing, setSelectedPricing] = useState<PricingType | 'all'>('all');
 
-  // Filter logic
+  // Fetch tests on component mount
+  useEffect(() => {
+    setIsLoading(true);
+    setError(null);
+    getTests()
+      .then(data => {
+        setAllTestItems(data);
+      })
+      .catch(err => {
+        console.error("Failed to fetch tests:", err);
+        setError("Failed to load tests. Please try again later.");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  // Filter logic - filter only PUBLISHED tests
   const filteredTestItems = useMemo(() => {
-    return allTestItems.filter(item => {
-      const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.subject.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesExam = selectedExams.length === 0 || selectedExams.includes(item.exam as Exam);
-      const matchesModel = selectedModels.length === 0 || selectedModels.includes(item.model as Model);
-      const matchesPricing = selectedPricing === 'all' || item.pricing === selectedPricing;
+    return allTestItems
+        .filter(item => item.published) // Only show published tests
+        .filter(item => {
+            const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                item.subject.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesExam = selectedExams.length === 0 || selectedExams.includes(item.exam as Exam);
+            const matchesModel = selectedModels.length === 0 || selectedModels.includes(item.model as TestModel);
+            const matchesPricing = selectedPricing === 'all' || item.pricing === selectedPricing;
 
-      return matchesSearch && matchesExam && matchesModel && matchesPricing;
-    });
-  }, [searchTerm, selectedExams, selectedModels, selectedPricing]);
+            return matchesSearch && matchesExam && matchesModel && matchesPricing;
+     });
+  }, [searchTerm, selectedExams, selectedModels, selectedPricing, allTestItems]);
 
   // Handlers for filter changes
   const handleExamChange = (exam: Exam) => {
@@ -60,11 +72,31 @@ export default function TestsPage() {
     );
   };
 
-  const handleModelChange = (model: Model) => {
+  const handleModelChange = (model: TestModel) => {
     setSelectedModels(prev =>
       prev.includes(model) ? prev.filter(m => m !== model) : [...prev, model]
     );
   };
+
+  const renderSkeletons = (count: number) => {
+     return Array.from({ length: count }).map((_, index) => (
+         <Card key={`skeleton-${index}`} className="overflow-hidden flex flex-col group bg-card">
+             <Skeleton className="w-full h-40" />
+             <CardContent className="p-4 flex flex-col flex-grow space-y-2">
+                 <div className="flex flex-wrap gap-1">
+                     <Skeleton className="h-5 w-16" />
+                     <Skeleton className="h-5 w-20" />
+                     <Skeleton className="h-5 w-12" />
+                 </div>
+                 <Skeleton className="h-6 w-3/4 mt-1" />
+                 <Skeleton className="h-4 w-1/2 mt-1" />
+                 <div className="pt-2 mt-auto">
+                    <Skeleton className="h-9 w-full mt-auto" />
+                 </div>
+             </CardContent>
+         </Card>
+     ));
+  }
 
   return (
     <div className="space-y-6">
@@ -145,7 +177,7 @@ export default function TestsPage() {
                    {/* Pricing Filter */}
                    <div className="space-y-2">
                      <Label>Pricing</Label>
-                     <Select onValueChange={(value) => setSelectedPricing(value as Pricing | 'all')} value={selectedPricing}>
+                     <Select onValueChange={(value) => setSelectedPricing(value as PricingType | 'all')} value={selectedPricing}>
                        <SelectTrigger>
                          <SelectValue placeholder="Select Pricing" />
                        </SelectTrigger>
@@ -165,61 +197,73 @@ export default function TestsPage() {
          </div>
       </div>
 
-      {/* Test Grid */}
-      {filteredTestItems.length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredTestItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-200 flex flex-col group bg-card">
-              <CardHeader className="p-0 relative">
-                 <Image
-                    src={`https://picsum.photos/seed/${item.id}/400/200`}
-                    alt={item.title}
-                    width={400}
-                    height={200}
-                    className="w-full h-40 object-cover"
-                    data-ai-hint={item.imageHint}
-                  />
-                  <div className="absolute top-2 right-2 flex gap-1">
-                     {item.status && (
-                        <Badge variant={item.status === 'Popular' ? 'destructive' : 'secondary'} className="text-xs">
-                          {item.status}
-                        </Badge>
-                      )}
-                      <Badge variant={item.pricing === 'free' ? 'default' : 'outline'} className={`text-xs ${item.pricing === 'free' ? 'bg-green-600 text-white border-green-600' : ''}`}>
-                         {item.pricing === 'free' ? 'Free' : 'Paid'}
-                      </Badge>
-                  </div>
-              </CardHeader>
-              <CardContent className="p-4 flex flex-col flex-grow space-y-2">
-                 <div className="flex flex-wrap gap-1">
-                   <Badge variant="outline" className="text-xs w-fit"><CalendarDays className="h-3 w-3 mr-1"/>{item.exam}</Badge>
-                   <Badge variant="secondary" className="text-xs w-fit capitalize"><CheckSquare className="h-3 w-3 mr-1"/>{item.model.replace('_', ' ')}</Badge>
-                   <Badge variant="secondary" className="text-xs w-fit"><BookOpen className="h-3 w-3 mr-1"/>{item.subject}</Badge>
-                 </div>
-                 <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.title}</CardTitle>
-                 <CardDescription className="text-sm text-muted-foreground line-clamp-2">
-                   {item.questions} Questions | {item.duration} Mins | {item.type}
-                 </CardDescription>
-
-                 <div className="pt-2 mt-auto">
-                    <Link href={`/tests/${item.id}`} passHref className="mt-auto block">
-                        <Button variant="secondary" className="w-full">
-                            View Details
-                            <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                    </Link>
-                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-         <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4">
-            <CardContent className="p-6 text-center text-muted-foreground">
-                No tests found matching your criteria. Try adjusting the filters.
+       {/* Error Display */}
+       {error && (
+         <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4 border-destructive bg-destructive/10">
+            <CardContent className="p-6 text-center text-destructive">
+                {error}
             </CardContent>
         </Card>
-      )}
+       )}
+
+      {/* Test Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+         {isLoading ? (
+             renderSkeletons(8) // Show 8 skeletons while loading
+         ) : filteredTestItems.length > 0 ? (
+             filteredTestItems.map((item) => (
+                <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-200 flex flex-col group bg-card">
+                <CardHeader className="p-0 relative">
+                    <Image
+                        // Use imageUrl from data if available, otherwise fallback to picsum
+                        src={item.imageUrl || `https://picsum.photos/seed/${item.id}/400/200`}
+                        alt={item.title}
+                        width={400}
+                        height={200}
+                        className="w-full h-40 object-cover"
+                        data-ai-hint={item.imageHint || `${item.exam} ${item.subject} test`} // Use hint or generate one
+                    />
+                    <div className="absolute top-2 right-2 flex gap-1">
+                        {item.status && (
+                            <Badge variant={item.status === 'Popular' ? 'destructive' : 'secondary'} className="text-xs">
+                            {item.status}
+                            </Badge>
+                        )}
+                        <Badge variant={item.pricing === 'free' ? 'default' : 'outline'} className={`text-xs ${item.pricing === 'free' ? 'bg-green-600 text-white border-green-600' : ''}`}>
+                            {item.pricing === 'free' ? 'Free' : 'Paid'}
+                        </Badge>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-4 flex flex-col flex-grow space-y-2">
+                    <div className="flex flex-wrap gap-1">
+                    <Badge variant="outline" className="text-xs w-fit"><CalendarDays className="h-3 w-3 mr-1"/>{item.exam}</Badge>
+                    <Badge variant="secondary" className="text-xs w-fit capitalize"><CheckSquare className="h-3 w-3 mr-1"/>{item.model.replace('_', ' ')}</Badge>
+                    <Badge variant="secondary" className="text-xs w-fit"><BookOpen className="h-3 w-3 mr-1"/>{item.subject}</Badge>
+                    </div>
+                    <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.title}</CardTitle>
+                    <CardDescription className="text-sm text-muted-foreground line-clamp-2">
+                    {item.questionsCount} Questions | {item.durationMinutes} Mins | {item.type}
+                    </CardDescription>
+
+                    <div className="pt-2 mt-auto">
+                        <Link href={`/tests/${item.id}`} passHref className="mt-auto block">
+                            <Button variant="secondary" className="w-full">
+                                View Details
+                                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                            </Button>
+                        </Link>
+                    </div>
+                </CardContent>
+                </Card>
+            ))
+            ) : !error ? ( // Only show "No tests found" if there wasn't an error
+            <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                    No tests found matching your criteria. Try adjusting the filters.
+                </CardContent>
+            </Card>
+         ) : null /* Don't show anything if there was an error and no tests */ }
+      </div>
     </div>
   );
 }

@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+// Remove Firebase imports
+// import { updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+// import { auth } from '@/lib/firebase';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -14,78 +15,100 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, AlertTriangle } from "lucide-react"; // Added AlertTriangle
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
+import { saveUserToJson } from '@/actions/save-user'; // Import action to update user
+import type { UserProfile } from '@/types';
 
 // --- Profile Form ---
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  // email: z.string().email().optional(), // Email cannot be changed directly here for security
+  // Add other editable fields if needed, e.g., academicStatus, phoneNumber
+  // email: z.string().email().optional(), // Email cannot be changed
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-// --- Password Form ---
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, { message: "Current password is required."}),
-  newPassword: z.string().min(6, { message: "New password must be at least 6 characters." }),
-  confirmPassword: z.string(),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "New passwords don't match",
-  path: ["confirmPassword"],
-});
-type PasswordFormValues = z.infer<typeof passwordSchema>;
-
+// --- Password Form Removed ---
 
 export default function SettingsPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, login } = useAuth(); // Use simulated user, loading state, and login
   const { toast } = useToast();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [isLoadingPassword, setIsLoadingPassword] = useState(false);
+  // const [isLoadingPassword, setIsLoadingPassword] = useState(false); // Removed password loading state
 
   // --- Profile Form Initialization ---
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       name: "",
+      // Initialize other fields if added
     },
   });
 
-  // --- Password Form Initialization ---
-   const passwordForm = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    },
-  });
-
+  // --- Password Form Initialization Removed ---
 
   useEffect(() => {
-    if (user) {
+    // Redirect if not logged in and not loading
+    if (!loading && !user) {
+       router.push('/auth/login');
+       toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
+    } else if (user) {
+       // Populate profile form once user data is available
       profileForm.reset({ name: user.displayName || "" });
-    }
-     // Redirect if not logged in and not loading
-     if (!loading && !user) {
-        router.push('/auth/login');
-        toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
+       // Reset other fields if added
     }
   }, [user, loading, profileForm, router, toast]);
 
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
-    if (!user) return;
+    if (!user || !user.email) { // Need email to find user in JSON
+         toast({ title: 'Error', description: 'User not found.', variant: 'destructive' });
+         return;
+    };
     setIsLoadingProfile(true);
     try {
-      await updateProfile(user, { displayName: data.name });
-       // Consider forcing a reload or context update if display name is used widely immediately
-      toast({
-        title: "Profile Updated",
-        description: "Your name has been successfully updated.",
-      });
+       // 1. Find the existing user data in users.json (inefficiently)
+        // In a real DB, you'd fetch by UID directly. Here we simulate with findUserByCredentials.
+        // We pass undefined for password as we only need to find the user by email here.
+       const existingUserProfile = await findUserByCredentials(user.email);
+
+       if (!existingUserProfile) {
+            throw new Error("Could not find existing user data to update.");
+       }
+
+      // 2. Update the user data in users.json via Server Action
+      // WARNING: This modifies the JSON file directly, which is not ideal.
+      // We are only updating the name here based on the form schema.
+       const updateResult = await saveUserToJson(
+            existingUserProfile.uid,
+            data.name, // Updated name
+            existingUserProfile.email!, // Keep existing email
+            existingUserProfile.academicStatus!, // Keep existing status
+            existingUserProfile.phoneNumber! // Keep existing phone
+            // Add other fields if they become editable
+       );
+
+        if (!updateResult.success) {
+            throw new Error(updateResult.message || "Failed to save profile updates locally.");
+        }
+
+        // 3. **Crucially, update the Auth Context state**
+        // This requires re-logging in the user with the updated details in our simulated setup
+        // Alternatively, you could add an `updateUser` function to the context.
+        // Re-login simulation:
+        await login(user.email); // Re-fetch updated data via login simulation
+
+        toast({
+            title: "Profile Updated",
+            description: "Your name has been successfully updated.",
+        });
+        // Optionally trigger a re-fetch or update context if not using re-login
+        profileForm.reset({ name: data.name }); // Reflect changes in the form
+
+
     } catch (error: any) {
       console.error("Profile update failed:", error);
       toast({
@@ -98,45 +121,7 @@ export default function SettingsPage() {
     }
   };
 
-   const onPasswordSubmit = async (data: PasswordFormValues) => {
-    if (!user || !user.email) return; // Ensure user and email exist
-    setIsLoadingPassword(true);
-
-    try {
-      // Re-authenticate user first
-      const credential = EmailAuthProvider.credential(user.email, data.currentPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      // If re-authentication is successful, update the password
-      await updatePassword(user, data.newPassword);
-
-      passwordForm.reset(); // Clear password fields after success
-      toast({
-        title: "Password Updated",
-        description: "Your password has been successfully changed.",
-      });
-
-    } catch (error: any) {
-       console.error("Password update failed:", error);
-       let description = "Could not update password.";
-       if (error.code === 'auth/wrong-password') {
-         description = "Incorrect current password. Please try again.";
-         // Optionally set an error on the currentPassword field
-         passwordForm.setError("currentPassword", { type: "manual", message: description });
-       } else if (error.code === 'auth/too-many-requests') {
-            description = "Too many attempts. Please try again later.";
-       } else {
-            description = error.message || description;
-       }
-       toast({
-        variant: "destructive",
-        title: "Update Failed",
-        description: description,
-      });
-    } finally {
-      setIsLoadingPassword(false);
-    }
-  };
+   // --- Password Submit Function Removed ---
 
 
   // Get first letter of display name or email for fallback
@@ -180,7 +165,8 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
-                     <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.email}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                     {/* Use a placeholder avatar since local auth doesn't have photoURL */}
+                     <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.uid}.png`} alt={user.displayName || user.email || 'User Avatar'} />
                     <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
                   </Avatar>
                    {/* <Button type="button" variant="outline" disabled>Change Picture (Coming Soon)</Button> */}
@@ -201,9 +187,10 @@ export default function SettingsPage() {
                     />
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" defaultValue={user.email || ""} disabled />
+                    <Input id="email" type="email" value={user.email || ""} disabled />
                     <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
                   </div>
+                  {/* Add inputs for other editable fields here if needed */}
                 </div>
               </CardContent>
               <CardFooter>
@@ -218,64 +205,25 @@ export default function SettingsPage() {
 
       <Separator />
 
-       {/* Account Settings (Password) */}
-       <Form {...passwordForm}>
-         <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}>
-            <Card>
-              <CardHeader>
+       {/* Account Settings (Password) - Removed/Disabled */}
+        <Card>
+            <CardHeader>
                 <CardTitle>Password</CardTitle>
-                <CardDescription>Update your account password.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                 <FormField
-                    control={passwordForm.control}
-                    name="currentPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Current Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} disabled={isLoadingPassword}/>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField
-                    control={passwordForm.control}
-                    name="newPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>New Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} disabled={isLoadingPassword}/>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                   <FormField
-                    control={passwordForm.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirm New Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" {...field} disabled={isLoadingPassword}/>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-              </CardContent>
-              <CardFooter>
-                 <Button type="submit" disabled={isLoadingPassword}>
-                    {isLoadingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Update Password
-                 </Button>
-              </CardFooter>
-            </Card>
-          </form>
-        </Form>
+                 <CardDescription className="flex items-center gap-2 text-orange-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    Password changes are disabled in local mode.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <p className="text-sm text-muted-foreground">
+                    Password management requires a secure authentication provider like Firebase Auth.
+                    This functionality is not available when using local JSON storage for users.
+                 </p>
+            </CardContent>
+             <CardFooter>
+                 <Button disabled>Update Password</Button>
+             </CardFooter>
+        </Card>
 
        <Separator />
 

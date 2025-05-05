@@ -7,41 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search, Phone } from "lucide-react"; // Added Phone icon
+import { MoreHorizontal, PlusCircle, Search, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type UserProfile } from '@/types'; // Import UserProfile type
-import fs from 'fs/promises'; // Import fs for reading local file (Server-Side)
-import path from 'path';
+import { type UserProfile } from '@/types';
+// Import the action to read users from JSON
+import { readUsers } from '@/actions/user-actions'; // Assuming action is renamed or created
 
-// --- Data Fetching (Server-Side Recommended, Client-Side Example for users.json) ---
-// IMPORTANT: Fetching directly from users.json on the client is NOT secure or scalable.
-// This is a demonstration based on the previous request.
-// In a real app, fetch from Firestore/Auth on the server-side or via a secure API endpoint.
-async function fetchUsersFromClientJson(): Promise<UserProfile[]> {
-   console.warn(
-    'WARNING: Fetching user data from users.json on the client is insecure and not recommended for production.'
-  );
-  try {
-     // This approach won't work directly on the client due to fs access limitations.
-     // We'll simulate it by fetching from a temporary API route or using mock data.
-     // For this example, let's return mock data matching UserProfile.
-     console.log("Simulating fetch from users.json on client...");
-     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
 
-     // Example mock data based on UserProfile
-     return [
-      { uid: 'user1', name: 'Alice Smith', email: 'alice@example.com', phoneNumber: '9876543210', academicStatus: '12th Class', createdAt: new Date(2023, 10, 1).toISOString(), status: 'active' },
-      { uid: 'user2', name: 'Bob Johnson', email: 'bob@example.com', phoneNumber: '9123456789', academicStatus: 'Dropper', createdAt: new Date(2023, 9, 15).toISOString(), status: 'active' },
-      { uid: 'user3', name: 'Charlie Brown', email: 'charlie@example.com', phoneNumber: '9988776655', academicStatus: '11th Class', createdAt: new Date(2024, 0, 5).toISOString(), status: 'inactive' },
-      { uid: 'user4', name: null, email: 'dave@sample.net', phoneNumber: null, academicStatus: '12th Class', createdAt: new Date(2024, 1, 20).toISOString(), status: 'active' },
-      { uid: 'user5', name: 'Eve Williams', email: 'eve@mail.org', phoneNumber: '9654321098', academicStatus: 'Dropper', createdAt: new Date(2024, 2, 10).toISOString(), status: 'active' },
-     ] as any; // Cast to any to bypass status field temporarily
-
-  } catch (error) {
-    console.error("Error fetching users (simulated client-side):", error);
-    return [];
-  }
-}
+// Remove client-side mock fetch
+// async function fetchUsersFromClientJson(): Promise<UserProfile[]> { ... }
 
 
 export default function AdminUsersPage() {
@@ -50,17 +24,26 @@ export default function AdminUsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // Using the insecure client-side fetch for demonstration
-    fetchUsersFromClientJson().then(data => {
-      setUsers(data);
-      setIsLoading(false);
-    });
+    setIsLoading(true);
+    // Fetch users using the server action
+    readUsers()
+      .then(data => {
+        setUsers(data);
+      })
+      .catch(error => {
+        console.error("Failed to fetch users:", error);
+        // Handle error appropriately, maybe show a toast
+        setUsers([]); // Set to empty on error
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const filteredUsers = users.filter(user =>
     (user.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
     (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (user.phoneNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) // Search by phone
+    (user.phoneNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
    // Helper to safely format date
@@ -91,7 +74,7 @@ export default function AdminUsersPage() {
            <div className="flex items-center gap-2">
              <Search className="h-4 w-4 text-muted-foreground" />
              <Input
-               placeholder="Search by name, email, or phone..." // Updated placeholder
+               placeholder="Search by name, email, or phone..."
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
                className="max-w-sm"
@@ -104,9 +87,9 @@ export default function AdminUsersPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Phone Number</TableHead> {/* Added Phone Column */}
+                <TableHead>Phone Number</TableHead>
                 <TableHead>Academic Status</TableHead>
-                {/* <TableHead>Status</TableHead> */} {/* Temporarily hiding Status if not in UserProfile */}
+                {/* <TableHead>Status</TableHead> */} {/* Hiding status as it's not consistently in UserProfile */}
                 <TableHead>Created At</TableHead>
                 <TableHead><span className="sr-only">Actions</span></TableHead>
               </TableRow>
@@ -117,9 +100,8 @@ export default function AdminUsersPage() {
                   <TableRow key={index}>
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-28" /></TableCell> {/* Skeleton for Phone */}
+                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    {/* <TableCell><Skeleton className="h-5 w-16" /></TableCell> */}
                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                   </TableRow>
@@ -138,14 +120,8 @@ export default function AdminUsersPage() {
                       ) : (
                         'N/A'
                       )}
-                    </TableCell> {/* Display Phone */}
+                    </TableCell>
                      <TableCell>{user.academicStatus || 'N/A'}</TableCell>
-                   {/*  <TableCell>
-                      <Badge variant={user.status === 'active' ? 'default' : 'outline'}
-                        className={user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                        {user.status}
-                      </Badge>
-                    </TableCell> */}
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -159,10 +135,6 @@ export default function AdminUsersPage() {
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem disabled>View Details</DropdownMenuItem>
                           <DropdownMenuItem disabled>Edit User</DropdownMenuItem>
-                          {/* Deactivate/Activate might need status field */}
-                          {/* <DropdownMenuItem disabled className="text-destructive">
-                             {user.status === 'active' ? 'Deactivate' : 'Activate'} User
-                           </DropdownMenuItem> */}
                           <DropdownMenuItem disabled className="text-destructive">Delete User</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -171,7 +143,7 @@ export default function AdminUsersPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center"> {/* Adjusted colSpan */}
+                  <TableCell colSpan={6} className="h-24 text-center">
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -180,7 +152,6 @@ export default function AdminUsersPage() {
           </Table>
         </CardContent>
         <CardFooter>
-          {/* Optional: Add pagination controls */}
           <div className="text-xs text-muted-foreground">
             Showing <strong>{filteredUsers.length}</strong> of <strong>{users.length}</strong> users
           </div>

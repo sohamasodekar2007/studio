@@ -1,23 +1,25 @@
+
 'use client';
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+// Remove Firebase imports
+// import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+// import { auth } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Keep Label for structure if needed outside form context
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
-import { GraduationCap, Loader2, Phone } from "lucide-react"; // Added Phone icon
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GraduationCap, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
-import { academicStatuses, type AcademicStatus } from '@/types'; // Import types
-import { saveUserToJson } from '@/actions/save-user'; // Import the server action
+import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
+import { saveUserToJson } from '@/actions/user-actions'; // Corrected import path
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 // Updated schema with phone number
 const signupSchema = z.object({
@@ -26,10 +28,10 @@ const signupSchema = z.object({
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
-  phoneNumber: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }), // Added phone number validation
+  phoneNumber: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ["confirmPassword"], // path of error
+  path: ["confirmPassword"],
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -37,6 +39,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 export default function SignupPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { signUpLocally } = useAuth(); // Get simulated signup function from context
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<SignupFormValues>({
@@ -46,62 +49,58 @@ export default function SignupPage() {
       email: "",
       password: "",
       confirmPassword: "",
-      academicStatus: undefined, // Initialize academic status
-      phoneNumber: "", // Initialize phone number
+      academicStatus: undefined,
+      phoneNumber: "",
     },
   });
 
   const onSubmit = async (data: SignupFormValues) => {
     setIsLoading(true);
     try {
-      // 1. Create Firebase User
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const user = userCredential.user;
+      // Generate a simple UID (e.g., based on email and timestamp) - NOT cryptographically secure
+      const simpleUid = `local_${data.email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
 
-      // 2. Update Firebase Profile (Name)
-      if (user) {
-        await updateProfile(user, { displayName: data.name });
-        console.log("Firebase profile updated with name:", data.name);
+      // 1. Save data to JSON file via Server Action
+      // WARNING: Storing data this way is insecure and not suitable for production.
+      const saveResult = await saveUserToJson(
+        simpleUid,
+        data.name,
+        data.email,
+        data.academicStatus,
+        data.phoneNumber
+        // Passwords are NOT saved to JSON for minimal security Theater
+      );
 
-        // 3. Save data to JSON file via Server Action
-        // WARNING: Storing data this way is insecure and not suitable for production.
-        const saveResult = await saveUserToJson(
-          user.uid,
-          data.name,
-          data.email,
-          data.academicStatus,
-          data.phoneNumber
-        );
-
-        if (!saveResult.success) {
-           // Notify user about local save failure, but proceed as Firebase auth succeeded
-            toast({
-                variant: "destructive",
-                title: "Local Save Failed",
-                description: saveResult.message || "Could not save user details locally.",
-            });
-        } else {
-             console.log("User data saved to users.json");
-        }
+      if (!saveResult.success) {
+        throw new Error(saveResult.message || "Could not save user details locally.");
       }
 
+      console.log(`User data for ${data.email} saved to users.json`);
+
+      // 2. Update local auth state using the function from AuthContext
+      // Create a UserProfile object to pass to signUpLocally
+      const newUserProfile: UserProfile = {
+         uid: simpleUid,
+         name: data.name,
+         email: data.email,
+         phoneNumber: data.phoneNumber,
+         academicStatus: data.academicStatus,
+         createdAt: new Date().toISOString(), // Use current date
+      };
+      await signUpLocally(newUserProfile);
+
       toast({
-        title: "Account Created",
+        title: "Account Created (Locally)",
         description: "You have successfully signed up!",
       });
       router.push('/'); // Redirect to dashboard after successful signup
 
     } catch (error: any) {
-      console.error("Signup failed:", error);
+      console.error("Signup failed (local simulation):", error);
        toast({
         variant: "destructive",
         title: "Sign Up Failed",
-        // Provide more specific Firebase error messages if available
-        description: error.code === 'auth/email-already-in-use'
-          ? "This email is already registered. Try logging in."
-          : error.code === 'auth/invalid-api-key'
-          ? "Firebase configuration error. Please check your API key."
-          : error.message || "An unexpected error occurred. Please try again.",
+        description: error.message || "An unexpected error occurred. Please try again.",
       });
     } finally {
       setIsLoading(false);

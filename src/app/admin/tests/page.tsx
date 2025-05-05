@@ -9,49 +9,33 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
+import type { Test } from '@/types'; // Use the actual Test type
+import { getTests } from '@/actions/get-tests'; // Import the server action
 
-// Placeholder test data type (matching the structure in tests/page.tsx)
-interface TestData {
-  id: string;
-  title: string;
-  type: string;
-  exam: string;
-  subject: string;
-  model: string; // chapterwise, full_length, combo, topicwise
-  pricing: string; // free, paid
-  status: string; // New, Popular, ''
-  questions: number;
-  duration: number;
-  // Add other relevant fields like 'published', 'createdAt' if available
-}
-
-// Mock data fetching function - replace with actual Firestore query
-async function fetchTests(): Promise<TestData[]> {
-  await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
-  // In a real app, fetch from Firestore or your database
-  return [
-    { id: "mht-cet-phy-1", title: "MHT-CET Physics Mock Test 1", type: "Mock Test", exam: "MHT-CET", subject: "Physics", imageHint: "physics formula atoms", status: "New", model: "full_length", pricing: "paid", questions: 50, duration: 90 },
-    { id: "jee-main-full-3", title: "JEE Main Full Syllabus Test 3", type: "Full Syllabus Test", exam: "JEE Main", subject: "PCM", imageHint: "jee exam students writing", status: "Popular", model: "full_length", pricing: "paid", questions: 90, duration: 180 },
-    { id: "neet-bio-ch-cell", title: "NEET Biology: Cell Structure", type: "Chapter Test", exam: "NEET", subject: "Biology", imageHint: "biology cell microscope dna", status: "", model: "chapterwise", pricing: "free", questions: 45, duration: 45 },
-    { id: "jee-adv-math-calc", title: "JEE Advanced Maths: Calculus", type: "Topic Test", exam: "JEE Advanced", subject: "Maths", imageHint: "mathematics calculus graph", status: "New", model: "topicwise", pricing: "paid", questions: 30, duration: 120 },
-    { id: "mht-cet-chem-org", title: "MHT-CET Chemistry: Organic Basics", type: "Chapter Test", exam: "MHT-CET", subject: "Chemistry", imageHint: "chemistry beakers science lab", status: "", model: "chapterwise", pricing: "free", questions: 50, duration: 60 },
-    { id: "neet-phy-mock-2", title: "NEET Physics Mock Test 2", type: "Mock Test", exam: "NEET", subject: "Physics", imageHint: "physics concepts motion energy", status: "Popular", model: "full_length", pricing: "paid", questions: 180, duration: 180 },
-    { id: "jee-main-combo-1", title: "JEE Main Physics & Chem Combo", type: "Combo Test", exam: "JEE Main", subject: "Physics, Chemistry", imageHint: "physics chemistry combo equations", status: "", model: "combo", pricing: "paid", questions: 60, duration: 120 },
-    { id: "mht-cet-full-free", title: "MHT-CET Full Syllabus Free Mock", type: "Mock Test", exam: "MHT-CET", subject: "PCM", imageHint: "free exam access student", status: "Popular", model: "full_length", pricing: "free", questions: 150, duration: 180 },
-  ];
-}
+// Remove mock data fetching function
+// async function fetchTests(): Promise<TestData[]> { ... }
 
 export default function AdminTestsPage() {
-  const [tests, setTests] = useState<TestData[]>([]);
+  const [tests, setTests] = useState<Test[]>([]); // Use Test type
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchTests().then(data => {
-      setTests(data);
-      setIsLoading(false);
-    });
+    setIsLoading(true);
+    // Fetch tests using the server action
+    getTests()
+      .then(data => {
+        setTests(data);
+      })
+      .catch(error => {
+         console.error("Failed to fetch tests:", error);
+         // Handle error appropriately, maybe show a toast
+         setTests([]); // Set to empty array on error
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const filteredTests = tests.filter(test =>
@@ -126,8 +110,8 @@ export default function AdminTestsPage() {
                         {test.pricing}
                       </Badge>
                     </TableCell>
-                    <TableCell>{test.questions}</TableCell>
-                    <TableCell>{test.duration}</TableCell>
+                    <TableCell>{test.questionsCount}</TableCell> {/* Updated field name */}
+                    <TableCell>{test.durationMinutes}</TableCell> {/* Updated field name */}
                     <TableCell>
                       {test.status ? (
                         <Badge variant={test.status === 'Popular' ? 'destructive' : 'secondary'}>

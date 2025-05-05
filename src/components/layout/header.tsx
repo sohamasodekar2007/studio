@@ -4,39 +4,42 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, HelpCircle, Loader2 } from 'lucide-react'; // Added Loader2
+import { User, Settings, LogOut, HelpCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useAuth } from '@/context/auth-context';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { useAuth } from '@/context/auth-context'; // Use our AuthContext
+// Remove Firebase imports
+// import { auth } from '@/lib/firebase';
+// import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react'; // Import useState
+import { useState } from 'react';
 
 export function AppHeader() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth(); // Get user, loading, and simulated logout
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // State for logout loading
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true); // Start loading indicator
+    setIsLoggingOut(true);
     try {
-      await signOut(auth);
+      await logout(); // Call the simulated logout function from context
       toast({
         title: "Logged Out",
         description: "You have been successfully logged out.",
       });
-      router.push('/auth/login'); // Redirect to login after logout
+      // No need to manually push to login, AuthProvider might handle redirect or UI update
+       // If AuthProvider doesn't redirect, uncomment the line below:
+       // router.push('/auth/login');
     } catch (error: any) {
-      console.error("Logout failed:", error);
+      console.error("Logout failed (simulated):", error);
       toast({
         variant: "destructive",
         title: "Logout Failed",
         description: error.message || "Could not log out. Please try again.",
       });
     } finally {
-       setIsLoggingOut(false); // Stop loading indicator
+       setIsLoggingOut(false);
     }
   };
 
@@ -64,8 +67,8 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
               <Avatar>
-                 {/* Add user?.photoURL check if you implement profile picture uploads */}
-                <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.email}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                 {/* Use a placeholder avatar for local auth */}
+                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.uid}.png`} alt={user.displayName || user.email || 'User Avatar'} />
                 <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
               </Avatar>
             </Button>

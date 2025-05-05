@@ -4,21 +4,22 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+// Remove Firebase Auth import
+// import { signInWithEmailAndPassword } from 'firebase/auth';
+// import { auth } from '@/lib/firebase';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(6, { message: "Password must be at least 6 characters." }),
+  password: z.string().min(1, { message: "Password is required." }), // Simplified password validation for local check
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -26,6 +27,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { login } = useAuth(); // Get the login function from context
   const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<LoginFormValues>({
@@ -39,18 +41,20 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
+      // Call the simulated login function from context
+      await login(data.email, data.password);
       toast({
         title: "Login Successful",
         description: "Welcome back!",
       });
       router.push('/'); // Redirect to dashboard after successful login
     } catch (error: any) {
-      console.error("Login failed:", error);
+      console.error("Login failed (simulated):", error);
       toast({
         variant: "destructive",
         title: "Login Failed",
-        description: error.message || "An unexpected error occurred. Please try again.",
+        // Use the error message from the context/action if available
+        description: error.message || "Invalid credentials or local error.",
       });
     } finally {
       setIsLoading(false);
@@ -90,6 +94,7 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center">
                       <FormLabel>Password</FormLabel>
+                      {/* Link for forgot password can be kept, but functionality needs separate implementation */}
                       <Link href="#" className="ml-auto inline-block text-sm underline">
                         Forgot your password?
                       </Link>
