@@ -104,15 +104,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log(`User ${email} logged in (simulated).`);
 
         // --- REDIRECT LOGIC ---
+        console.log(`Found user profile:`, foundUserProfile);
+        const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+        console.log(`Admin email from env: ${adminEmail}`);
+        console.log(`Comparing: '${foundUserProfile.email?.toLowerCase()}' === '${adminEmail?.toLowerCase()}'`);
+
         // Check if the logged-in user is the admin
         // Use NEXT_PUBLIC_ADMIN_EMAIL from environment variables
         // Ensure NEXT_PUBLIC_ADMIN_EMAIL is set in your .env file (e.g., NEXT_PUBLIC_ADMIN_EMAIL=admin@edunexus.com)
-        if (foundUserProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-          router.push('/admin'); // Redirect to admin dashboard
+        if (foundUserProfile.email && adminEmail && foundUserProfile.email.toLowerCase() === adminEmail.toLowerCase()) {
           console.log('Admin user detected, redirecting to /admin');
+          router.push('/admin'); // Redirect to admin dashboard
         } else {
-          router.push('/'); // Redirect regular users to home dashboard
           console.log('Regular user detected, redirecting to /');
+          router.push('/'); // Redirect regular users to home dashboard
         }
         // --- END REDIRECT LOGIC ---
 
@@ -275,3 +280,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
