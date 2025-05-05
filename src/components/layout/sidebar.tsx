@@ -33,28 +33,34 @@ export function AppSidebar() {
       <SidebarContent className="flex-1">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/" asChild>
-              <SidebarMenuButton isActive={isActive('/')} tooltip="Dashboard">
-                <Home />
-                <span>Dashboard</span>
+            <Link href="/">
+              <SidebarMenuButton isActive={isActive('/')} tooltip="Dashboard" asChild>
+                <div> {/* Wrap content in a div for asChild to work correctly */}
+                    <Home />
+                    <span>Dashboard</span>
+                </div>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-             <Link href="/tests" asChild>
-              <SidebarMenuButton isActive={isActive('/tests')} tooltip="Test Series">
-                <ListChecks /> {/* Updated icon */}
-                <span>Test Series</span> {/* Updated label */}
+             <Link href="/tests">
+              <SidebarMenuButton isActive={isActive('/tests')} tooltip="Test Series" asChild>
+                 <div>
+                    <ListChecks /> {/* Updated icon */}
+                    <span>Test Series</span> {/* Updated label */}
+                 </div>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
            {/* Add Results link later when page exists */}
            {/*
            <SidebarMenuItem>
-            <Link href="/results" asChild>
-              <SidebarMenuButton isActive={isActive('/results')} tooltip="Results">
-                <LineChart />
-                <span>Results</span>
+            <Link href="/results">
+              <SidebarMenuButton isActive={isActive('/results')} tooltip="Results" asChild>
+                <div>
+                    <LineChart />
+                    <span>Results</span>
+                </div>
               </SidebarMenuButton>
             </Link>
            </SidebarMenuItem>
@@ -64,18 +70,22 @@ export function AppSidebar() {
       <SidebarFooter className="mt-auto">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/settings" asChild>
-              <SidebarMenuButton isActive={isActive('/settings')} tooltip="Settings">
-                <Settings />
-                <span>Settings</span>
+            <Link href="/settings">
+              <SidebarMenuButton isActive={isActive('/settings')} tooltip="Settings" asChild>
+                 <div>
+                    <Settings />
+                    <span>Settings</span>
+                 </div>
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-             <Link href="/help" asChild>
-              <SidebarMenuButton isActive={isActive('/help')} tooltip="Help & Support">
-                <HelpCircle />
-                <span>Help & Support</span>
+             <Link href="/help">
+              <SidebarMenuButton isActive={isActive('/help')} tooltip="Help & Support" asChild>
+                 <div>
+                    <HelpCircle />
+                    <span>Help & Support</span>
+                 </div>
               </SidebarMenuButton>
              </Link>
           </SidebarMenuItem>
