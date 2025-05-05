@@ -106,10 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // --- REDIRECT LOGIC ---
         // Check if the logged-in user is the admin
         // Use NEXT_PUBLIC_ADMIN_EMAIL from environment variables
+        // Ensure NEXT_PUBLIC_ADMIN_EMAIL is set in your .env file (e.g., NEXT_PUBLIC_ADMIN_EMAIL=admin@edunexus.com)
         if (foundUserProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
           router.push('/admin'); // Redirect to admin dashboard
+          console.log('Admin user detected, redirecting to /admin');
         } else {
           router.push('/'); // Redirect regular users to home dashboard
+          console.log('Regular user detected, redirecting to /');
         }
         // --- END REDIRECT LOGIC ---
 
