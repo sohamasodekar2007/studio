@@ -13,8 +13,8 @@ export default function SignupPage() {
            <div className="flex justify-center mb-4">
              <GraduationCap className="h-10 w-10 text-primary" />
            </div>
-          <CardTitle className="text-2xl font-bold">Join EduNexus</CardTitle>
-          <CardDescription>Create your account to start your personalized learning journey.</CardDescription>
+          <CardTitle className="text-2xl font-bold">Join ExamPrep Hub</CardTitle> {/* Updated Title */}
+          <CardDescription>Create your account to start practicing with our test series.</CardDescription> {/* Updated description */}
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="space-y-2">

@@ -34,15 +34,16 @@ export default function HelpPage() {
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-2">
-              <AccordionTrigger>How does the recommendation system work?</AccordionTrigger>
+              <AccordionTrigger>How can I view my test results and analysis?</AccordionTrigger> {/* Updated Question */}
               <AccordionContent>
-                Our AI-powered recommendation system analyzes your stated learning goals and past performance/experience. It then suggests resources from our library that align with your needs and current skill level. The more detail you provide, the better the recommendations will be.
+                After completing a test, your results, including score, percentile, time taken, and question-wise analysis, will be available in the 'Results' section (coming soon). This will help you understand your strengths and weaknesses. {/* Updated Answer */}
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-3">
-              <AccordionTrigger>Can I track my learning progress?</AccordionTrigger>
+              <AccordionTrigger>What types of tests are available?</AccordionTrigger> {/* Updated Question */}
               <AccordionContent>
-                Yes, progress tracking features are planned for a future update. Soon, you'll be able to see completed modules, scores on exercises, and track your overall learning journey within EduNexus.
+                We offer a variety of tests including full syllabus mock tests, chapter-wise tests, and topic-wise tests for MHT-CET, JEE Main, JEE Advanced, and NEET. You can browse all available tests on the{' '}
+                <Link href="/tests" className="underline hover:text-primary">Test Series page</Link>. {/* Updated Answer */}
               </AccordionContent>
             </AccordionItem>
              <AccordionItem value="item-4">
@@ -50,7 +51,13 @@ export default function HelpPage() {
               <AccordionContent>
                 We take data security seriously. Please refer to our{' '}
                  <Link href="/privacy" className="underline hover:text-primary">Privacy Policy</Link>
-                {' '}for detailed information on how we collect, use, and protect your data.
+                {' '}for detailed information on how we collect, use, and protect your data, including test performance data. {/* Updated Answer */}
+              </AccordionContent>
+            </AccordionItem>
+             <AccordionItem value="item-5">
+              <AccordionTrigger>How are the tests created?</AccordionTrigger> {/* Added Question */}
+              <AccordionContent>
+                 Our tests are designed by subject matter experts based on the latest syllabus and exam patterns for MHT-CET, JEE, and NEET to provide an authentic exam experience. {/* Added Answer */}
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -69,7 +76,7 @@ export default function HelpPage() {
             Chat with Support (Coming Soon)
           </Button>
           <Button variant="outline" size="lg" asChild>
-             <a href="mailto:support@edunexus.app">
+             <a href="mailto:support@examprephub.app"> {/* Updated email */}
                  <Mail className="mr-2 h-5 w-5" />
                  Email Us
              </a>

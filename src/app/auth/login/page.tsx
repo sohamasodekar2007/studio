@@ -14,7 +14,7 @@ export default function LoginPage() {
              <GraduationCap className="h-10 w-10 text-primary" />
            </div>
           <CardTitle className="text-2xl font-bold">Welcome Back!</CardTitle>
-          <CardDescription>Enter your email below to login to your EduNexus account</CardDescription>
+          <CardDescription>Enter your email below to access your ExamPrep Hub account and test results.</CardDescription> {/* Updated description */}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

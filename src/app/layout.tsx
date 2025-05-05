@@ -6,8 +6,8 @@ import { AppLayout } from '@/components/layout/app-layout'; // Import AppLayout
 import { Toaster } from "@/components/ui/toaster"; // Import Toaster
 
 export const metadata: Metadata = {
-  title: 'EduNexus - Your Learning Hub', // Updated title
-  description: 'Personalized learning recommendations and content.', // Updated description
+  title: 'ExamPrep Hub - MHT-CET, JEE, NEET Test Series', // Updated title
+  description: 'Practice tests and performance analysis for MHT-CET, JEE, and NEET aspirants.', // Updated description
 };
 
 export default function RootLayout({
