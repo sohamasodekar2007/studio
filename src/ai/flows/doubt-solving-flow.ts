@@ -10,21 +10,17 @@
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
 
-// Define the input schema using Zod
-export const DoubtSolvingInputSchema = z.object({
+// Define the input schema using Zod (no export)
+const DoubtSolvingInputSchema = z.object({
   questionText: z.string().optional().describe('The textual question asked by the student.'),
   imageDataUri: z.string().optional().describe(
     "An image of the doubt, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Optional."
   ),
 });
-// Removed refine as validation is handled client-side and in the flow logic.
-// .refine(data => data.questionText || data.imageDataUri, {
-//     message: "Either questionText or imageDataUri must be provided.",
-// });
 export type DoubtSolvingInput = z.infer<typeof DoubtSolvingInputSchema>;
 
-// Define the output schema using Zod
-export const DoubtSolvingOutputSchema = z.object({
+// Define the output schema using Zod (no export)
+const DoubtSolvingOutputSchema = z.object({
   answer: z.string().describe('A clear, step-by-step explanation or answer to the student\'s doubt.'),
 });
 export type DoubtSolvingOutput = z.infer<typeof DoubtSolvingOutputSchema>;
@@ -65,7 +61,7 @@ const doubtSolvingFlow = ai.defineFlow<
     outputSchema: DoubtSolvingOutputSchema,
   },
   async (input) => {
-    // Check if at least one input is provided (already handled by Zod refine, but good practice)
+    // Check if at least one input is provided
     if (!input.questionText && !input.imageDataUri) {
         throw new Error("No question text or image provided.");
     }
