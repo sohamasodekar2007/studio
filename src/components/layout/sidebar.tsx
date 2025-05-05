@@ -10,8 +10,7 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { Home, ListChecks, GraduationCap, LineChart, Settings, HelpCircle, Wand2, ShieldCheck } from 'lucide-react'; // Added ShieldCheck
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquareQuestion } from 'lucide-react'; // Added MessageSquareQuestion
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
@@ -61,6 +60,15 @@ export function AppSidebar() {
                <SidebarMenuButton as="a" isActive={isActive('/study-tips')} tooltip="AI Study Tips">
                  <Wand2 />
                  <span>Study Tips</span>
+               </SidebarMenuButton>
+             </Link>
+           </SidebarMenuItem>
+           {/* New Doubt Solving Link */}
+           <SidebarMenuItem>
+             <Link href="/doubt-solving" legacyBehavior passHref>
+               <SidebarMenuButton as="a" isActive={isActive('/doubt-solving')} tooltip="Doubt Solving">
+                 <MessageSquareQuestion />
+                 <span>Doubt Solving</span>
                </SidebarMenuButton>
              </Link>
            </SidebarMenuItem>
