@@ -2,60 +2,102 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, BookOpen, Settings, BarChart3, DollarSign, ShieldCheck, ClipboardList, FileText, Banknote } from 'lucide-react'; // Added ClipboardList, FileText, Banknote
-import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Home,
+  Users,
+  BookOpen,
+  Settings,
+  BarChart3,
+  ShieldCheck,
+  ClipboardList,
+  FileText,
+  Banknote,
+} from 'lucide-react';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarFooter,
+  SidebarTrigger,
+} from '@/components/ui/sidebar'; // Use the main Sidebar components
+import { useAuth } from '@/context/auth-context'; // Get user context if needed later
 
 // Define navigation items for the admin sidebar
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests', label: 'Tests', icon: BookOpen }, // Manages all test types
-  { href: '/admin/questions', label: 'Question Bank', icon: ClipboardList }, // New: Question Bank
-  { href: '/admin/notes', label: 'Short Notes', icon: FileText }, // New: Short Notes
-  { href: '/admin/payments', label: 'Payments', icon: Banknote }, // Changed Icon
+  { href: '/admin/tests', label: 'Tests', icon: BookOpen },
+  { href: '/admin/questions', label: 'Question Bank', icon: ClipboardList },
+  { href: '/admin/notes', label: 'Short Notes', icon: FileText },
+  { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/admin/settings', label: 'Settings', icon: Settings }, // Platform settings
 ];
+
+const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth(); // Could be used to conditionally show items
 
   const isActive = (href: string) => pathname === href || (href !== '/admin' && pathname.startsWith(href));
 
-  return (
-    <aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-sidebar text-sidebar-foreground sm:flex">
-      <TooltipProvider>
-        <nav className="flex flex-col items-center gap-4 px-2 py-4">
-           <Link
-              href="/admin"
-              className="group flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:h-8 md:w-8 md:text-base"
-            >
-                <ShieldCheck className="h-4 w-4 transition-all group-hover:scale-110" />
-                <span className="sr-only">Study Sphere Admin</span> {/* Updated Name */}
-           </Link>
+  // Check if the current user is the designated admin
+  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
+  // Only render the sidebar if the user is an admin
+  if (!isAdmin) {
+    // Optionally, you could redirect here or show an unauthorized message,
+    // but typically middleware or page-level checks handle authorization.
+    // Returning null ensures non-admins don't see the sidebar structure.
+    return null;
+  }
+
+  return (
+    // Use the main Sidebar component structure
+    <Sidebar side="left" variant="sidebar" collapsible="icon">
+      <SidebarHeader className="flex items-center justify-between p-2">
+        <Link
+          href="/admin"
+          className="flex items-center gap-2 group-data-[collapsible=icon]:hidden"
+          aria-label="Admin Dashboard Home"
+          >
+          <ShieldCheck className="h-6 w-6 text-primary" />
+          <h1 className="text-lg font-semibold">SPHERE Admin</h1> {/* Updated Name */}
+        </Link>
+         {/* Desktop Toggle Trigger */}
+        <SidebarTrigger className="hidden sm:flex mr-1" />
+      </SidebarHeader>
+
+      <SidebarContent className="flex-1 mt-4">
+        <SidebarMenu>
           {adminNavItems.map((item) => (
-             <Tooltip key={item.href}>
-                <TooltipTrigger asChild>
-                    <Link
-                        href={item.href}
-                        className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8',
-                        isActive(item.href) ? 'bg-accent text-accent-foreground' : ''
-                        )}
-                    >
-                        <item.icon className="h-5 w-5" />
-                        <span className="sr-only">{item.label}</span>
-                    </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">{item.label}</TooltipContent>
-            </Tooltip>
+            <SidebarMenuItem key={item.href}>
+              <Link href={item.href} legacyBehavior passHref>
+                <SidebarMenuButton as="a" isActive={isActive(item.href)} tooltip={item.label}>
+                  <item.icon />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
           ))}
-        </nav>
-        {/* Optional: Add settings/logout at the bottom */}
-        {/* <nav className="mt-auto flex flex-col items-center gap-4 px-2 py-4"> ... </nav> */}
-      </TooltipProvider>
-    </aside>
+        </SidebarMenu>
+      </SidebarContent>
+
+      <SidebarFooter className="mt-auto">
+        <SidebarMenu>
+          <SidebarMenuItem>
+             <Link href={settingsNavItem.href} legacyBehavior passHref>
+               <SidebarMenuButton as="a" isActive={isActive(settingsNavItem.href)} tooltip={settingsNavItem.label}>
+                 <settingsNavItem.icon />
+                 <span>{settingsNavItem.label}</span>
+               </SidebarMenuButton>
+             </Link>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
