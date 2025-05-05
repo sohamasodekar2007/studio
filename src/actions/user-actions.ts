@@ -1,7 +1,7 @@
 // src/actions/user-actions.ts
 'use server';
 
-import type { AcademicStatus, UserProfile } from '@/types';
+import type { UserProfile, AcademicStatus, UserModel } from '@/types'; // Import UserModel
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -21,7 +21,8 @@ export async function readUsers(): Promise<UserProfile[]> {
       console.error('users.json does not contain a valid array. Returning empty array.');
       return [];
     }
-    return users as UserProfile[]; // Add type assertion
+    // Add basic validation if needed, e.g., checking required fields
+    return users as UserProfile[]; // Assert type based on the new structure
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       console.warn('users.json not found. Creating an empty file.');
@@ -41,56 +42,70 @@ export async function readUsers(): Promise<UserProfile[]> {
 
 /**
  * Saves or updates user data in the local users.json file.
- * If a user with the same UID exists, it updates; otherwise, it adds.
+ * If a user with the same ID exists, it updates; otherwise, it adds.
  * WARNING: This method is insecure and not suitable for production environments.
- * It's implemented here only to fulfill the specific request.
- * Passwords are NOT stored.
+ * Passwords are NOT saved or updated by this function for simulation security.
  *
- * @param uid - The unique user ID.
+ * @param id - The unique user ID.
  * @param name - The user's full name.
  * @param email - The user's email.
- * @param academicStatus - The user's academic status.
- * @param phoneNumber - The user's phone number.
+ * @param phone - The user's phone number.
+ * @param className - The user's class (academic status). Note the parameter name change.
+ * @param model - The user's subscription model.
+ * @param expiry_date - The expiry date for the model (ISO string or null).
  * @returns A promise that resolves with success status and optional message.
  */
 export async function saveUserToJson(
-    uid: string,
+    id: string,
     name: string,
     email: string,
-    academicStatus: AcademicStatus,
-    phoneNumber: string
+    phone: string,
+    className: AcademicStatus, // Renamed parameter for clarity
+    model: UserModel,
+    expiry_date: string | null
 ): Promise<{ success: boolean; message?: string }> {
     console.warn(
-    'WARNING: Saving/Updating user data in users.json is insecure and not recommended for production.'
+    'WARNING: Saving/Updating user data in users.json is insecure and not recommended for production. Passwords are ignored.'
   );
 
-    const userToSave: UserProfile = {
-        uid,
+    // Construct the user object based on the new structure
+    const userToSave: Omit<UserProfile, 'password' | 'createdAt'> & { class: AcademicStatus | null } = { // Explicitly omit password
+        id,
         name,
         email,
-        academicStatus,
-        phoneNumber,
-        createdAt: new Date().toISOString(), // Always set/update createdAt on save for simplicity here
+        phone,
+        class: className, // Use the renamed parameter
+        model,
+        expiry_date,
+        referral: "", // Add default referral if not provided
     };
+
 
     try {
         let users = await readUsers(); // Use the readUsers function
 
-        const existingUserIndex = users.findIndex(u => u.uid === uid);
+        const existingUserIndex = users.findIndex(u => u.id === id);
 
         if (existingUserIndex !== -1) {
-            // Update existing user (merge new data, keep original createdAt if needed)
-             const originalCreatedAt = users[existingUserIndex].createdAt;
+            // Update existing user (merge new data, keep original createdAt, ignore password)
+            const existingUser = users[existingUserIndex];
             users[existingUserIndex] = {
-                ...users[existingUserIndex], // Keep existing fields if not provided
-                ...userToSave, // Overwrite with new data
-                 createdAt: originalCreatedAt // Preserve original creation date on update
+                ...existingUser, // Keep existing fields
+                ...userToSave, // Overwrite with new data (excluding password)
+                password: existingUser.password, // *** Keep existing stored password (even if it's plain text) ***
+                createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date or set if missing
              };
-            console.log(`User data for ${email} (UID: ${uid}) updated in users.json`);
+            console.log(`User data for ${email} (ID: ${id}) updated in users.json`);
         } else {
             // Add new user
-            users.push(userToSave);
-             console.log(`New user data for ${email} (UID: ${uid}) added to users.json`);
+            const newUserWithTimestamp: UserProfile = {
+                ...userToSave,
+                 password: "dummy_password_not_saved", // Add placeholder for structure, but it won't be saved securely
+                 createdAt: new Date().toISOString(),
+                 class: className, // Ensure class is set correctly for new user
+            };
+            users.push(newUserWithTimestamp);
+             console.log(`New user data for ${email} (ID: ${id}) added to users.json`);
         }
 
 

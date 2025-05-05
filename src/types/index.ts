@@ -2,7 +2,11 @@
 
 // Define academic statuses used in signup
 export const academicStatuses = ["11th Class", "12th Class", "Dropper"] as const;
-export type AcademicStatus = typeof academicStatuses[number];
+export type AcademicStatus = typeof academicStatuses[number]; // Renamed to 'ClassType' below for clarity in UserProfile
+
+// Define user models
+export const userModels = ["free", "chapterwise", "full_length", "combo"] as const;
+export type UserModel = typeof userModels[number];
 
 // Define Test Model types
 export const testModels = ["chapterwise", "full_length", "topicwise", "combo"] as const;
@@ -16,38 +20,42 @@ export type PricingType = typeof pricingTypes[number];
 export const testStatuses = ["New", "Popular", ""] as const;
 export type TestStatus = typeof testStatuses[number];
 
+// Define Exam types
+export const exams = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"] as const;
+export type Exam = typeof exams[number];
 
-// Interface for User Data (potentially stored in Firestore or users.json)
+
+// Interface for User Data (matching the example structure)
 export interface UserProfile {
-  uid: string;
-  name: string | null;
+  id: string; // Unique ID (previously uid)
   email: string | null;
-  phoneNumber: string | null; // Added phone number
-  academicStatus: AcademicStatus | null;
-  createdAt: Date | string; // Store as ISO string or Timestamp in Firestore/JSON
-  // Add other profile fields as needed (e.g., targetExams)
+  password?: string; // Stored in JSON as per example, but NOT used for auth in this simulation
+  name: string | null;
+  phone: string | null;
+  referral?: string; // Optional referral code
+  class: AcademicStatus | null; // Academic status (e.g., 11th, 12th, Dropper)
+  model: UserModel; // User's subscription model
+  expiry_date: string | null; // ISO string date or null
+  createdAt?: string; // Optional: Keep creation date if desired
 }
 
-// Interface for Test Data (potentially stored in Firestore)
+// Interface for Test Data (potentially stored in Firestore or tests.json)
 export interface Test {
-  id: string; // Firestore document ID
+  id: string; // document ID
   title: string;
   description?: string;
   type: string; // e.g., Mock Test, Chapter Test
-  exam: string; // MHT-CET, JEE Main, etc.
+  exam: Exam; // MHT-CET, JEE Main, etc.
   subject: string; // Physics, PCM, Biology
-  model: TestModel;
-  pricing: PricingType;
-  status?: TestStatus;
+  model: TestModel; // chapterwise, full_length, etc.
+  pricing: PricingType; // free, paid
+  status?: TestStatus; // New, Popular
   questionsCount: number;
   durationMinutes: number;
   syllabus: string[]; // Array of topics/chapters
-  imageUrl?: string; // Optional image URL
+  imageUrl?: string; // Optional image URL for detail page
   imageHint?: string; // For AI image generation hints
   published: boolean; // Is the test live?
-  createdAt: Date | string; // Firestore Timestamp or ISO string
-  updatedAt?: Date | string; // Firestore Timestamp or ISO string
-  // Add fields for question IDs array, answer key reference, etc.
+  createdAt: Date | string; // Timestamp or ISO string
+  updatedAt?: Date | string; // Timestamp or ISO string
 }
-
-// You can add more shared types here as the application grows

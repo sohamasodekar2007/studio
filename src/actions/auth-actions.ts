@@ -21,7 +21,7 @@ async function readUsers(): Promise<UserProfile[]> {
       console.error('users.json does not contain a valid array. Returning empty array.');
       return [];
     }
-    return users;
+    return users as UserProfile[]; // Assert type based on the new structure
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       console.warn('users.json not found. Returning empty array.');
@@ -33,20 +33,20 @@ async function readUsers(): Promise<UserProfile[]> {
 }
 
 /**
- * Finds a user by email in the local users.json file.
- * WARNING: Insecure - stores/compares plain text passwords (simulated).
+ * Finds a user by email and password in the local users.json file.
+ * WARNING: Insecure - compares plain text passwords stored in the JSON.
  * @param email The email to search for.
  * @param password The password to compare (insecurely).
  * @returns A promise resolving to the UserProfile if found and password matches, otherwise null.
  */
 export async function findUserByCredentials(
   email: string,
-  password?: string // Password check is simulated and insecure
+  password?: string // Password check IS performed against plain text in JSON
 ): Promise<UserProfile | null> {
   console.warn(
-    'WARNING: Checking credentials against users.json is insecure and uses plain text comparison (simulated). DO NOT USE IN PRODUCTION.'
+    'WARNING: Checking credentials against users.json is insecure and uses plain text comparison. DO NOT USE IN PRODUCTION.'
   );
-  if (!email) {
+  if (!email || !password) { // Require both email and password for login attempt
     return null;
   }
 
@@ -57,20 +57,43 @@ export async function findUserByCredentials(
     );
 
     // Simulate password check - EXTREMELY INSECURE
-    // In a real scenario, you'd compare hashed passwords.
-    // Here, we just check if the user exists for simplicity based on the request.
-    // A simple hardcoded check for demo purposes:
-    if (foundUser) {
-         // Example: check if password matches a demo password or the email itself (highly insecure)
-         // const isPasswordMatch = password === 'password123' || password === foundUser.email;
-         // For this demo, we will skip password check if user is found.
-         console.log(`Simulated login successful for ${email} (password check skipped for demo).`);
+    // Compares the provided password directly with the one stored in users.json
+    if (foundUser && foundUser.password === password) {
+         console.log(`Simulated login successful for ${email}.`);
+         // Return the full profile, but ensure password isn't accidentally used elsewhere
+         // It's better practice to omit sensitive data when returning user objects,
+         // but for this simulation, we return the structure as read.
          return foundUser;
     }
 
-    return null; // User not found or simulated password mismatch
+    console.log(`Simulated login failed for ${email}. User not found or password mismatch.`);
+    return null; // User not found or password mismatch
   } catch (error) {
     console.error('Error finding user by credentials:', error);
+    return null;
+  }
+}
+
+/**
+ * Finds a user by email in the local users.json file *without* checking password.
+ * Useful for checking if an email exists during signup or for profile updates.
+ * @param email The email to search for.
+ * @returns A promise resolving to the UserProfile if found, otherwise null.
+ */
+export async function findUserByEmail(
+  email: string,
+): Promise<UserProfile | null> {
+  if (!email) {
+    return null;
+  }
+  try {
+    const users = await readUsers();
+    const foundUser = users.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase()
+    );
+    return foundUser || null;
+  } catch (error) {
+    console.error(`Error finding user by email ${email}:`, error);
     return null;
   }
 }

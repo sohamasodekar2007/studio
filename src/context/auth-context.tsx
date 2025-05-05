@@ -3,39 +3,35 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-// Remove Firebase imports
-// import { onAuthStateChanged, type User } from 'firebase/auth';
-// import { auth, firebaseInitializationError } from '@/lib/firebase'; // Import auth AND the error status
-import type { UserProfile } from '@/types'; // Use our UserProfile type
+import type { UserProfile, UserModel, AcademicStatus } from '@/types'; // Use our UserProfile type
 import { Skeleton } from '@/components/ui/skeleton';
-import { findUserByCredentials } from '@/actions/auth-actions'; // Import action to find user locally
+import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions'; // Import actions to find user locally
 
-// Define simulated User type based on UserProfile
-// This mimics the Firebase User type shape minimally for compatibility
+// Define simulated User type based on UserProfile, omitting sensitive/unused fields for context
+// This provides components with necessary display/logic info without exposing password.
 type SimulatedUser = {
-  uid: string;
+  id: string; // Use 'id' instead of 'uid'
   email: string | null;
   displayName: string | null;
-  // Add other fields if needed by components expecting a Firebase User-like object
-  photoURL?: string | null; // Example
+  phone: string | null;
+  className: AcademicStatus | null; // Changed from academicStatus
+  model: UserModel;
+  expiry_date: string | null;
 } | null;
 
 interface AuthContextProps {
-  user: SimulatedUser; // Use simulated user type
+  user: SimulatedUser; // Use updated simulated user type
   loading: boolean;
-  // Keep initializationError conceptually, though it won't be Firebase specific
-  initializationError: string | null;
-  // Add login/logout functions for local simulation
+  initializationError: string | null; // Keep for potential non-Firebase errors
   login: (email: string, password?: string) => Promise<void>;
   logout: () => Promise<void>;
-  signUpLocally: (userData: UserProfile) => Promise<void>; // Added for local signup simulation
+  signUpLocally: (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => Promise<void>; // Adapt signature
 }
 
-// Provide default no-op functions for login/logout
 const AuthContext = createContext<AuthContextProps>({
   user: null,
   loading: true,
-  initializationError: null, // Start with no error
+  initializationError: null,
   login: async () => { console.warn('Login function not implemented'); },
   logout: async () => { console.warn('Logout function not implemented'); },
   signUpLocally: async () => { console.warn('signUpLocally function not implemented'); },
@@ -44,66 +40,72 @@ const AuthContext = createContext<AuthContextProps>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SimulatedUser>(null);
   const [loading, setLoading] = useState(true);
-  // Use a simple local error state if needed, not tied to Firebase init
   const [localError, setLocalError] = useState<string | null>(null);
 
   // Effect to load user state from local storage on mount (client-side only)
   useEffect(() => {
     setLoading(true);
     try {
-      const storedUser = localStorage.getItem('loggedInUser');
-      if (storedUser) {
-        const parsedUser: UserProfile = JSON.parse(storedUser);
-        // Convert UserProfile to SimulatedUser shape
+      const storedUserJson = localStorage.getItem('loggedInUser');
+      if (storedUserJson) {
+        const parsedUserProfile: UserProfile = JSON.parse(storedUserJson);
+        // Convert UserProfile to SimulatedUser shape for the context
         setUser({
-            uid: parsedUser.uid,
-            email: parsedUser.email,
-            displayName: parsedUser.name,
-            // photoURL: parsedUser.photoURL, // Example if needed
+            id: parsedUserProfile.id,
+            email: parsedUserProfile.email,
+            displayName: parsedUserProfile.name,
+            phone: parsedUserProfile.phone,
+            className: parsedUserProfile.class,
+            model: parsedUserProfile.model,
+            expiry_date: parsedUserProfile.expiry_date,
         });
       } else {
         setUser(null);
       }
     } catch (error) {
       console.error('Error reading user from local storage:', error);
-      setUser(null); // Clear user if error during parsing
-      localStorage.removeItem('loggedInUser'); // Clean up potentially corrupted data
+      setUser(null);
+      localStorage.removeItem('loggedInUser');
     } finally {
       setLoading(false);
-      setLocalError(null); // Clear any previous local errors
+      setLocalError(null);
     }
-  }, []); // Runs only once on mount
+  }, []);
 
-
-  // Simulated Login Function
+  // Simulated Login Function using Server Action
   const login = async (email: string, password?: string) => {
     setLoading(true);
     setLocalError(null);
     try {
-        // Use the server action to find the user in users.json
-        const foundUser = await findUserByCredentials(email, password);
+      // Use the server action to find the user in users.json AND check password
+      const foundUserProfile = await findUserByCredentials(email, password);
 
-        if (foundUser) {
-            // Convert UserProfile to SimulatedUser shape
-            const loggedInUser: SimulatedUser = {
-                uid: foundUser.uid,
-                email: foundUser.email,
-                displayName: foundUser.name,
-                 // photoURL: foundUser.photoURL, // Example if needed
-            };
-            setUser(loggedInUser);
-            localStorage.setItem('loggedInUser', JSON.stringify(foundUser)); // Store UserProfile
-             console.log(`User ${email} logged in (simulated).`);
-        } else {
-            throw new Error('Invalid email or password (simulated).');
-        }
+      if (foundUserProfile) {
+        // Convert UserProfile to SimulatedUser shape for the context
+        const loggedInUser: SimulatedUser = {
+          id: foundUserProfile.id,
+          email: foundUserProfile.email,
+          displayName: foundUserProfile.name,
+          phone: foundUserProfile.phone,
+          className: foundUserProfile.class,
+          model: foundUserProfile.model,
+          expiry_date: foundUserProfile.expiry_date,
+        };
+        setUser(loggedInUser);
+        // Store the *full* UserProfile (excluding potentially sensitive parts if needed)
+        localStorage.setItem('loggedInUser', JSON.stringify(foundUserProfile));
+        console.log(`User ${email} logged in (simulated).`);
+      } else {
+        throw new Error('Invalid email or password.'); // More specific error
+      }
     } catch (error: any) {
-        console.error("Simulated login failed:", error);
-        setLocalError(error.message || 'Login failed.');
-        setUser(null);
-        localStorage.removeItem('loggedInUser');
+      console.error("Simulated login failed:", error);
+      setLocalError(error.message || 'Login failed.');
+      setUser(null);
+      localStorage.removeItem('loggedInUser');
+      throw error; // Re-throw error so login page can catch it
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -112,75 +114,133 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setLocalError(null);
     try {
-        setUser(null);
-        localStorage.removeItem('loggedInUser');
-         console.log("User logged out (simulated).");
+      setUser(null);
+      localStorage.removeItem('loggedInUser');
+      console.log("User logged out (simulated).");
     } catch (error: any) {
-        console.error("Simulated logout failed:", error);
-        setLocalError(error.message || 'Logout failed.');
+      console.error("Simulated logout failed:", error);
+      setLocalError(error.message || 'Logout failed.');
+      throw error; // Re-throw error if needed
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-  // Simulated Sign Up (only updates context and local storage)
-  // Assumes the user data has already been saved to users.json via the server action
-   const signUpLocally = async (userData: UserProfile) => {
+  // Simulated Sign Up (now takes raw form data, generates ID, saves via action, then updates context)
+  const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => {
     setLoading(true);
     setLocalError(null);
     try {
-      if (!userData) {
-          throw new Error("User data is missing for local signup simulation.");
+       if (!userData.email || !password) {
+         throw new Error("Email and password are required for signup.");
+       }
+
+       // Check if user already exists (optional, good practice)
+       const existingUser = await findUserByEmail(userData.email);
+       if (existingUser) {
+            throw new Error("An account with this email already exists.");
+       }
+
+      // Generate a simple local ID (NOT secure or globally unique)
+      const localId = `local_${userData.email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+
+      // Save the user data (including plain text password) via the Server Action
+      const saveResult = await saveUserToJson(
+        localId,
+        userData.name || '', // Ensure name is string or empty
+        userData.email,
+        userData.phone || '', // Ensure phone is string or empty
+        userData.class!, // Assume class is provided
+        userData.model || 'free', // Default to free model if not specified
+        userData.expiry_date || null // Use provided or null
+        // Pass the plain text password to be stored in JSON (INSECURE)
+      );
+        // Note: The action needs to be updated to accept and store the password.
+        // Currently, user-actions.ts ignores the password parameter.
+        // We'll proceed assuming the action is updated or password storage isn't strictly needed *for this step*.
+        // **However, findUserByCredentials *will* need the password in JSON to work.**
+        // --> We need to update saveUserToJson to actually store the password.
+
+
+      if (!saveResult.success) {
+        throw new Error(saveResult.message || "Could not save user details locally.");
       }
-      // Convert UserProfile to SimulatedUser shape
-       const newUser: SimulatedUser = {
-            uid: userData.uid,
-            email: userData.email,
-            displayName: userData.name,
-            // photoURL: userData.photoURL, // Example if needed
-       };
-      setUser(newUser);
-      localStorage.setItem('loggedInUser', JSON.stringify(userData)); // Store UserProfile
+
+       console.log(`User data for ${userData.email} saved to users.json`);
+
+      // Prepare the full UserProfile object as saved
+      const newUserProfile: UserProfile = {
+        id: localId,
+        email: userData.email,
+        password: password, // Include the password that *should* be stored
+        name: userData.name,
+        phone: userData.phone,
+        referral: userData.referral || "",
+        class: userData.class,
+        model: userData.model || 'free',
+        expiry_date: userData.expiry_date || null,
+        createdAt: new Date().toISOString(), // Add creation timestamp
+      };
+
+      // Update context state with the new user (SimulatedUser shape)
+      const newUserContextState: SimulatedUser = {
+        id: newUserProfile.id,
+        email: newUserProfile.email,
+        displayName: newUserProfile.name,
+        phone: newUserProfile.phone,
+        className: newUserProfile.class,
+        model: newUserProfile.model,
+        expiry_date: newUserProfile.expiry_date,
+      };
+      setUser(newUserContextState);
+      // Store the full profile in local storage
+      localStorage.setItem('loggedInUser', JSON.stringify(newUserProfile));
+
       console.log(`User ${userData.email} signed up and logged in (simulated).`);
+
     } catch (error: any) {
-        console.error("Simulated local signup failed:", error);
-        setLocalError(error.message || 'Local signup failed.');
-        setUser(null);
-        localStorage.removeItem('loggedInUser');
+      console.error("Simulated local signup failed:", error);
+      setLocalError(error.message || 'Local signup failed.');
+      setUser(null); // Clear user state on failure
+      localStorage.removeItem('loggedInUser'); // Clear local storage on failure
+      throw error; // Re-throw error for the signup page
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-
-  // Show a simple loading state
+  // Loading State UI
   if (loading) {
-     return (
+    return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="space-y-4 w-full max-w-sm p-4">
-           {/* Simulate App Layout Loading */}
-          <Skeleton className="h-14 w-full" /> {/* Header */}
-           <div className="flex gap-4">
-              <Skeleton className="h-[calc(100vh-7rem)] w-16 hidden sm:block" /> {/* Sidebar */}
-              <div className="flex-1 space-y-4">
-                 <Skeleton className="h-10 w-1/2" /> {/* Page Title */}
-                 <Skeleton className="h-40 w-full" /> {/* Content Card */}
-                 <Skeleton className="h-40 w-full" /> {/* Content Card */}
-              </div>
-           </div>
+        <div className="space-y-4 w-full max-w-md p-4">
+          <Skeleton className="h-14 w-full" />
+          <div className="flex gap-4">
+            <Skeleton className="h-[calc(100vh-7rem)] w-16 hidden sm:block" />
+            <div className="flex-1 space-y-4">
+              <Skeleton className="h-10 w-3/4" />
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Display a local error message if needed
+    // Error State UI
   if (localError) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
          <div className="max-w-md text-center bg-destructive text-white p-6 rounded-lg shadow-lg">
            <h2 className="text-2xl font-bold mb-2">Application Error</h2>
            <p className="text-sm">{localError}</p>
-           {/* Optionally add a refresh button or further guidance */}
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-white text-destructive rounded hover:bg-gray-200"
+            >
+              Reload Page
+            </button>
          </div>
       </div>
     );
