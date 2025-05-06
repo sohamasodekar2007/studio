@@ -1,5 +1,5 @@
 // src/app/take-test/[testId]/page.tsx
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"; // Added CardFooter import
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getGeneratedTestByCode } from "@/actions/generated-test-actions"; // Assuming this fetches the test details
