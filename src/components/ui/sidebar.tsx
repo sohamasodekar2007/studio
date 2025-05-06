@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import * as React from "react"
@@ -158,7 +159,7 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
              // Add group/sidebar here for peer selector to work correctly
-            className={cn("group/sidebar flex", className)}
+            className={cn("group/sidebar", className)} // Removed flex here, apply flex to layout container
             ref={ref}
             {...props}
           >
@@ -228,7 +229,7 @@ const Sidebar = React.forwardRef<
     }
 
     return (
-      // Peer element for desktop sidebar state
+      // Add 'peer' class to the desktop sidebar element
        <div
         ref={ref}
         data-state={state}
@@ -237,10 +238,10 @@ const Sidebar = React.forwardRef<
         data-side={side}
         className={cn(
             // Base styles for desktop sidebar
-            "peer fixed inset-y-0 z-30 h-svh flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out",
+            "peer fixed inset-y-0 z-30 h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out", // Changed h-svh to h-screen
             side === "left" ? "left-0 border-r" : "right-0 border-l",
             // Width based on state
-            state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]",
+            state === 'expanded' ? "w-[var(--sidebar-width)]" : "w-[var(--sidebar-width-icon)]",
             // Visibility based on collapsible type and breakpoint
             collapsible === 'icon' ? "hidden sm:flex" : "flex", // Show icon variant on sm+, hide below
             // Handle offcanvas collapsing
@@ -719,3 +720,4 @@ export {
   SidebarTrigger,
   useSidebar,
 }
+

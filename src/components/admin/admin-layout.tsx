@@ -2,14 +2,13 @@
 
 'use client'; // Required for AuthProvider context and useAuth
 
-// Remove SidebarProvider import
-// import { SidebarProvider } from '@/components/ui/sidebar';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { useAuth } from '@/context/auth-context';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils'; // Import cn utility
 
 // Metadata can't be exported from Client Components directly.
 
@@ -42,11 +41,23 @@ export default function AdminLayoutContent({
     ); // Or a loading spinner
   }
 
-  // Remove the explicit SidebarProvider wrapper here
+  // Main layout structure using flexbox
   return (
-    <div className={`flex min-h-screen bg-muted/40`}>
+    <div className="flex min-h-screen bg-muted/40">
+      {/* Sidebar is positioned fixed by its own component */}
       <AdminSidebar />
-      <div className="flex flex-col flex-1">
+       {/* Main content area: Adjust left margin based on sidebar state */}
+       {/* Use peer classes to react to the sidebar's data-state */}
+      <div
+        className={cn(
+          "flex flex-col flex-1 transition-[margin-left] duration-300 ease-in-out",
+          // Apply margin only on sm+ screens
+          // When sidebar is expanded (default state, or data-state=expanded)
+          "sm:ml-[var(--sidebar-width)]",
+           // When sidebar is collapsed (data-state=collapsed)
+          "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]" // Use peer selector based on Sidebar's data-state
+        )}
+       >
         <AdminHeader />
         <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
           {children}
@@ -55,3 +66,4 @@ export default function AdminLayoutContent({
     </div>
   );
 }
+
