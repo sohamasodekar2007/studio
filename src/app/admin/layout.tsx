@@ -1,4 +1,5 @@
 
+
 'use client'; // Required for AuthProvider context and SidebarProvider
 
 import type { Metadata } from 'next';
@@ -6,7 +7,7 @@ import { Inter } from 'next/font/google';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { AuthProvider } from '@/context/auth-context';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar'; // Re-import SidebarProvider
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -46,11 +47,11 @@ export default function AdminLayout({
 
 
   return (
-    <AuthProvider> {/* AuthProvider might be redundant if already in RootLayout, but keep for safety */}
+    <AuthProvider>
+      {/* Wrap the content with SidebarProvider */}
       <SidebarProvider defaultOpen>
-        {/* Use flex container to manage sidebar and content */}
         <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
-          <AdminSidebar />
+          <AdminSidebar /> {/* Sidebar remains inside SidebarProvider */}
           <div className="flex flex-col flex-1"> {/* Content Area takes remaining space */}
             <AdminHeader />
             <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

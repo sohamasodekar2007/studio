@@ -10,13 +10,13 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    // Wrap the entire layout structure with SidebarProvider
+    // Ensure SidebarProvider wraps the entire structure that needs the sidebar context
     <SidebarProvider defaultOpen>
        <div className="flex min-h-screen"> {/* Main flex container */}
-        <AppSidebar />
+        <AppSidebar /> {/* AppSidebar should be inside SidebarProvider */}
         <div className="flex flex-col flex-1"> {/* Content area flex container */}
           <AppHeader />
-          <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto"> {/* Added overflow-auto for main content */}
             {children}
           </main>
         </div>
