@@ -172,8 +172,8 @@ const SidebarProvider = React.forwardRef<
 SidebarProvider.displayName = "SidebarProvider"
 
 const Sidebar = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<"aside"> & { // Changed from div to aside for semantics
+  HTMLDivElement, // Changed back to div
+  React.ComponentProps<"div"> & {
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
@@ -194,7 +194,7 @@ const Sidebar = React.forwardRef<
 
     if (collapsible === "none") {
       return (
-        <aside
+        <div // Changed back to div
           className={cn(
             "flex h-full w-[--sidebar-width] flex-col bg-sidebar text-sidebar-foreground",
             className
@@ -203,7 +203,7 @@ const Sidebar = React.forwardRef<
           {...props}
         >
           {children}
-        </aside>
+        </div>
       )
     }
 
@@ -229,7 +229,7 @@ const Sidebar = React.forwardRef<
 
     return (
       // Peer element for desktop sidebar state
-       <aside
+       <div // Changed back to div
         ref={ref}
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
@@ -246,7 +246,7 @@ const Sidebar = React.forwardRef<
         {...props}
       >
         {children}
-      </aside>
+      </div>
     )
   }
 )
