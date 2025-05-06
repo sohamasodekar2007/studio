@@ -93,7 +93,10 @@ const FullLengthSchema = CommonTestFieldsSchema.extend({
 });
 
 // Discriminated union based on 'testType'
-const TestCreationSchema = z.discriminatedUnion("testType", [ChapterwiseSchema, FullLengthSchema]);
+const TestCreationSchema = z.discriminatedUnion("testType", [
+  ChapterwiseSchema.extend({testType: z.literal('chapterwise')}),
+  FullLengthSchema.extend({testType: z.literal('full_length')})
+]);
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
@@ -508,19 +511,19 @@ export default function CreateTestPage() {
                             <FormItem className="flex items-center space-x-3 space-y-0">
                                 <FormControl>
                                 <RadioGroupItem value="chapterwise" />
-                                </FormControl>
-                                <FormLabel className="font-normal flex items-center gap-2">
+                            </FormControl>
+                            <FormLabel className="font-normal flex items-center gap-2">
                                 <BookOpen className="h-4 w-4" /> Chapterwise Test
-                                </FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-3 space-y-0">
-                                <FormControl>
+                            </FormLabel>
+                        </FormItem>
+                         <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
                                 <RadioGroupItem value="full_length" />
-                                </FormControl>
-                                <FormLabel className="font-normal flex items-center gap-2">
+                            </FormControl>
+                            <FormLabel className="font-normal flex items-center gap-2">
                                 <ListFilter className="h-4 w-4" /> Full-Length Test
-                                </FormLabel>
-                            </FormItem>
+                            </FormLabel>
+                        </FormItem>
                             </RadioGroup>
                         </FormControl>
                         <FormMessage />
@@ -583,9 +586,9 @@ export default function CreateTestPage() {
                              </TableCell>
                           </TableRow>
                         ))
-                      ) : (
-                        <TableRow><TableCell colSpan={5} className="h-24 text-center">No questions found for this lesson/filter.</TableCell></TableRow>
-                      )}
+                     ) : (
+                         <TableRow><TableCell colSpan={5} className="h-24 text-center">No questions found for this lesson/filter.</TableCell></TableRow>
+                     )}
                     </TableBody>
                   </Table>
                  </ScrollArea>
