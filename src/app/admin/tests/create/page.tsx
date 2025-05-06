@@ -53,22 +53,25 @@ import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
-const BaseTestSchema = z.object({
+// Define common fields without the discriminator
+const CommonTestFieldsSchema = z.object({
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").max(300, "Duration cannot exceed 300 minutes."),
   access: z.enum(pricingTypes, { required_error: "Access type is required." }),
   audience: z.enum(academicStatuses, { required_error: "Target audience is required." }),
 });
 
-const ChapterwiseSchema = BaseTestSchema.extend({
-  testType: z.literal('chapterwise'),
+// Chapterwise specific fields + common fields
+const ChapterwiseSchema = CommonTestFieldsSchema.extend({
+  testType: z.literal('chapterwise'), // Discriminator
   subject: z.string().min(1, "Subject is required."),
   lesson: z.string().min(1, "Lesson is required."),
   examFilter: z.enum([...examOptions, "Random Exam"], { required_error: "Exam filter is required." }),
   selectedQuestions: z.array(z.string()).min(1, "Select at least one question."), // Store IDs
 });
 
-const FullLengthSchema = BaseTestSchema.extend({
-  testType: z.literal('full_length'),
+// Full-Length specific fields + common fields + validation refinement
+const FullLengthSchema = CommonTestFieldsSchema.extend({
+  testType: z.literal('full_length'), // Discriminator
   stream: z.enum(["PCM", "PCB"], { required_error: "Stream is required." }),
   physicsWeight: z.coerce.number().min(0).max(100),
   chemistryWeight: z.coerce.number().min(0).max(100),
@@ -77,13 +80,19 @@ const FullLengthSchema = BaseTestSchema.extend({
   examFilter: z.enum([...examOptions, "Combined"], { required_error: "Exam filter is required." }),
   totalQuestions: z.coerce.number().min(10, "Must have at least 10 questions").max(200, "Maximum 200 questions"), // Example limits
 }).refine(data => {
-    const totalWeight = (data.physicsWeight || 0) + (data.chemistryWeight || 0) + (data.mathsWeight || 0) + (data.biologyWeight || 0);
+    // Ensure weights are defined before summing
+    const p = data.physicsWeight ?? 0;
+    const c = data.chemistryWeight ?? 0;
+    const m = data.mathsWeight ?? 0;
+    const b = data.biologyWeight ?? 0;
+    const totalWeight = p + c + m + b;
     return totalWeight === 100;
 }, {
     message: "Total weightage must sum up to 100%.",
     path: ["physicsWeight"], // Apply error to a relevant field
 });
 
+// Discriminated union based on 'testType'
 const TestCreationSchema = z.discriminatedUnion("testType", [ChapterwiseSchema, FullLengthSchema]);
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
@@ -112,12 +121,12 @@ export default function CreateTestPage() {
       lesson: '',
       examFilter: 'Random Exam',
       selectedQuestions: [],
-      // Full-Length defaults
-      stream: undefined,
+      // Full-Length defaults - Explicitly set PCM/PCB specific defaults to avoid type errors initially
+      stream: undefined, // Start undefined until user selects
       physicsWeight: 33,
       chemistryWeight: 34,
       mathsWeight: 33,
-      biologyWeight: 0, // Default PCB to 0 initially
+      biologyWeight: 0, // Initialize to 0
       totalQuestions: 50, // Default total question count
       // Common defaults
       duration: 60,
@@ -127,15 +136,16 @@ export default function CreateTestPage() {
   });
 
   const testType = form.watch('testType');
-  const selectedSubject = form.watch('subject');
-  const selectedLesson = form.watch('lesson');
-  const chapterExamFilter = form.watch('examFilter'); // For chapterwise
-  const selectedQuestions = form.watch('selectedQuestions');
-  const stream = form.watch('stream');
+  const selectedSubject = form.watch('subject', ''); // Provide default empty string
+  const selectedLesson = form.watch('lesson', ''); // Provide default empty string
+  const chapterExamFilter = form.watch('examFilter'); // Watch chapterwise filter
+  const selectedQuestions = form.watch('selectedQuestions', []); // Provide default empty array
+  const stream = form.watch('stream'); // Watch full_length stream
   const pWeight = form.watch('physicsWeight');
   const cWeight = form.watch('chemistryWeight');
   const mWeight = form.watch('mathsWeight');
   const bWeight = form.watch('biologyWeight');
+
 
   // --- Effects for Dynamic Data Loading ---
 
@@ -165,15 +175,17 @@ export default function CreateTestPage() {
 
    // Load questions for Chapterwise test
    const fetchChapterQuestions = useCallback(async () => {
-        if (testType === 'chapterwise' && selectedSubject && selectedLesson && chapterExamFilter) {
+        // Ensure all necessary fields are available in the form state
+        const formValues = form.getValues();
+        if (formValues.testType === 'chapterwise' && formValues.subject && formValues.lesson && formValues.examFilter) {
             setIsLoadingQuestions(true);
             setAvailableQuestions([]); // Clear previous
             try {
                 // Ensure examFilter is correctly typed for the action
-                const filterValue = chapterExamFilter as ExamOption | 'Random Exam';
+                const filterValue = formValues.examFilter as ExamOption | 'Random Exam';
                 const questions = await getQuestionsForLesson({
-                    subject: selectedSubject,
-                    lesson: selectedLesson,
+                    subject: formValues.subject,
+                    lesson: formValues.lesson,
                     examType: filterValue === 'Random Exam' ? undefined : filterValue
                 });
                 setAvailableQuestions(questions);
@@ -187,49 +199,60 @@ export default function CreateTestPage() {
             setAvailableQuestions([]); // Clear if not chapterwise or filters incomplete
             setIsLoadingQuestions(false); // Ensure loading state is off
         }
-   }, [testType, selectedSubject, selectedLesson, chapterExamFilter, toast]); // Add dependencies
+   }, [form, toast]); // Depend on form state
 
 
    useEffect(() => {
-       fetchChapterQuestions();
-   }, [fetchChapterQuestions]); // Run effect when the callback changes
+       // Re-fetch questions whenever relevant filters change for chapterwise
+       const formValues = form.getValues();
+       if (formValues.testType === 'chapterwise') {
+           fetchChapterQuestions();
+       }
+   }, [form.watch('subject'), form.watch('lesson'), form.watch('examFilter'), form.watch('testType'), fetchChapterQuestions]); // Watch specific fields
 
 
   // Adjust weights for Full Length stream change
   useEffect(() => {
-    if (testType === 'full_length') {
-      if (stream === 'PCM') {
+    const formValues = form.getValues();
+    if (formValues.testType === 'full_length' && formValues.stream) {
+      const currentPWeight = formValues.physicsWeight ?? 0;
+      const currentCWeight = formValues.chemistryWeight ?? 0;
+      const currentMWeight = formValues.mathsWeight ?? 0;
+      const currentBWeight = formValues.biologyWeight ?? 0;
+
+      if (formValues.stream === 'PCM') {
         form.setValue('biologyWeight', 0);
-        const currentTotal = (pWeight || 0) + (cWeight || 0) + (mWeight || 0);
+        const currentTotal = currentPWeight + currentCWeight + currentMWeight;
         if (currentTotal !== 100 && currentTotal > 0) {
              const factor = 100 / currentTotal;
-             form.setValue('physicsWeight', Math.round((pWeight || 0) * factor));
-             form.setValue('chemistryWeight', Math.round((cWeight || 0) * factor));
-             const adjustedM = 100 - Math.round((pWeight || 0) * factor) - Math.round((cWeight || 0) * factor);
+             form.setValue('physicsWeight', Math.round(currentPWeight * factor));
+             form.setValue('chemistryWeight', Math.round(currentCWeight * factor));
+             const adjustedM = 100 - Math.round(currentPWeight * factor) - Math.round(currentCWeight * factor);
              form.setValue('mathsWeight', adjustedM);
-        } else if (currentTotal === 0) {
+        } else if (currentTotal === 0) { // Initial state or all zero
              form.setValue('physicsWeight', 33);
              form.setValue('chemistryWeight', 34);
              form.setValue('mathsWeight', 33);
         }
 
-      } else if (stream === 'PCB') {
+      } else if (formValues.stream === 'PCB') {
         form.setValue('mathsWeight', 0);
-         const currentTotal = (pWeight || 0) + (cWeight || 0) + (bWeight || 0);
+        const currentTotal = currentPWeight + currentCWeight + currentBWeight;
         if (currentTotal !== 100 && currentTotal > 0) {
             const factor = 100 / currentTotal;
-             form.setValue('physicsWeight', Math.round((pWeight || 0) * factor));
-             form.setValue('chemistryWeight', Math.round((cWeight || 0) * factor));
-             const adjustedB = 100 - Math.round((pWeight || 0) * factor) - Math.round((cWeight || 0) * factor);
+             form.setValue('physicsWeight', Math.round(currentPWeight * factor));
+             form.setValue('chemistryWeight', Math.round(currentCWeight * factor));
+             const adjustedB = 100 - Math.round(currentPWeight * factor) - Math.round(currentCWeight * factor);
              form.setValue('biologyWeight', adjustedB);
-         } else if (currentTotal === 0) {
+         } else if (currentTotal === 0) { // Initial state or all zero
              form.setValue('physicsWeight', 33);
              form.setValue('chemistryWeight', 34);
              form.setValue('biologyWeight', 33);
         }
       }
     }
-  }, [stream, testType, form, pWeight, cWeight, mWeight, bWeight]); // Add weights to dependencies
+  }, [form, form.watch('stream'), form.watch('testType')]); // Rerun when stream or testType changes
+
 
   // --- Event Handlers ---
 
@@ -273,62 +296,93 @@ export default function CreateTestPage() {
       // The backend should handle fetching questions based on filters and applying weightage logic.
 
        const fetchPool = async (subject: string) => {
-          // Simulate fetching a large pool - adjust filters as needed
-          return getQuestionsForLesson({ subject, lesson: '', // Fetch across all lessons for full length? Or specific ones?
-            examType: examFilter === 'Combined' ? undefined : examFilter });
-       };
-
+            console.log(`Simulating fetch for: ${subject}, Exam: ${examFilter === 'Combined' ? 'All' : examFilter}`);
+            // Simulate fetching a large pool - adjust filters as needed
+            // NOTE: This is highly inefficient for large banks, needs optimization backend-side
+            return getQuestionsForLesson({ subject: subject, lesson: '', // Fetch across all lessons
+                examType: examFilter === 'Combined' ? undefined : examFilter });
+        };
 
       const [physicsPool, chemistryPool, mathsPool, biologyPool] = await Promise.all([
           fetchPool('Physics'),
           fetchPool('Chemistry'),
           stream === 'PCM' ? fetchPool('Maths') : Promise.resolve([]),
-          stream === 'PCB' ? fetchPool('Biology') : Promise.resolve([]), // Corrected fetch for Biology
+          stream === 'PCB' ? fetchPool('Biology') : Promise.resolve([]),
       ]);
 
-       const calcCount = (weight: number) => Math.max(0, Math.round((weight / 100) * totalQuestions));
+      console.log(`Pool sizes: Physics=${physicsPool.length}, Chemistry=${chemistryPool.length}, Maths=${mathsPool.length}, Biology=${biologyPool.length}`);
+
+
+       const calcCount = (weight: number | undefined) => Math.max(0, Math.round(((weight ?? 0) / 100) * totalQuestions));
 
        const selectRandomIds = (pool: QuestionBankItem[], count: number): string[] => {
             const available = pool.filter(q => q !== null && q !== undefined); // Ensure pool items are valid
+            if (count > available.length) {
+                console.warn(`Warning: Requested ${count} questions from pool of size ${available.length}. Selecting all available.`);
+                count = available.length;
+            }
             const shuffled = [...available].sort(() => 0.5 - Math.random());
             return shuffled.slice(0, count).map(q => q.id);
        }
 
        let physicsCount = calcCount(physicsWeight);
        let chemistryCount = calcCount(chemistryWeight);
-       let mathsCount = stream === 'PCM' ? calcCount(mathsWeight || 0) : 0;
-       let biologyCount = stream === 'PCB' ? calcCount(biologyWeight || 0) : 0;
+       let mathsCount = stream === 'PCM' ? calcCount(mathsWeight) : 0;
+       let biologyCount = stream === 'PCB' ? calcCount(biologyWeight) : 0;
 
        // Adjust counts to meet totalQuestions precisely (simple distribution adjustment)
        let currentTotal = physicsCount + chemistryCount + mathsCount + biologyCount;
        let diff = totalQuestions - currentTotal;
+        let attempts = 0; // Prevent infinite loop
 
-        // Prioritize adding/removing from the largest weightage subject (example)
-        while(diff !== 0) {
+        console.log(`Initial counts: P=${physicsCount}, C=${chemistryCount}, M=${mathsCount}, B=${biologyCount}, Total=${currentTotal}, Diff=${diff}`);
+
+        // Adjust counts to meet totalQuestions precisely
+        while(diff !== 0 && attempts < totalQuestions * 2) { // Add attempt limit
+             attempts++;
+             const weights = [
+                { subject: 'Physics', weight: physicsWeight ?? 0, count: physicsCount, poolSize: physicsPool.length, increment: () => physicsCount++, decrement: () => physicsCount-- },
+                { subject: 'Chemistry', weight: chemistryWeight ?? 0, count: chemistryCount, poolSize: chemistryPool.length, increment: () => chemistryCount++, decrement: () => chemistryCount-- },
+                ...(stream === 'PCM' ? [{ subject: 'Maths', weight: mathsWeight ?? 0, count: mathsCount, poolSize: mathsPool.length, increment: () => mathsCount++, decrement: () => mathsCount-- }] : []),
+                ...(stream === 'PCB' ? [{ subject: 'Biology', weight: biologyWeight ?? 0, count: biologyCount, poolSize: biologyPool.length, increment: () => biologyCount++, decrement: () => biologyCount-- }] : []),
+            ];
+
             if (diff > 0) {
-                 // Add to largest pool that has more questions available
-                if (stream === 'PCM' && (mathsWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && mathsCount < mathsPool.length) mathsCount++;
-                else if (stream === 'PCB' && (biologyWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && biologyCount < biologyPool.length) biologyCount++;
-                else if (physicsWeight >= chemistryWeight && physicsCount < physicsPool.length) physicsCount++;
-                 else if (chemistryCount < chemistryPool.length) chemistryCount++;
-                else break; // Cannot add more
+                // Add to the subject with the highest weightage that hasn't reached its pool size limit
+                weights.sort((a, b) => b.weight - a.weight); // Sort by weight descending
+                let added = false;
+                for(const subj of weights) {
+                    if (subj.count < subj.poolSize) {
+                        subj.increment();
+                        added = true;
+                        break;
+                    }
+                }
+                 if (!added) break; // Cannot add more questions
                 diff--;
-            } else {
-                 // Remove from largest pool that has questions
-                if (stream === 'PCM' && (mathsWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && mathsCount > 0) mathsCount--;
-                else if (stream === 'PCB' && (biologyWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && biologyCount > 0) biologyCount--;
-                else if (physicsWeight >= chemistryWeight && physicsCount > 0) physicsCount--;
-                 else if (chemistryCount > 0) chemistryCount--;
-                 else break; // Cannot remove more
+            } else { // diff < 0
+                // Remove from the subject with the lowest weightage that has questions > 0
+                 weights.sort((a, b) => a.weight - b.weight); // Sort by weight ascending
+                 let removed = false;
+                 for(const subj of weights) {
+                    if (subj.count > 0) {
+                        subj.decrement();
+                        removed = true;
+                        break;
+                    }
+                }
+                 if (!removed) break; // Cannot remove more questions
                  diff++;
             }
         }
+        console.log(`Adjusted counts: P=${physicsCount}, C=${chemistryCount}, M=${mathsCount}, B=${biologyCount}, Total=${physicsCount+chemistryCount+mathsCount+biologyCount}`);
+
 
        // Select final IDs
        const finalPhysicsIds = selectRandomIds(physicsPool, physicsCount);
        const finalChemistryIds = selectRandomIds(chemistryPool, chemistryCount);
        const finalMathsIds = stream === 'PCM' ? selectRandomIds(mathsPool, mathsCount) : [];
-       const finalBiologyIds = stream === 'PCB' ? selectRandomIds(biologyPool, biologyCount) : []; // Corrected Biology logic
+       const finalBiologyIds = stream === 'PCB' ? selectRandomIds(biologyPool, biologyCount) : [];
 
 
       return {
@@ -337,12 +391,12 @@ export default function CreateTestPage() {
           physics: finalPhysicsIds,
           chemistry: finalChemistryIds,
           maths: stream === 'PCM' ? finalMathsIds : undefined,
-          biology: stream === 'PCB' ? finalBiologyIds : undefined, // Corrected Biology logic
+          biology: stream === 'PCB' ? finalBiologyIds : undefined,
           weightage: {
-              physics: physicsWeight,
-              chemistry: chemistryWeight,
-              ...(stream === 'PCM' && { maths: mathsWeight || 0 }),
-              ...(stream === 'PCB' && { biology: biologyWeight || 0 }),
+              physics: physicsWeight ?? 0,
+              chemistry: chemistryWeight ?? 0,
+              ...(stream === 'PCM' && { maths: mathsWeight ?? 0 }),
+              ...(stream === 'PCB' && { biology: biologyWeight ?? 0 }),
           },
       };
   }
@@ -354,7 +408,10 @@ export default function CreateTestPage() {
 
     try {
         const testId = generateTestId(data);
-        const title = `${data.testType === 'chapterwise' ? `${data.subject} - ${data.lesson}` : data.stream} Test (${data.examFilter})`;
+        // Generate a more descriptive title
+        const title = data.testType === 'chapterwise'
+            ? `${data.subject} - ${data.lesson} (${data.examFilter}) Test`
+            : `${data.stream} - ${data.examFilter} Full Length Test`;
         const nowISO = new Date().toISOString();
         let testDefinition: ChapterwiseTestJson | FullLengthTestJson;
 
@@ -404,10 +461,12 @@ export default function CreateTestPage() {
            const testDefinition = JSON.parse(generatedTestJson);
            const result = await saveGeneratedTest(testDefinition);
            if (!result.success) throw new Error(result.message || "Failed to save test definition.");
-            toast({ title: "Test Saved Successfully!", description: `Test saved to ${result.filePath} (simulated).` });
+            toast({ title: "Test Saved Successfully!", description: `Test definition saved.` });
            form.reset(); // Reset form
            setGeneratedTestJson(null); // Clear JSON
            setShowJsonDialog(false); // Close dialog
+           // Optionally clear other states like available questions
+            setAvailableQuestions([]);
        } catch (error: any) {
            toast({ variant: "destructive", title: "Save Failed", description: error.message });
        } finally {
@@ -486,7 +545,7 @@ export default function CreateTestPage() {
                 <h3 className="mb-3 font-medium">Select Questions ({selectedQuestions?.length || 0} selected)</h3>
                  <div className="flex justify-between items-center mb-3">
                     <p className="text-sm text-muted-foreground">Available: {availableQuestions.length} questions</p>
-                     <Button type="button" size="sm" variant="outline" onClick={() => handleSelectRandom(20)} disabled={isLoadingQuestions || availableQuestions.length < 20 || isSaving}>
+                     <Button type="button" size="sm" variant="outline" onClick={() => handleSelectRandom(20)} disabled={isLoadingQuestions || availableQuestions.length < 1 || isSaving}> {/* Enabled if at least 1 question */}
                         Auto-Pick 20
                      </Button>
                  </div>
@@ -552,11 +611,11 @@ export default function CreateTestPage() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <FormField control={form.control} name="physicsWeight" render={({ field }) => ( <FormItem> <FormLabel>Physics</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
                     <FormField control={form.control} name="chemistryWeight" render={({ field }) => ( <FormItem> <FormLabel>Chemistry</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    {stream === 'PCM' && <FormField control={form.control} name="mathsWeight" render={({ field }) => ( <FormItem> <FormLabel>Maths</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
-                    {stream === 'PCB' && <FormField control={form.control} name="biologyWeight" render={({ field }) => ( <FormItem> <FormLabel>Biology</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
+                    {stream === 'PCM' && <FormField control={form.control} name="mathsWeight" render={({ field }) => ( <FormItem> <FormLabel>Maths</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving || stream !== 'PCM'} /> </FormControl> <FormMessage /> </FormItem> )} />}
+                    {stream === 'PCB' && <FormField control={form.control} name="biologyWeight" render={({ field }) => ( <FormItem> <FormLabel>Biology</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving || stream !== 'PCB'} /> </FormControl> <FormMessage /> </FormItem> )} />}
                   </div>
                    {/* General message for weightage validation */}
-                   <FormMessage className="mt-2">{form.formState.errors.physicsWeight?.message}</FormMessage>
+                   <FormMessage className="mt-2">{form.formState.errors.physicsWeight?.message || form.formState.errors.root?.message}</FormMessage>
                </CardContent>
                <CardContent>
                  <p className="text-sm text-muted-foreground">Questions will be automatically selected based on the weightage and exam filter from the entire question bank (simulation). Final question list can be reviewed before saving.</p>
