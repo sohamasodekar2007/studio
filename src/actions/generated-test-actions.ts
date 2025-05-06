@@ -38,16 +38,10 @@ export async function saveGeneratedTest(
     // Determine save directory and filename based on test type
     if (testDefinition.testType === 'chapterwise') {
         targetDir = chapterwiseTestsBasePath;
-        // Example filename: physics_thermodynamics_jee_20240520.json (or use test_code)
-        // Using test_code for uniqueness guarantees
         filename = `${testDefinition.test_code}.json`;
-        // filename = `${testDefinition.test_subject[0]}_${testDefinition.lesson}_${testDefinition.examFilter}_${testDefinition.test_code}.json`;
     } else if (testDefinition.testType === 'full_length') {
         targetDir = fullLengthTestsBasePath;
-        // Example filename: pcm_jee_20240520.json (or use test_code)
-        // Using test_code for uniqueness guarantees
          filename = `${testDefinition.test_code}.json`;
-        // filename = `${testDefinition.stream}_${testDefinition.examFilter}_${testDefinition.test_code}.json`;
     } else {
         // Fallback for safety, though should be covered by types
         console.error('Unknown test type provided to saveGeneratedTest:', (testDefinition as any).testType);
@@ -61,12 +55,6 @@ export async function saveGeneratedTest(
 
         // Remove the temporary 'testType' discriminator property before saving
         const { testType, ...dataToSave } = testDefinition;
-
-        // Optionally add/update a 'modifiedAt' timestamp if needed
-        // const finalData = {
-        //     ...dataToSave,
-        //     // modifiedAt: new Date().toISOString(), // Uncomment if needed
-        // };
 
         await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
         console.log(`Generated test definition saved: ${filePath}`);
@@ -187,5 +175,57 @@ export async function deleteGeneratedTest(testCode: string): Promise<{ success: 
 // --- TODO: Add functions for updating a generated test if needed ---
 // export async function updateGeneratedTest(...) { ... }
 
-// --- TODO: Add function to get a single test by code ---
-// export async function getGeneratedTestByCode(testCode: string): Promise<GeneratedTest | null> { ... }
+/**
+ * Fetches a single generated test by its unique test code.
+ * Searches in both chapterwise and full_length directories.
+ * @param testCode The unique code of the test to fetch.
+ * @returns A promise resolving to the GeneratedTest object or null if not found or on error.
+ */
+export async function getGeneratedTestByCode(testCode: string): Promise<GeneratedTest | null> {
+    if (!testCode) {
+        console.error('Test code is required to fetch a test.');
+        return null;
+    }
+
+    const possibleDirs = [chapterwiseTestsBasePath, fullLengthTestsBasePath];
+
+    for (const dir of possibleDirs) {
+        const filePath = path.join(dir, `${testCode}.json`);
+        try {
+            // Check if file exists first
+            await fs.access(filePath);
+
+            // Read and parse the file
+            const fileContent = await fs.readFile(filePath, 'utf-8');
+            const testData = JSON.parse(fileContent) as Omit<GeneratedTest, 'testType'>;
+
+            // Determine test type based on directory
+            const testType = dir.includes('chapterwise') ? 'chapterwise' : 'full_length';
+            const fullTestData = { ...testData, testType } as GeneratedTest;
+
+            // Basic validation
+             if (fullTestData.test_code && fullTestData.name && fullTestData.test_subject && fullTestData.type) {
+                  console.log(`Test found: ${testCode} in ${dir}`);
+                  return fullTestData;
+             } else {
+                 console.warn(`Found test file ${filePath} but it's missing core fields.`);
+                 // Continue searching in the other directory
+             }
+
+        } catch (error: any) {
+            if (error.code === 'ENOENT') {
+                // File not found in this directory, continue to the next one
+                continue;
+            } else {
+                // Other error (parsing, reading)
+                console.error(`Error accessing or parsing test file ${filePath}:`, error);
+                // Return null on significant errors, maybe throw depending on desired behavior
+                return null;
+            }
+        }
+    }
+
+    // If the loop finishes without finding the file
+    console.log(`Test with code ${testCode} not found in any directory.`);
+    return null; // Not found in any directory
+}
