@@ -1,3 +1,4 @@
+
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -68,7 +69,7 @@ export function AppHeader() {
             <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
               <Avatar>
                  {/* Use a placeholder avatar for local auth */}
-                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.uid}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
                 <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
               </Avatar>
             </Button>

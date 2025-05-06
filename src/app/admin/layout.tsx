@@ -1,13 +1,14 @@
 
-'use client'; // Required for SidebarProvider context
+'use client'; // Required for AuthProvider context
 
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { AuthProvider } from '@/context/auth-context';
-import { SidebarProvider } from '@/components/ui/sidebar'; // Import SidebarProvider
-import { cn } from '@/lib/utils'; // Import cn utility
+// Remove SidebarProvider and cn imports
+// import { SidebarProvider } from '@/components/ui/sidebar';
+// import { cn } from '@/lib/utils';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,25 +25,18 @@ export default function AdminLayout({
 
   return (
     <AuthProvider> {/* Auth context for header/sidebar checks */}
-      {/* Wrap with SidebarProvider and add group/sidebar */}
-      <SidebarProvider defaultOpen={true}>
-        <div className={`group/sidebar flex min-h-screen bg-muted/40 ${inter.className}`}>
-          <AdminSidebar />
-          {/* This div will have the dynamic margin based on sidebar state */}
-          <div
-            className={cn(
-              "flex flex-col flex-1 transition-[margin-left] duration-300 ease-in-out",
-              "sm:ml-[--sidebar-width-icon] peer-data-[state=expanded]:sm:ml-[--sidebar-width]" // Apply margin based on peer state
-            )}
-          >
-            <AdminHeader />
-            {/* Main content area */}
-            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-              {children}
-            </main>
-          </div>
+      {/* Revert to original div structure */}
+      <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
+        <AdminSidebar />
+        {/* Revert flex-1 div */}
+        <div className="flex flex-col flex-1">
+          <AdminHeader />
+          {/* Main content area */}
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+            {children}
+          </main>
         </div>
-      </SidebarProvider>
+      </div>
     </AuthProvider>
   );
 }
