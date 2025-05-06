@@ -48,6 +48,8 @@ import { academicStatuses, exams, pricingTypes, examOptions, classLevels, diffic
 // Import actual actions
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/test-generation-actions'; // Assume this action exists
+import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
@@ -281,7 +283,7 @@ export default function CreateTestPage() {
           fetchPool('Physics'),
           fetchPool('Chemistry'),
           stream === 'PCM' ? fetchPool('Maths') : Promise.resolve([]),
-          stream === 'PCB' ? Promise.resolve([]),
+          stream === 'PCB' ? fetchPool('Biology') : Promise.resolve([]), // Corrected fetch for Biology
       ]);
 
        const calcCount = (weight: number) => Math.max(0, Math.round((weight / 100) * totalQuestions));
@@ -326,7 +328,7 @@ export default function CreateTestPage() {
        const finalPhysicsIds = selectRandomIds(physicsPool, physicsCount);
        const finalChemistryIds = selectRandomIds(chemistryPool, chemistryCount);
        const finalMathsIds = stream === 'PCM' ? selectRandomIds(mathsPool, mathsCount) : [];
-       const finalBiologyIds = stream === 'PCB' ? selectRandomIds(biologyPool, biologyCount) : [];
+       const finalBiologyIds = stream === 'PCB' ? selectRandomIds(biologyPool, biologyCount) : []; // Corrected Biology logic
 
 
       return {
@@ -335,7 +337,7 @@ export default function CreateTestPage() {
           physics: finalPhysicsIds,
           chemistry: finalChemistryIds,
           maths: stream === 'PCM' ? finalMathsIds : undefined,
-          biology: stream === 'PCB' ? finalBiologyIds : undefined,
+          biology: stream === 'PCB' ? finalBiologyIds : undefined, // Corrected Biology logic
           weightage: {
               physics: physicsWeight,
               chemistry: chemistryWeight,
