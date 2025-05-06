@@ -55,20 +55,15 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
        // Format expiry_date to ISO string or null BEFORE updating
        const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
 
-      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>> = { // Exclude createdAt
+      // Prepare the data payload specifically for the update action
+      // Only include fields that are changing (model, expiry_date)
+      const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt'>> = {
         model: data.model,
         expiry_date: expiryDateString,
-         // Include other fields to ensure updateUserInJson has full context if needed
-         email: user.email,
-         password: user.password,
-         name: user.name,
-         phone: user.phone,
-         referral: user.referral,
-         class: user.class,
       };
 
-
-      const result = await updateUserInJson(user.id, updatedData);
+      // Call the server action to update the user in users.json
+      const result = await updateUserInJson(user.id, updatedDataPayload);
 
       if (!result.success) {
         throw new Error(result.message || 'Failed to update user role/plan.');
@@ -78,15 +73,16 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
         title: 'User Role/Plan Updated',
         description: `${user.email}'s plan has been updated to ${data.model}.`,
       });
-      // Construct the fully updated user profile to pass back
+
+      // Construct the fully updated user profile object to pass back to the parent page
+      // This ensures the local state in the parent component reflects the saved changes
       const fullyUpdatedUser: UserProfile = {
           ...user, // Start with original user data
-          ...updatedData, // Apply the changes from the form
-          // Ensure expiry_date in the callback data is also a string or null
-          expiry_date: updatedData.expiry_date
+          model: data.model, // Apply the new model
+          expiry_date: expiryDateString // Apply the new expiry date (string or null)
       };
        onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
-       // onClose(); // Close is handled by onUserUpdate which calls closeDialog in parent
+       // onClose(); // Closing is handled by the parent component via onUserUpdate -> closeDialog
 
     } catch (error: any) {
       console.error('Failed to update user role/plan:', error);

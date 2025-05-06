@@ -124,13 +124,16 @@ export default function AdminUsersPage() {
 
    // Function to handle updates from Edit/Role dialogs
    const handleUserUpdate = (updatedUser: UserProfile) => {
-     // Re-assign role based on email after potential update
+     // Re-assign role based on email after potential update (e.g., if email could be changed in Edit, though it's currently disabled)
      const role = updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
      setUsers(prevUsers =>
-       prevUsers.map(u => (u.id === updatedUser.id ? { ...u, ...updatedUser, role } : u))
+       // Map through existing users, find the one with the matching ID, and replace it with the updated user profile
+       // Ensure the role is also updated based on the potentially updated email or other logic.
+       prevUsers.map(u => (u.id === updatedUser.id ? { ...updatedUser, role } : u))
      );
-     closeDialog();
+     closeDialog(); // Close the currently open dialog
    };
+
 
    // Function to handle adding a user from Add dialog
    const handleUserAdded = (newUser: UserProfile) => {
@@ -230,7 +233,8 @@ export default function AdminUsersPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={isCurrentUserAdmin}>
+                          {/* Disable actions for the primary admin user */}
+                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Toggle menu</span>
                           </Button>
@@ -238,13 +242,13 @@ export default function AdminUsersPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
                            {/* Enable buttons and add onClick handlers */}
-                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={isCurrentUserAdmin}>
+                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
                              <Edit className="mr-2 h-4 w-4" /> Edit User
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserAdmin}>
+                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                            </DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={isCurrentUserAdmin}>
+                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
                              <UserCheck className="mr-2 h-4 w-4" /> Change Role/Plan
                            </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -254,7 +258,7 @@ export default function AdminUsersPage() {
                                 <Button
                                   variant="ghost"
                                   className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
-                                  disabled={isCurrentUserAdmin || isDeleting} // Disable if admin or already deleting
+                                  disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL || isDeleting} // Disable if admin or already deleting
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" /> Delete User
                                 </Button>
@@ -335,3 +339,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+

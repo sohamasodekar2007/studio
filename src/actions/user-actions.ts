@@ -1,3 +1,4 @@
+
 // src/actions/user-actions.ts
 'use server';
 
@@ -10,8 +11,8 @@ import path from 'path';
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
 
 // Define the default admin user details
-const defaultAdminEmail = 'admin@edunexus.com';
-const defaultAdminPassword = 'Soham@1234';
+const defaultAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com'; // Use env var or fallback
+const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234'; // Use env var or fallback
 const defaultAdminProfileBase: Omit<UserProfile, 'id' | 'createdAt'> = {
     email: defaultAdminEmail,
     password: defaultAdminPassword, // Store plain text password (INSECURE)
@@ -165,6 +166,8 @@ export async function saveUserToJson(
 
         if (existingUserIndex !== -1) {
             // Update existing user: replace the existing entry completely
+             // Preserve the original createdAt timestamp if it exists, otherwise use the one from userToSave
+            userToSave.createdAt = users[existingUserIndex].createdAt || userToSave.createdAt;
             users[existingUserIndex] = userToSave;
             console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated in users.json`);
         } else {
@@ -233,11 +236,11 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
  * Updates an existing user in the users.json file by ID.
  * WARNING: Insecure. Updates potentially include plain text password.
  * @param userId The ID of the user to update.
- * @param updatedData Partial user profile data to update.
+ * @param updatedData Partial user profile data to update. Can include `model`, `expiry_date`, etc.
  * @returns A promise resolving with success status and optional message.
  */
 export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id'>>): Promise<{ success: boolean; message?: string }> {
-     console.warn("WARNING: Updating user data (potentially including password) in users.json is insecure.");
+     console.warn("WARNING: Updating user data (potentially including password or model) in users.json is insecure.");
     try {
         let users = await readUsers(); // Ensures admin is present
         const userIndex = users.findIndex(u => u.id === userId);
@@ -249,13 +252,19 @@ export async function updateUserInJson(userId: string | number, updatedData: Par
         // Merge existing data with updated data, ensuring ID and original createdAt are preserved
         const existingUser = users[userIndex];
         users[userIndex] = {
-            ...existingUser, // Keep existing data
-            ...updatedData,   // Apply updates
+            ...existingUser, // Start with existing data
+            ...updatedData,   // Apply the updates (e.g., model, expiry_date)
             id: userId,       // Ensure ID remains the same
-            createdAt: existingUser.createdAt, // Preserve original creation date
+            createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date or set if missing
         };
+         console.log(`Updating user ${userId}. New data merged:`, users[userIndex]);
 
         const success = await writeUsers(users);
+        if (success) {
+             console.log(`Successfully updated user ${userId} in users.json`);
+        } else {
+             console.error(`Failed to write update for user ${userId} to users.json`);
+        }
         return { success, message: success ? undefined : 'Failed to write users file.' };
     } catch (error) {
         console.error(`Error updating user ${userId} in JSON:`, error);
@@ -326,3 +335,4 @@ export async function updateUserPasswordInJson(userId: string | number, newPassw
         return { success: false, message: 'Failed to update password.' };
     }
 }
+
