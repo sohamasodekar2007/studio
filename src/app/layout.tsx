@@ -1,4 +1,4 @@
-{'use client'; // Make this a client component to use usePathname
+'use client'; // Make this a client component to use usePathname
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation'; // Import usePathname
