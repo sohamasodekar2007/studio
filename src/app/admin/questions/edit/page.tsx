@@ -1,7 +1,7 @@
 // src/app/admin/questions/edit/page.tsx
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,82 +19,136 @@ import { examOptions, classLevels } from '@/types'; // Import filter options
 import { Badge } from "@/components/ui/badge"; // Import Badge component
 // Import the actual server actions
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
+// Import the EditQuestionDialog
+import EditQuestionDialog from '@/components/admin/edit-question-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
 
 export default function EditQuestionsPage() {
   const { toast } = useToast();
   const [subjects, setSubjects] = useState<string[]>([]);
   const [lessons, setLessons] = useState<string[]>([]);
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
-  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true); // Renamed for clarity
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // --- State for Edit Dialog ---
+  const [editingQuestion, setEditingQuestion] = useState<QuestionBankItem | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  // --- End Edit Dialog State ---
 
   // --- Filter State ---
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<ClassLevel | 'all'>('all');
   const [selectedExam, setSelectedExam] = useState<ExamOption | 'all'>('all');
-  const [useBothFilters, setUseBothFilters] = useState(false); // Kept for potential future use
+  const [useBothFilters, setUseBothFilters] = useState(false);
   // --- End Filter State ---
 
 
   // --- Fetch Initial Data (Subjects) ---
-  useEffect(() => {
-    setIsLoadingSubjects(true);
-    getSubjects()
-      .then(setSubjects)
-      .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load subjects." }))
-      .finally(() => setIsLoadingSubjects(false));
-  }, [toast]);
+   const fetchSubjects = useCallback(async () => {
+        setIsLoadingSubjects(true);
+        try {
+            const fetchedSubjects = await getSubjects();
+            setSubjects(fetchedSubjects);
+        } catch (err) {
+            toast({ variant: "destructive", title: "Error", description: "Could not load subjects." });
+            setSubjects([]); // Ensure empty on error
+        } finally {
+            setIsLoadingSubjects(false);
+        }
+   }, [toast]);
+
+    useEffect(() => {
+        fetchSubjects();
+    }, [fetchSubjects]);
 
   // --- Fetch Lessons when Subject Changes ---
-  useEffect(() => {
-    if (selectedSubject) {
-      setIsLoadingLessons(true);
-      setLessons([]); // Clear previous lessons
-      setSelectedLesson(''); // Reset lesson selection
-      setQuestions([]); // Clear questions too
-      getLessonsForSubject(selectedSubject)
-        .then(setLessons)
-        .catch(err => toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` }))
-        .finally(() => setIsLoadingLessons(false));
-    } else {
-      setLessons([]); // Clear lessons if no subject selected
-      setSelectedLesson('');
-      setQuestions([]); // Clear questions if no subject selected
-    }
-  }, [selectedSubject, toast]);
+   const fetchLessons = useCallback(async () => {
+       if (selectedSubject) {
+         setIsLoadingLessons(true);
+         setLessons([]); // Clear previous lessons
+         setQuestions([]); // Clear questions too
+         try {
+           const fetchedLessons = await getLessonsForSubject(selectedSubject);
+           setLessons(fetchedLessons);
+           setSelectedLesson(''); // Reset lesson selection when subject changes
+         } catch (err) {
+           toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` });
+           setLessons([]); // Ensure empty on error
+         } finally {
+           setIsLoadingLessons(false);
+         }
+       } else {
+         setLessons([]); // Clear lessons if no subject selected
+         setSelectedLesson('');
+         setQuestions([]);
+       }
+   }, [selectedSubject, toast]);
+
+   useEffect(() => {
+       fetchLessons();
+   }, [fetchLessons]); // Depend on the memoized fetchLessons function
 
   // --- Fetch Questions when Subject AND Lesson Change (and other filters) ---
+   const fetchQuestions = useCallback(async () => {
+      if (selectedSubject && selectedLesson) {
+           setIsLoadingQuestions(true);
+           setQuestions([]); // Clear previous questions
+
+           const filters = {
+             subject: selectedSubject,
+             lesson: selectedLesson,
+             class: selectedClass !== 'all' ? selectedClass : undefined,
+             examType: selectedExam !== 'all' ? selectedExam : undefined,
+           };
+
+           console.log("Fetching questions with filters:", filters);
+           try {
+               const fetchedQuestions = await getQuestionsForLesson(filters);
+               setQuestions(fetchedQuestions);
+           } catch (err) {
+                console.error("Error loading questions:", err);
+                toast({ variant: "destructive", title: "Error", description: "Could not load questions." });
+                setQuestions([]); // Ensure empty on error
+           } finally {
+                setIsLoadingQuestions(false);
+           }
+       } else {
+           setQuestions([]); // Clear questions if subject or lesson is not selected
+       }
+   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, toast]); // Removed fetchQuestions from deps
+
    useEffect(() => {
-     // Only fetch if subject AND lesson are selected
-     if (selectedSubject && selectedLesson) {
-       setIsLoadingQuestions(true);
-       setQuestions([]); // Clear previous questions
+       // Trigger fetch only when the necessary filters are set
+       if (selectedSubject && selectedLesson) {
+           fetchQuestions();
+       } else {
+           setQuestions([]); // Clear if filters incomplete
+           setIsLoadingQuestions(false); // Ensure loading is off
+       }
+   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, fetchQuestions]); // Include fetchQuestions here
 
-       // Build filter object based on state
-       const filters = {
-         subject: selectedSubject,
-         lesson: selectedLesson,
-         class: selectedClass !== 'all' ? selectedClass : undefined,
-         examType: selectedExam !== 'all' ? selectedExam : undefined,
-         // Add 'useBoth' or similar logic if needed based on the toggle state
-       };
-
-       console.log("Fetching questions with filters:", filters);
-
-       getQuestionsForLesson(filters) // Pass the filter object
-         .then(setQuestions)
-         .catch(err => {
-            console.error("Error loading questions:", err);
-            toast({ variant: "destructive", title: "Error", description: "Could not load questions." })
-         })
-         .finally(() => setIsLoadingQuestions(false));
-     } else {
-       setQuestions([]); // Clear questions if subject or lesson is not selected
-     }
-   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, toast]);
+    // Function to update the questions list after editing
+    const handleQuestionUpdate = useCallback((updatedQuestion: QuestionBankItem) => {
+        setQuestions(prevQuestions =>
+            prevQuestions.map(q => (q.id === updatedQuestion.id ? updatedQuestion : q))
+        );
+        setIsEditDialogOpen(false); // Close dialog after update
+    }, []);
 
 
   // --- Filtered Questions for Display (using search term) ---
@@ -107,45 +161,34 @@ export default function EditQuestionsPage() {
   }, [questions, searchTerm]);
 
    // --- Action Handlers ---
-   const handleEdit = (id: string) => {
-     console.log("Edit question:", id);
-     toast({ title: "Edit Action", description: `Edit functionality for ${id} coming soon.` });
-     // TODO: Implement inline editing or open a modal/dialog using the actual question data
+   const handleEdit = (question: QuestionBankItem) => {
+        setEditingQuestion(question);
+        setIsEditDialogOpen(true);
    };
 
    const handleDelete = async (id: string, subject: string, lesson: string) => {
      console.log("Delete question:", id, subject, lesson);
-     if (confirm(`Are you sure you want to delete question ${id} from ${subject}/${lesson}? This cannot be undone.`)) {
-       try {
-         const result = await deleteQuestion({ questionId: id, subject, lesson }); // Pass parameters as an object
+     // Confirmation is now handled by AlertDialogTrigger
+
+     try {
+         const result = await deleteQuestion({ questionId: id, subject, lesson });
          if (result.success) {
            toast({ title: "Question Deleted", description: `${id} has been removed.` });
-           // Re-fetch questions for the current filters after deletion
-           setIsLoadingQuestions(true);
-            const filters = {
-                subject: selectedSubject,
-                lesson: selectedLesson,
-                class: selectedClass !== 'all' ? selectedClass : undefined,
-                examType: selectedExam !== 'all' ? selectedExam : undefined,
-            };
-           getQuestionsForLesson(filters)
-            .then(setQuestions)
-            .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not reload questions." }))
-            .finally(() => setIsLoadingQuestions(false));
+            // Re-fetch questions after deletion by calling the memoized fetch function
+           await fetchQuestions();
          } else {
            throw new Error(result.message || 'Failed to delete question.');
          }
        } catch (error: any) {
          toast({ variant: "destructive", title: "Delete Failed", description: error.message });
        }
-     }
    };
 
     const renderQuestionPreview = (q: QuestionBankItem) => {
         if (q.type === 'image') {
-            // TODO: Fetch actual image path or show placeholder correctly
-            // const imagePath = `/data/question_bank/${q.subject}/${q.lesson}/images/${q.question.image}`; // Adjust path as needed
-            return <span className="flex items-center gap-1 text-blue-600"><ImageIcon className="h-4 w-4"/> [Image Question]</span>;
+             // IMPORTANT: Adjust this path based on how images are served publicly
+            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}`;
+            return <span className="flex items-center gap-1 text-blue-600"><ImageIcon className="h-4 w-4"/> [Image: {q.question.image}]</span>;
         }
         const text = q.question.text || '[No Text]';
         // Basic MathJax preview (relies on MathJax being loaded globally)
@@ -176,7 +219,7 @@ export default function EditQuestionsPage() {
                value={selectedSubject}
                onValueChange={(value) => {
                  setSelectedSubject(value);
-                 // Reset dependent filters handled by useEffect
+                 // Lessons and questions will auto-update via useEffect
                }}
                disabled={isLoadingSubjects}
              >
@@ -198,7 +241,7 @@ export default function EditQuestionsPage() {
                     value={selectedLesson}
                     onValueChange={(value) => {
                         setSelectedLesson(value);
-                        // Reset questions handled by useEffect
+                        // Questions will auto-update via useEffect
                     }}
                     disabled={isLoadingLessons || !selectedSubject || subjects.length === 0}
                 >
@@ -250,18 +293,9 @@ export default function EditQuestionsPage() {
              </div>
 
              {/* 'Use Both Filters' Toggle - kept for potential future implementation */}
-             {/* <div className="flex items-center space-x-2 sm:col-span-2 md:col-span-1 lg:col-span-1 justify-self-start pt-5">
-                 <Checkbox
-                    id="use-both-filters"
-                    checked={useBothFilters}
-                    onCheckedChange={(checked) => setUseBothFilters(Boolean(checked))}
-                    disabled={!selectedSubject || !selectedLesson || selectedClass === 'all' || selectedExam === 'all'}
-                 />
-                 <Label htmlFor="use-both-filters" className="text-sm text-muted-foreground">Use Class & Exam Together</Label>
-             </div> */}
+             {/* ... */}
 
          </CardContent>
-         {/* Footer button for manual load removed, loads automatically via useEffect */}
        </Card>
 
       {/* Question Table */}
@@ -297,7 +331,6 @@ export default function EditQuestionsPage() {
                         <TableHead>Exam</TableHead>
                         <TableHead>Difficulty</TableHead>
                         <TableHead>Correct Ans</TableHead>
-                        {/* Add Marks later if needed */}
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -340,14 +373,34 @@ export default function EditQuestionsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => handleEdit(q.id)} disabled> {/* Keep edit disabled for now */}
+                                 <DropdownMenuItem onClick={() => handleEdit(q)}>
                                     <Edit className="mr-2 h-4 w-4" /> Edit Question
-                                </DropdownMenuItem>
-                                {/* Add other actions like View Full, Clone later */}
+                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => handleDelete(q.id, q.subject, q.lesson)}>
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Question
-                                </DropdownMenuItem>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete Question
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This will permanently delete question <span className="font-mono text-xs">{q.id}</span> from {q.subject}/{q.lesson}. This action cannot be undone.
+                                        </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleDelete(q.id, q.subject, q.lesson)} className="bg-destructive hover:bg-destructive/90">
+                                            Yes, delete
+                                        </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             </TableCell>
@@ -372,6 +425,19 @@ export default function EditQuestionsPage() {
               </div>
            </CardFooter>
        </Card>
+
+        {/* Edit Question Dialog */}
+        {editingQuestion && (
+            <EditQuestionDialog
+                question={editingQuestion}
+                isOpen={isEditDialogOpen}
+                onClose={() => {
+                    setIsEditDialogOpen(false);
+                    setEditingQuestion(null); // Clear the question being edited
+                }}
+                onQuestionUpdate={handleQuestionUpdate}
+            />
+        )}
 
     </div>
   );

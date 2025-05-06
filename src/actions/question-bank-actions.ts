@@ -62,7 +62,7 @@ async function saveImage(
  */
 export async function addQuestionToBank(
     formData: FormData
-): Promise<{ success: boolean; question: QuestionBankItem | null; error?: string }> {
+): Promise<{ success: boolean; question: QuestionBankItem | null; error?: string }}> {
     console.log("Received FormData Keys:", Array.from(formData.keys()));
 
     try {
@@ -174,8 +174,122 @@ export async function addQuestionToBank(
     }
 }
 
+
+/**
+ * Updates specific details of an existing question in the question bank.
+ * Primarily focuses on updating correct answer and explanation (text and/or image).
+ *
+ * @param formData - FormData containing the questionId, subject, lesson, correctAnswer, explanationText, and optional new explanationImage.
+ * @returns A promise resolving with success status, the updated question object (or null on failure), and optional error message.
+ */
+export async function updateQuestionDetails(
+    formData: FormData
+): Promise<{ success: boolean; question: QuestionBankItem | null; error?: string }> {
+    console.log("Received FormData Keys for Update:", Array.from(formData.keys()));
+
+    try {
+        // --- Extract Data ---
+        const questionId = formData.get('questionId') as string;
+        const subject = formData.get('subject') as string;
+        const lesson = formData.get('lesson') as string;
+        const correctAnswer = formData.get('correctAnswer') as "A" | "B" | "C" | "D";
+        const explanationText = formData.get('explanationText') as string | null;
+        const explanationImageFile = formData.get('explanationImage') as File | null; // New image file
+        const removeExplanationImage = formData.get('removeExplanationImage') === 'true'; // Flag to remove existing image
+
+        // --- Basic Validation ---
+        if (!questionId || !subject || !lesson || !correctAnswer) {
+            return { success: false, question: null, error: 'Missing required fields for update (ID, Subject, Lesson, Correct Answer).' };
+        }
+
+        // --- File Paths ---
+        const questionsDir = path.join(questionBankBasePath, subject, lesson, 'questions');
+        const imagesDir = path.join(questionBankBasePath, subject, lesson, 'images');
+        const questionFilePath = path.join(questionsDir, `${questionId}.json`);
+
+        // --- Read Existing Question ---
+        let existingQuestion: QuestionBankItem;
+        try {
+            const fileContent = await fs.readFile(questionFilePath, 'utf-8');
+            existingQuestion = JSON.parse(fileContent) as QuestionBankItem;
+        } catch (readError: any) {
+            if (readError.code === 'ENOENT') {
+                return { success: false, question: null, error: `Question file not found: ${questionId}` };
+            }
+            console.error(`Error reading existing question file ${questionId}:`, readError);
+            return { success: false, question: null, error: 'Could not read existing question data.' };
+        }
+
+        const existingExplanationImage = existingQuestion.explanation.image;
+        let newExplanationImageFilename: string | null = existingExplanationImage; // Default to existing
+
+        // --- Handle Explanation Image Update ---
+        // 1. If a new image is uploaded
+        if (explanationImageFile) {
+            // Delete the old image if it exists
+            if (existingExplanationImage) {
+                try {
+                    await fs.unlink(path.join(imagesDir, existingExplanationImage));
+                    console.log(`Deleted old explanation image: ${existingExplanationImage}`);
+                } catch (delError: any) {
+                    if (delError.code !== 'ENOENT') console.warn(`Could not delete old explanation image ${existingExplanationImage}:`, delError);
+                }
+            }
+            // Save the new image
+            newExplanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E');
+            if (!newExplanationImageFilename) {
+                // Decide if this is critical. Maybe allow update without new image saving?
+                console.warn('Failed to save new explanation image, update proceeding without image change.');
+                 newExplanationImageFilename = null; // Ensure it's null if save failed
+                // return { success: false, question: null, error: 'Failed to save new explanation image.' };
+            }
+        }
+        // 2. If the remove flag is set and no new image was uploaded
+        else if (removeExplanationImage && existingExplanationImage) {
+            // Delete the old image
+             try {
+                 await fs.unlink(path.join(imagesDir, existingExplanationImage));
+                 console.log(`Deleted existing explanation image: ${existingExplanationImage}`);
+                  newExplanationImageFilename = null; // Set filename to null
+             } catch (delError: any) {
+                 if (delError.code !== 'ENOENT') console.warn(`Could not delete existing explanation image ${existingExplanationImage}:`, delError);
+                 // Keep existing filename if deletion fails? Or set to null? Let's set to null.
+                 newExplanationImageFilename = null;
+             }
+        }
+         // 3. If neither upload nor remove flag, keep the existing image filename (already defaulted)
+
+
+        // --- Update Question Object ---
+        const nowISO = new Date().toISOString();
+        const updatedQuestion: QuestionBankItem = {
+            ...existingQuestion,
+            correct: correctAnswer,
+            explanation: {
+                text: explanationText || null,
+                image: newExplanationImageFilename, // Use the determined filename
+            },
+            modified: nowISO, // Update modified timestamp
+        };
+
+        // --- Save Updated Question JSON ---
+        await fs.writeFile(questionFilePath, JSON.stringify(updatedQuestion, null, 2), 'utf-8');
+        console.log(`Updated Question JSON saved: ${questionFilePath}`);
+
+        // --- TODO: Update Master Index if needed ---
+
+        return { success: true, question: updatedQuestion };
+
+    } catch (error: any) {
+        console.error(`Error updating question ${formData.get('questionId')}:`, error);
+        return { success: false, question: null, error: error.message || 'An unknown error occurred while updating the question.' };
+    }
+}
+
+
+
 // --- TODO: Implement other CRUD operations ---
 // export async function getQuestionById(id: string): Promise<QuestionBankItem | null> { ... }
-// export async function updateQuestion(id: string, data: Partial<QuestionBankItem>, ...): Promise<{ success: boolean; ... }> { ... }
+// export async function updateQuestion(id: string, data: Partial<QuestionBankItem>, ...): Promise<{ success: boolean; ... }> { ... } // Full update
 // export async function deleteQuestion(id: string): Promise<{ success: boolean; ... }> { ... }
 // export async function getAllQuestions(filters?): Promise<QuestionBankItem[]> { ... }

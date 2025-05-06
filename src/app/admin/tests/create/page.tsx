@@ -1,7 +1,7 @@
 // src/app/admin/tests/create/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -45,50 +45,14 @@ import type {
   FullLengthTestJson
 } from '@/types';
 import { academicStatuses, exams, pricingTypes, examOptions, classLevels, difficultyLevels } from '@/types'; // Import options
-
-// Placeholder Actions (implement later)
-async function getSubjects(): Promise<string[]> {
-    console.warn("getSubjects action not implemented, returning placeholder data.");
-    return ["Physics", "Chemistry", "Maths", "Biology"];
-}
-async function getLessons(subject: string): Promise<string[]> {
-    console.warn(`getLessons action for ${subject} not implemented, returning placeholder data.`);
-    if (subject === 'Physics') return ['Kinematics', 'Work Energy Power', 'Rotational Motion'];
-    if (subject === 'Chemistry') return ['Mole Concept', 'Atomic Structure', 'Chemical Bonding'];
-    return ['Lesson A', 'Lesson B'];
-}
-async function getQuestionsForLesson(subject: string, lesson: string, examFilter: ExamOption | 'Random Exam'): Promise<QuestionBankItem[]> {
-    console.warn(`getQuestionsForLesson for ${subject}/${lesson} (filter: ${examFilter}) not implemented.`);
-    // Simulate fetching based on subject/lesson/exam
-    const allQuestions: QuestionBankItem[] = [
-        // Sample questions... (add more diverse samples)
-        { id: "Q_1", subject: "Physics", lesson: "Kinematics", class: "11", examType: "JEE Main", difficulty: "Medium", tags: ["1d"], type: "text", question: { text: "Question 1 Physics/Kinematics/JEE" }, options: { A: "A", B: "B", C: "C", D: "D" }, correct: "A", explanation: { text: "Expl" }, created: "...", modified: "..." },
-        { id: "Q_2", subject: "Physics", lesson: "Kinematics", class: "11", examType: "NEET", difficulty: "Easy", tags: ["vector"], type: "text", question: { text: "Question 2 Physics/Kinematics/NEET" }, options: { A: "A", B: "B", C: "C", D: "D" }, correct: "B", explanation: { text: "Expl" }, created: "...", modified: "..." },
-         { id: "Q_3", subject: "Physics", lesson: "Work Energy Power", class: "11", examType: "JEE Advanced", difficulty: "Hard", tags: ["work"], type: "image", question: { image: "q3.png" }, options: { A: "A", B: "B", C: "C", D: "D" }, correct: "C", explanation: { text: "Expl img" }, created: "...", modified: "..." },
-          { id: "Q_4", subject: "Chemistry", lesson: "Mole Concept", class: "11", examType: "NEET", difficulty: "Easy", tags: [], type: "text", question: { text: "Question 4 Chem/Mole/NEET" }, options: { A: "A", B: "B", C: "C", D: "D" }, correct: "D", explanation: { text: "Expl" }, created: "...", modified: "..." },
-    ];
-    return new Promise(resolve => setTimeout(() => resolve(
-        allQuestions.filter(q =>
-            q.subject === subject &&
-            q.lesson === lesson &&
-            (examFilter === 'Random Exam' || q.examType === examFilter)
-        )
-    ), 300));
-}
-async function saveGeneratedTest(testDefinition: ChapterwiseTestJson | FullLengthTestJson): Promise<{ success: boolean; message?: string; filePath?: string }> {
-   console.warn("saveGeneratedTest action not implemented. Simulating success.");
-   console.log("Simulating save for test:", testDefinition);
-   // In a real app, write the JSON to the correct folder structure based on testDefinition.type
-   const folder = testDefinition.type === 'chapterwise' ? 'chapterwise' : 'full_length';
-   const filePath = `src/data/test_pages/${folder}/${testDefinition.test_id}.json`;
-   await new Promise(resolve => setTimeout(resolve, 500)); // Simulate save delay
-   return { success: true, message: `Test saved successfully (simulated)`, filePath };
-}
+// Import actual actions
+import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
+import { saveGeneratedTest } from '@/actions/test-generation-actions'; // Assume this action exists
 
 // --- Zod Schemas ---
 
 const BaseTestSchema = z.object({
-  duration: z.coerce.number().min(1, "Duration must be at least 1 minute."),
+  duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").max(300, "Duration cannot exceed 300 minutes."),
   access: z.enum(pricingTypes, { required_error: "Access type is required." }),
   audience: z.enum(academicStatuses, { required_error: "Target audience is required." }),
 });
@@ -126,7 +90,8 @@ type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
 export default function CreateTestPage() {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [lessons, setLessons] = useState<string[]>([]);
   const [availableQuestions, setAvailableQuestions] = useState<QuestionBankItem[]>([]);
@@ -172,49 +137,72 @@ export default function CreateTestPage() {
 
   // --- Effects for Dynamic Data Loading ---
 
-  useEffect(() => {
-    getSubjects().then(setSubjects).catch(() => toast({ variant: "destructive", title: "Error loading subjects" }));
-  }, [toast]);
+   // Fetch Subjects
+   useEffect(() => {
+       setIsLoadingSubjects(true);
+       getSubjects()
+           .then(setSubjects)
+           .catch(() => toast({ variant: "destructive", title: "Error loading subjects" }))
+           .finally(() => setIsLoadingSubjects(false));
+   }, [toast]);
 
-  useEffect(() => {
-    if (selectedSubject) {
-      setLessons([]); // Clear previous lessons
-      form.setValue('lesson', ''); // Reset lesson selection in form
-      getLessons(selectedSubject)
-        .then(setLessons)
-        .catch(() => toast({ variant: "destructive", title: `Error loading lessons for ${selectedSubject}` }));
-    } else {
-      setLessons([]);
-    }
-  }, [selectedSubject, toast, form]);
+   // Fetch Lessons when Subject Changes
+   useEffect(() => {
+       if (selectedSubject) {
+           setIsLoadingLessons(true);
+           setLessons([]); // Clear previous lessons
+           form.setValue('lesson', ''); // Reset lesson selection in form
+           getLessonsForSubject(selectedSubject)
+               .then(setLessons)
+               .catch(() => toast({ variant: "destructive", title: `Error loading lessons for ${selectedSubject}` }))
+               .finally(() => setIsLoadingLessons(false));
+       } else {
+           setLessons([]);
+       }
+   }, [selectedSubject, toast, form]);
 
    // Load questions for Chapterwise test
-  useEffect(() => {
-    if (testType === 'chapterwise' && selectedSubject && selectedLesson && chapterExamFilter) {
-        setIsLoadingQuestions(true);
-        setAvailableQuestions([]); // Clear previous
-        getQuestionsForLesson(selectedSubject, selectedLesson, chapterExamFilter as ExamOption | 'Random Exam')
-            .then(setAvailableQuestions)
-            .catch(() => toast({ variant: "destructive", title: "Error loading questions" }))
-            .finally(() => setIsLoadingQuestions(false));
-    } else {
-        setAvailableQuestions([]); // Clear if not chapterwise or subject/lesson not selected
-    }
-  }, [testType, selectedSubject, selectedLesson, chapterExamFilter, toast]);
+   const fetchChapterQuestions = useCallback(async () => {
+        if (testType === 'chapterwise' && selectedSubject && selectedLesson && chapterExamFilter) {
+            setIsLoadingQuestions(true);
+            setAvailableQuestions([]); // Clear previous
+            try {
+                // Ensure examFilter is correctly typed for the action
+                const filterValue = chapterExamFilter as ExamOption | 'Random Exam';
+                const questions = await getQuestionsForLesson({
+                    subject: selectedSubject,
+                    lesson: selectedLesson,
+                    examType: filterValue === 'Random Exam' ? undefined : filterValue
+                });
+                setAvailableQuestions(questions);
+            } catch (err) {
+                 console.error("Error fetching chapter questions:", err);
+                 toast({ variant: "destructive", title: "Error loading questions" });
+            } finally {
+                 setIsLoadingQuestions(false);
+            }
+        } else {
+            setAvailableQuestions([]); // Clear if not chapterwise or filters incomplete
+            setIsLoadingQuestions(false); // Ensure loading state is off
+        }
+   }, [testType, selectedSubject, selectedLesson, chapterExamFilter, toast]); // Add dependencies
+
+
+   useEffect(() => {
+       fetchChapterQuestions();
+   }, [fetchChapterQuestions]); // Run effect when the callback changes
+
 
   // Adjust weights for Full Length stream change
   useEffect(() => {
     if (testType === 'full_length') {
       if (stream === 'PCM') {
         form.setValue('biologyWeight', 0);
-        // Optional: Redistribute weights if needed, e.g., ensure total is 100
         const currentTotal = (pWeight || 0) + (cWeight || 0) + (mWeight || 0);
-        if (currentTotal !== 100 && currentTotal > 0) { // Avoid division by zero
-             // Example: Proportional adjustment (can be complex)
+        if (currentTotal !== 100 && currentTotal > 0) {
              const factor = 100 / currentTotal;
              form.setValue('physicsWeight', Math.round((pWeight || 0) * factor));
              form.setValue('chemistryWeight', Math.round((cWeight || 0) * factor));
-             // Ensure total is exactly 100 after rounding
              const adjustedM = 100 - Math.round((pWeight || 0) * factor) - Math.round((cWeight || 0) * factor);
              form.setValue('mathsWeight', adjustedM);
         } else if (currentTotal === 0) {
@@ -248,14 +236,15 @@ export default function CreateTestPage() {
     const isSelected = currentSelection.includes(id);
     form.setValue(
       'selectedQuestions',
-      isSelected ? currentSelection.filter(qid => qid !== id) : [...currentSelection, id]
+      isSelected ? currentSelection.filter(qid => qid !== id) : [...currentSelection, id],
+       { shouldValidate: true } // Trigger validation after selection change
     );
   };
 
   const handleSelectRandom = (count: number) => {
     const shuffled = [...availableQuestions].sort(() => 0.5 - Math.random());
     const randomSelection = shuffled.slice(0, count).map(q => q.id);
-    form.setValue('selectedQuestions', randomSelection);
+    form.setValue('selectedQuestions', randomSelection, { shouldValidate: true });
     toast({ title: `Selected ${randomSelection.length} random questions.` });
   };
 
@@ -273,56 +262,71 @@ export default function CreateTestPage() {
     }
   }
 
-   // --- Generate Full Length Questions (Simulated) ---
-   // In a real app, this would involve complex backend logic
+   // --- Generate Full Length Questions (Simulated - Needs Backend Implementation) ---
   const generateFullLengthQuestions = async (data: Extract<TestCreationFormValues, { testType: 'full_length' }>): Promise<Omit<FullLengthTestJson, 'test_id' | 'title' | 'duration' | 'access' | 'audience' | 'type' | 'createdAt'>> => {
-      console.warn("Full-length question generation is simulated.");
+      console.warn("Full-length question generation is simulated. Implement backend logic.");
       const { stream, physicsWeight, chemistryWeight, mathsWeight, biologyWeight, totalQuestions, examFilter } = data;
 
-      // Simulate fetching a larger pool of questions based on stream and exam filter
-      // Replace with actual fetching logic targeting relevant subjects/lessons/exams
-      const physicsPool = await getQuestionsForLesson('Physics', 'Kinematics', examFilter as ExamOption | 'Combined'); // Example lesson
-      const chemistryPool = await getQuestionsForLesson('Chemistry', 'Mole Concept', examFilter as ExamOption | 'Combined'); // Example lesson
-      const mathsPool = stream === 'PCM' ? await getQuestionsForLesson('Maths', 'Calculus', examFilter as ExamOption | 'Combined') : []; // Example lesson
-      const biologyPool = stream === 'PCB' ? await getQuestionsForLesson('Biology', 'Genetics', examFilter as ExamOption | 'Combined') : []; // Example lesson
+      // **Replace this entire section with a call to your backend/server action**
+      // The backend should handle fetching questions based on filters and applying weightage logic.
 
-       const calcCount = (weight: number) => Math.round((weight / 100) * totalQuestions);
+       const fetchPool = async (subject: string) => {
+          // Simulate fetching a large pool - adjust filters as needed
+          return getQuestionsForLesson({ subject, lesson: '', // Fetch across all lessons for full length? Or specific ones?
+            examType: examFilter === 'Combined' ? undefined : examFilter });
+       };
+
+
+      const [physicsPool, chemistryPool, mathsPool, biologyPool] = await Promise.all([
+          fetchPool('Physics'),
+          fetchPool('Chemistry'),
+          stream === 'PCM' ? fetchPool('Maths') : Promise.resolve([]),
+          stream === 'PCB' ? Promise.resolve([]),
+      ]);
+
+       const calcCount = (weight: number) => Math.max(0, Math.round((weight / 100) * totalQuestions));
 
        const selectRandomIds = (pool: QuestionBankItem[], count: number): string[] => {
-            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            const available = pool.filter(q => q !== null && q !== undefined); // Ensure pool items are valid
+            const shuffled = [...available].sort(() => 0.5 - Math.random());
             return shuffled.slice(0, count).map(q => q.id);
        }
 
-       const physicsCount = calcCount(physicsWeight);
-       const chemistryCount = calcCount(chemistryWeight);
-       let finalPhysicsIds = selectRandomIds(physicsPool, physicsCount);
-       let finalChemistryIds = selectRandomIds(chemistryPool, chemistryCount);
-       let finalMathsIds: string[] = [];
-       let finalBiologyIds: string[] = [];
+       let physicsCount = calcCount(physicsWeight);
+       let chemistryCount = calcCount(chemistryWeight);
+       let mathsCount = stream === 'PCM' ? calcCount(mathsWeight || 0) : 0;
+       let biologyCount = stream === 'PCB' ? calcCount(biologyWeight || 0) : 0;
 
-       let remainingCount = totalQuestions - finalPhysicsIds.length - finalChemistryIds.length;
+       // Adjust counts to meet totalQuestions precisely (simple distribution adjustment)
+       let currentTotal = physicsCount + chemistryCount + mathsCount + biologyCount;
+       let diff = totalQuestions - currentTotal;
 
-       if (stream === 'PCM') {
-            const mathsCount = Math.max(0, remainingCount); // Assign remaining to maths
-            finalMathsIds = selectRandomIds(mathsPool, mathsCount);
-        } else { // PCB
-            const biologyCount = Math.max(0, remainingCount); // Assign remaining to biology
-            finalBiologyIds = selectRandomIds(biologyPool, biologyCount);
-       }
+        // Prioritize adding/removing from the largest weightage subject (example)
+        while(diff !== 0) {
+            if (diff > 0) {
+                 // Add to largest pool that has more questions available
+                if (stream === 'PCM' && (mathsWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && mathsCount < mathsPool.length) mathsCount++;
+                else if (stream === 'PCB' && (biologyWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && biologyCount < biologyPool.length) biologyCount++;
+                else if (physicsWeight >= chemistryWeight && physicsCount < physicsPool.length) physicsCount++;
+                 else if (chemistryCount < chemistryPool.length) chemistryCount++;
+                else break; // Cannot add more
+                diff--;
+            } else {
+                 // Remove from largest pool that has questions
+                if (stream === 'PCM' && (mathsWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && mathsCount > 0) mathsCount--;
+                else if (stream === 'PCB' && (biologyWeight || 0) >= Math.max(physicsWeight, chemistryWeight) && biologyCount > 0) biologyCount--;
+                else if (physicsWeight >= chemistryWeight && physicsCount > 0) physicsCount--;
+                 else if (chemistryCount > 0) chemistryCount--;
+                 else break; // Cannot remove more
+                 diff++;
+            }
+        }
 
-       // Ensure total count is exactly as requested (simple adjustment - could be smarter)
-        let currentTotal = finalPhysicsIds.length + finalChemistryIds.length + finalMathsIds.length + finalBiologyIds.length;
-       if (currentTotal < totalQuestions) {
-           // Add more from the largest pool (example logic)
-           if (stream === 'PCM' && mathsPool.length > finalMathsIds.length) finalMathsIds.push(...selectRandomIds(mathsPool.filter(q => !finalMathsIds.includes(q.id)), totalQuestions - currentTotal));
-           else if (stream === 'PCB' && biologyPool.length > finalBiologyIds.length) finalBiologyIds.push(...selectRandomIds(biologyPool.filter(q => !finalBiologyIds.includes(q.id)), totalQuestions - currentTotal));
-           // Add further fallback if needed
-       } else if (currentTotal > totalQuestions) {
-            // Remove excess from the largest pool (example logic)
-            if (stream === 'PCM' && finalMathsIds.length > 0) finalMathsIds.splice(0, currentTotal - totalQuestions);
-            else if (stream === 'PCB' && finalBiologyIds.length > 0) finalBiologyIds.splice(0, currentTotal - totalQuestions);
-            // Add further fallback if needed
-       }
+       // Select final IDs
+       const finalPhysicsIds = selectRandomIds(physicsPool, physicsCount);
+       const finalChemistryIds = selectRandomIds(chemistryPool, chemistryCount);
+       const finalMathsIds = stream === 'PCM' ? selectRandomIds(mathsPool, mathsCount) : [];
+       const finalBiologyIds = stream === 'PCB' ? selectRandomIds(biologyPool, biologyCount) : [];
 
 
       return {
@@ -383,18 +387,11 @@ export default function CreateTestPage() {
         setGeneratedTestJson(JSON.stringify(testDefinition, null, 2));
         setShowJsonDialog(true); // Show the dialog for confirmation
 
-        // Actual saving happens after confirmation in the dialog
-        // const result = await saveGeneratedTest(testDefinition);
-        // if (!result.success) throw new Error(result.message || "Failed to save test definition.");
-        // toast({ title: "Test Definition Generated", description: result.message });
-        // form.reset(); // Reset form after successful generation
-
-
     } catch (error: any) {
         console.error("Test generation failed:", error);
         toast({ variant: "destructive", title: "Generation Failed", description: error.message });
     } finally {
-        setIsSaving(false); // Stop loading indicator whether success or fail
+        setIsSaving(false);
     }
   };
 
@@ -445,7 +442,7 @@ export default function CreateTestPage() {
                                 onValueChange={field.onChange}
                                 defaultValue={field.value}
                                 className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
-                                disabled={isLoading || isSaving}
+                                disabled={isSaving}
                             >
                             <FormItem className="flex items-center space-x-3 space-y-0">
                                 <FormControl>
@@ -479,15 +476,15 @@ export default function CreateTestPage() {
                 <CardTitle>2. Chapterwise Test Setup</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                 <FormField control={form.control} name="subject" render={({ field }) => ( <FormItem> <FormLabel>Subject *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Subject" /> </SelectTrigger> </FormControl> <SelectContent> {subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                 <FormField control={form.control} name="lesson" render={({ field }) => ( <FormItem> <FormLabel>Lesson *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSubject || isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder={selectedSubject ? "Select Lesson" : "Select Subject First"} /> </SelectTrigger> </FormControl> <SelectContent> {lessons.map((lesson) => <SelectItem key={lesson} value={lesson}>{lesson}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedLesson || isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Random Exam">Random Exam Mix</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                 <FormField control={form.control} name="subject" render={({ field }) => ( <FormItem> <FormLabel>Subject *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingSubjects || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} /> </SelectTrigger> </FormControl> <SelectContent> {subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                 <FormField control={form.control} name="lesson" render={({ field }) => ( <FormItem> <FormLabel>Lesson *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSubject || isLoadingLessons || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder={isLoadingLessons ? "Loading..." : (selectedSubject ? "Select Lesson" : "Select Subject First")} /> </SelectTrigger> </FormControl> <SelectContent> {lessons.map((lesson) => <SelectItem key={lesson} value={lesson}>{lesson}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedLesson || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Random Exam">Random Exam Mix</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
               </CardContent>
               <CardContent>
                 <h3 className="mb-3 font-medium">Select Questions ({selectedQuestions?.length || 0} selected)</h3>
                  <div className="flex justify-between items-center mb-3">
                     <p className="text-sm text-muted-foreground">Available: {availableQuestions.length} questions</p>
-                     <Button type="button" size="sm" variant="outline" onClick={() => handleSelectRandom(20)} disabled={isLoadingQuestions || availableQuestions.length < 20 || isLoading || isSaving}>
+                     <Button type="button" size="sm" variant="outline" onClick={() => handleSelectRandom(20)} disabled={isLoadingQuestions || availableQuestions.length < 20 || isSaving}>
                         Auto-Pick 20
                      </Button>
                  </div>
@@ -514,7 +511,7 @@ export default function CreateTestPage() {
                                 checked={selectedQuestions?.includes(q.id)}
                                 onCheckedChange={() => handleQuestionSelect(q.id)}
                                 aria-label={`Select question ${q.id}`}
-                                disabled={isLoading || isSaving}
+                                disabled={isSaving}
                               />
                             </TableCell>
                             <TableCell className="line-clamp-1">{q.question.text || "[Image Question]"}</TableCell>
@@ -544,17 +541,17 @@ export default function CreateTestPage() {
                 <CardTitle>2. Full-Length Test Setup</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                 <FormField control={form.control} name="stream" render={({ field }) => ( <FormItem> <FormLabel>Stream *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Stream" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="PCM">PCM (Physics, Chemistry, Maths)</SelectItem> <SelectItem value="PCB">PCB (Physics, Chemistry, Biology)</SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                 <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Combined">Combined (All Exams)</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                  <FormField control={form.control} name="totalQuestions" render={({ field }) => ( <FormItem> <FormLabel>Total Questions *</FormLabel> <FormControl> <Input type="number" {...field} min="10" max="200" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
+                 <FormField control={form.control} name="stream" render={({ field }) => ( <FormItem> <FormLabel>Stream *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Stream" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="PCM">PCM (Physics, Chemistry, Maths)</SelectItem> <SelectItem value="PCB">PCB (Physics, Chemistry, Biology)</SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                 <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Combined">Combined (All Exams)</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                  <FormField control={form.control} name="totalQuestions" render={({ field }) => ( <FormItem> <FormLabel>Total Questions *</FormLabel> <FormControl> <Input type="number" {...field} min="10" max="200" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
               </CardContent>
                <CardContent>
                  <Label className="mb-4 block font-medium flex items-center gap-2"><SlidersHorizontal className="h-4 w-4"/>Set Subject Weightage (%)</Label>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <FormField control={form.control} name="physicsWeight" render={({ field }) => ( <FormItem> <FormLabel>Physics</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    <FormField control={form.control} name="chemistryWeight" render={({ field }) => ( <FormItem> <FormLabel>Chemistry</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
-                    {stream === 'PCM' && <FormField control={form.control} name="mathsWeight" render={({ field }) => ( <FormItem> <FormLabel>Maths</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
-                    {stream === 'PCB' && <FormField control={form.control} name="biologyWeight" render={({ field }) => ( <FormItem> <FormLabel>Biology</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
+                    <FormField control={form.control} name="physicsWeight" render={({ field }) => ( <FormItem> <FormLabel>Physics</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
+                    <FormField control={form.control} name="chemistryWeight" render={({ field }) => ( <FormItem> <FormLabel>Chemistry</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
+                    {stream === 'PCM' && <FormField control={form.control} name="mathsWeight" render={({ field }) => ( <FormItem> <FormLabel>Maths</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
+                    {stream === 'PCB' && <FormField control={form.control} name="biologyWeight" render={({ field }) => ( <FormItem> <FormLabel>Biology</FormLabel> <FormControl> <Input type="number" {...field} min="0" max="100" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />}
                   </div>
                    {/* General message for weightage validation */}
                    <FormMessage className="mt-2">{form.formState.errors.physicsWeight?.message}</FormMessage>
@@ -572,12 +569,12 @@ export default function CreateTestPage() {
               <CardTitle>3. Test Metadata</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem> <FormLabel>Duration (Minutes) *</FormLabel> <FormControl> <Input type="number" {...field} min="1" disabled={isLoading || isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
-              <FormField control={form.control} name="access" render={({ field }) => ( <FormItem> <FormLabel>Access Type *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Access" /> </SelectTrigger> </FormControl> <SelectContent> {pricingTypes.map((pt) => <SelectItem key={pt} value={pt} className="capitalize">{pt.replace('_', ' ')}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-              <FormField control={form.control} name="audience" render={({ field }) => ( <FormItem> <FormLabel>Target Audience *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Audience" /> </SelectTrigger> </FormControl> <SelectContent> {academicStatuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+              <FormField control={form.control} name="duration" render={({ field }) => ( <FormItem> <FormLabel>Duration (Minutes) *</FormLabel> <FormControl> <Input type="number" {...field} min="1" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
+              <FormField control={form.control} name="access" render={({ field }) => ( <FormItem> <FormLabel>Access Type *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Access" /> </SelectTrigger> </FormControl> <SelectContent> {pricingTypes.map((pt) => <SelectItem key={pt} value={pt} className="capitalize">{pt.replace('_', ' ')}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+              <FormField control={form.control} name="audience" render={({ field }) => ( <FormItem> <FormLabel>Target Audience *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Audience" /> </SelectTrigger> </FormControl> <SelectContent> {academicStatuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
             </CardContent>
             <CardFooter>
-                <Button type="submit" disabled={isSaving || isLoading || (testType === 'chapterwise' && (!selectedSubject || !selectedLesson)) || (testType === 'full_length' && !stream)}>
+                <Button type="submit" disabled={isSaving || (testType === 'chapterwise' && (!selectedSubject || !selectedLesson)) || (testType === 'full_length' && !stream)}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Generate Test Definition
                 </Button>
@@ -610,9 +607,9 @@ export default function CreateTestPage() {
                  {previewQuestion.type === 'image' && previewQuestion.question.image && (
                      <div>
                         <p className="font-medium mb-1">Question Image:</p>
-                         {/* In real app, construct full image path */}
-                         {/* <Image src={`/path/to/images/${previewQuestion.question.image}`} alt="Question Image" width={500} height={300} className="rounded border"/> */}
-                         <p className="text-muted-foreground text-sm">[Image Preview Placeholder for {previewQuestion.question.image}]</p>
+                        {/* IMPORTANT: Adjust this path */}
+                         <Image src={`/question_bank_images/${previewQuestion.subject}/${previewQuestion.lesson}/${previewQuestion.question.image}`} alt="Question Image" width={500} height={300} className="rounded border"/>
+                         {/* <p className="text-muted-foreground text-sm">[Image Preview Placeholder for {previewQuestion.question.image}]</p> */}
                      </div>
                  )}
                   <div>
@@ -634,9 +631,9 @@ export default function CreateTestPage() {
                   {previewQuestion.explanation.image && (
                      <div>
                         <p className="font-medium mb-1">Explanation Image:</p>
-                         {/* In real app, construct full image path */}
-                         {/* <Image src={`/path/to/images/${previewQuestion.explanation.image}`} alt="Explanation Image" width={400} height={200} className="rounded border"/> */}
-                          <p className="text-muted-foreground text-sm">[Image Preview Placeholder for {previewQuestion.explanation.image}]</p>
+                        {/* IMPORTANT: Adjust this path */}
+                         <Image src={`/question_bank_images/${previewQuestion.subject}/${previewQuestion.lesson}/${previewQuestion.explanation.image}`} alt="Explanation Image" width={400} height={200} className="rounded border"/>
+                          {/* <p className="text-muted-foreground text-sm">[Image Preview Placeholder for {previewQuestion.explanation.image}]</p> */}
                      </div>
                   )}
 
@@ -680,4 +677,3 @@ export default function CreateTestPage() {
     </div>
   );
 }
-```

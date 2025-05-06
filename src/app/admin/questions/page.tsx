@@ -20,6 +20,7 @@ import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste,
 import { type QuestionBankItem, questionTypes, difficultyLevels, examOptions, classLevels, type QuestionType } from '@/types';
 import Image from 'next/image';
 import { addQuestionToBank } from '@/actions/question-bank-actions'; // Import the server action
+import { getSubjects, getLessonsForSubject } from '@/actions/question-bank-query-actions'; // Import query actions
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // For Combobox
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"; // For Combobox
 import { cn } from "@/lib/utils";
@@ -97,13 +98,12 @@ type QuestionFormValues = z.infer<typeof questionSchema>;
 export default function AdminQuestionBankPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [subjects, setSubjects] = useState<string[]>(["Physics", "Chemistry", "Maths", "Biology"]); // Placeholder
-  const [lessons, setLessons] = useState<{ value: string; label: string }[]>([ // Example structure for Combobox
-    { value: "topic-1", label: "Topic 1" },
-    { value: "topic-2", label: "Topic 2" },
-    { value: "kinematics", label: "Kinematics" },
-  ]);
-  const [tags, setTags] = useState<string[]>(["tag1", "tag2"]); // Placeholder
+  const [subjects, setSubjects] = useState<string[]>([]); // Fetched dynamically
+  const [lessons, setLessons] = useState<string[]>([]); // Fetched dynamically
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
+  const [isLoadingLessons, setIsLoadingLessons] = useState(false);
+  // Removed static tags, could fetch dynamically if needed
+  // const [tags, setTags] = useState<string[]>([]);
 
   const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null);
   const [explanationImagePreview, setExplanationImagePreview] = useState<string | null>(null);
@@ -113,14 +113,12 @@ export default function AdminQuestionBankPage() {
   const [lessonPopoverOpen, setLessonPopoverOpen] = useState(false); // State for Combobox popover
 
 
-  // TODO: Fetch subjects, lessons (based on selected subject), tags dynamically in useEffect if needed
-
   const form = useForm<QuestionFormValues>({
     resolver: zodResolver(questionSchema),
     defaultValues: {
       subject: '',
       class: undefined,
-      lesson: '', // Keep as string, Combobox will handle selection/creation
+      lesson: '',
       examType: undefined,
       difficulty: undefined,
       tags: '',
@@ -138,6 +136,33 @@ export default function AdminQuestionBankPage() {
   });
 
   const questionType = form.watch('questionType'); // Watch for changes
+  const selectedSubject = form.watch('subject'); // Watch selected subject
+
+   // --- Fetch Subjects ---
+   useEffect(() => {
+        setIsLoadingSubjects(true);
+        getSubjects()
+        .then(setSubjects)
+        .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load subjects." }))
+        .finally(() => setIsLoadingSubjects(false));
+   }, [toast]);
+
+
+   // --- Fetch Lessons when Subject Changes ---
+    useEffect(() => {
+        if (selectedSubject) {
+            setIsLoadingLessons(true);
+            setLessons([]); // Clear previous lessons
+            form.setValue('lesson', ''); // Reset lesson selection in form
+            getLessonsForSubject(selectedSubject)
+                .then(setLessons)
+                .catch(err => toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` }))
+                .finally(() => setIsLoadingLessons(false));
+        } else {
+            setLessons([]); // Clear lessons if no subject selected
+        }
+    }, [selectedSubject, toast, form]);
+
 
   // --- Image Handling Callbacks ---
   const processImageFile = useCallback((
@@ -290,9 +315,9 @@ export default function AdminQuestionBankPage() {
             setExplanationImagePreview(null);
             if (questionFileInputRef.current) questionFileInputRef.current.value = "";
             if (explanationFileInputRef.current) explanationFileInputRef.current.value = "";
-            // Optionally, update the lesson list if a new one was added
-            if (!lessons.some(l => l.value === data.lesson || l.label === data.lesson)) {
-                setLessons(prev => [...prev, { value: data.lesson.toLowerCase().replace(/\s+/g, '-'), label: data.lesson }]);
+             // Refresh lessons for the current subject in case a new one was added
+            if (!lessons.includes(data.lesson)) {
+                getLessonsForSubject(data.subject).then(setLessons);
             }
         } else {
             throw new Error(result.error || "Failed to save question.");
@@ -335,14 +360,19 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Subject *</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                     <Select onValueChange={(value) => {
+                         field.onChange(value);
+                         // Reset lesson when subject changes (handled by useEffect)
+                     }} value={field.value} disabled={isLoading || isLoadingSubjects}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select Subject" />
+                          <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
+                         {isLoadingSubjects && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                         {!isLoadingSubjects && subjects.length === 0 && <SelectItem value="no-subjects" disabled>No subjects found</SelectItem>}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -387,13 +417,11 @@ export default function AdminQuestionBankPage() {
                               "w-full justify-between",
                               !field.value && "text-muted-foreground"
                             )}
-                            disabled={isLoading}
+                            disabled={isLoading || isLoadingLessons || !selectedSubject}
                           >
                              {field.value
-                               ? lessons.find(
-                                   (lesson) => lesson.label === field.value // Match by label (or value if needed)
-                                 )?.label ?? field.value // Show selected or typed value
-                               : "Select or type Lesson"}
+                               ? field.value // Show selected or typed value directly
+                               : (isLoadingLessons ? "Loading..." : "Select or type Lesson")}
                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </FormControl>
@@ -404,33 +432,42 @@ export default function AdminQuestionBankPage() {
                             placeholder="Search or add lesson..."
                             // Update form value directly on input change for new lessons
                              onValueChange={(search) => field.onChange(search)}
+                             value={field.value || ''} // Ensure CommandInput receives the value
+                             disabled={isLoadingLessons}
                           />
                           <CommandList>
-                            <CommandEmpty>No lesson found. Type to add.</CommandEmpty>
-                            <CommandGroup>
-                              {lessons.map((lesson) => (
+                             {isLoadingLessons ? (
+                                <CommandItem value="loading" disabled>Loading lessons...</CommandItem>
+                             ) : lessons.length === 0 && selectedSubject ? (
+                                <CommandEmpty>No lessons found. Type to add new.</CommandEmpty>
+                             ) : !selectedSubject ? (
+                                <CommandEmpty>Select Subject first.</CommandEmpty>
+                             ) : null }
+
+                              {!isLoadingLessons && lessons.map((lesson) => (
                                 <CommandItem
-                                  value={lesson.label} // Use label for search/display
-                                  key={lesson.value}
+                                  value={lesson} // Use lesson name directly
+                                  key={lesson}
                                   onSelect={() => {
-                                    form.setValue("lesson", lesson.label); // Set the label as value
+                                    form.setValue("lesson", lesson);
                                     setLessonPopoverOpen(false);
                                   }}
                                 >
                                   <Check
                                     className={cn(
                                       "mr-2 h-4 w-4",
-                                      lesson.label === field.value ? "opacity-100" : "opacity-0"
+                                      lesson === field.value ? "opacity-100" : "opacity-0"
                                     )}
                                   />
-                                  {lesson.label}
+                                  {lesson}
                                 </CommandItem>
                               ))}
-                               {/* Show the typed value as an option to select/confirm */}
-                               {field.value && !lessons.some(l => l.label === field.value) && (
+                               {/* Show the typed value as an option to add if it doesn't exist */}
+                               {field.value && !lessons.includes(field.value) && !isLoadingLessons && (
                                    <CommandItem
                                       value={field.value}
                                       onSelect={() => {
+                                          // No need to add to lessons state here, just confirm selection
                                           form.setValue("lesson", field.value);
                                           setLessonPopoverOpen(false);
                                       }}
