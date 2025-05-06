@@ -20,8 +20,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Loader2, Filter, BookOpen, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { QuestionBankItem, PricingType, ExamOption, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, audienceTypes, testStreams, examOptions } from '@/types'; // Import options
+import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types'; // Removed AudienceType, using AcademicStatus
+import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Import options (use academicStatuses for audience)
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions'; // Import query actions
 import { saveGeneratedTest } from '@/actions/generated-test-actions'; // Import save action
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,17 +37,17 @@ const BaseTestSchema = z.object({
     audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
 });
 
-// Schema for Chapterwise Test - explicitly add testType literal
+// Schema for Chapterwise Test
 const ChapterwiseSchema = BaseTestSchema.extend({
     testType: z.literal('chapterwise'), // Discriminator field
     subject: z.string().min(1, "Subject is required."),
     lesson: z.string().min(1, "Lesson name is required."),
     examFilter: z.enum([...examOptions, 'all'], { required_error: "Exam filter is required." }),
     selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question."),
-    // Removed count field, it will be derived from selectedQuestionIds.length
+    count: z.number().min(1, "Must select at least 1 question.").max(50, "Max 50 questions per chapterwise test."), // Count for number of questions
 });
 
-// Schema for Full Length Test - explicitly add testType literal
+// Schema for Full Length Test
 const FullLengthSchema = BaseTestSchema.extend({
     testType: z.literal('full_length'), // Discriminator field
     stream: z.enum(testStreams, { required_error: "Stream selection is required." }),
@@ -88,7 +88,7 @@ export default function CreateTestPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [subjects, setSubjects] = useState<string[]>([]);
     const [lessons, setLessons] = useState<string[]>([]);
-    const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
+    const [availableQuestions, setAvailableQuestions] = useState<QuestionBankItem[]>([]); // Renamed from 'questions'
     const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
     const [isLoadingLessons, setIsLoadingLessons] = useState(false);
     const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
@@ -108,6 +108,7 @@ export default function CreateTestPage() {
             lesson: '',
             examFilter: 'all',
             selectedQuestionIds: [],
+            count: 20, // Default count for chapterwise
             // Full Length Defaults (conditional rendering will handle visibility)
             stream: 'PCM', // Default stream
             totalQuestions: 50,
@@ -122,6 +123,7 @@ export default function CreateTestPage() {
     const selectedSubject = form.watch('subject');
     const selectedLesson = form.watch('lesson');
     const selectedQuestionIds = form.watch('selectedQuestionIds'); // Watch selected IDs
+    const chapterwiseCount = form.watch('count'); // Watch the desired count for chapterwise
 
     // --- Fetch Subjects ---
     useEffect(() => {
@@ -139,7 +141,7 @@ export default function CreateTestPage() {
             setLessons([]);
             form.setValue('lesson', ''); // Reset lesson
             form.setValue('selectedQuestionIds', []); // Clear selected questions
-            setQuestions([]); // Clear questions list
+            setAvailableQuestions([]); // Clear questions list
             getLessonsForSubject(selectedSubject)
                 .then(setLessons)
                 .catch(err => toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` }))
@@ -149,11 +151,11 @@ export default function CreateTestPage() {
         }
     }, [testType, selectedSubject, toast, form]);
 
-    // --- Fetch Questions when Lesson Changes (for Chapterwise) ---
+    // --- Fetch Available Questions when Lesson Changes (for Chapterwise) ---
     useEffect(() => {
         if (testType === 'chapterwise' && selectedSubject && selectedLesson) {
             setIsLoadingQuestions(true);
-            setQuestions([]);
+            setAvailableQuestions([]);
             form.setValue('selectedQuestionIds', []); // Clear selections when lesson changes
             const filters = {
                 subject: selectedSubject,
@@ -161,23 +163,48 @@ export default function CreateTestPage() {
                 examType: form.getValues('examFilter') !== 'all' ? form.getValues('examFilter') : undefined,
             };
             getQuestionsForLesson(filters)
-                .then(setQuestions)
+                .then(setAvailableQuestions)
                 .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load questions." }))
                 .finally(() => setIsLoadingQuestions(false));
         } else {
-            setQuestions([]); // Clear if subject/lesson not set
+            setAvailableQuestions([]); // Clear if subject/lesson not set
         }
-    }, [testType, selectedSubject, selectedLesson, toast, form]); // Re-fetch when lesson/examFilter changes
+    }, [testType, selectedSubject, selectedLesson, form, toast]); // Include form dependency
 
      // --- Update selected questions preview ---
      useEffect(() => {
          if (testType === 'chapterwise') {
-             const selectedObjects = questions.filter(q => selectedQuestionIds?.includes(q.id));
+             const selectedObjects = availableQuestions.filter(q => selectedQuestionIds?.includes(q.id));
              setSelectedQuestionObjects(selectedObjects);
          } else {
              setSelectedQuestionObjects([]); // Clear for full length for now
          }
-     }, [selectedQuestionIds, questions, testType]);
+     }, [selectedQuestionIds, availableQuestions, testType]);
+
+
+    // --- Question Selection Helpers (Chapterwise) ---
+     const shuffleArray = (array: any[]) => {
+        let currentIndex = array.length, randomIndex;
+        while (currentIndex !== 0) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex--;
+            [array[currentIndex], array[randomIndex]] = [
+                array[randomIndex], array[currentIndex]];
+        }
+        return array;
+    };
+
+    const handleAutoSelect = useCallback(() => {
+        if (testType === 'chapterwise' && availableQuestions.length > 0 && chapterwiseCount > 0) {
+            const countToSelect = Math.min(chapterwiseCount, availableQuestions.length);
+            const shuffledQuestions = shuffleArray([...availableQuestions]);
+            const selectedIds = shuffledQuestions.slice(0, countToSelect).map(q => q.id);
+            form.setValue('selectedQuestionIds', selectedIds);
+             toast({ title: "Questions Selected", description: `${selectedIds.length} questions randomly selected.` });
+        } else {
+            toast({ variant: "destructive", title: "Selection Failed", description: "Not enough questions available or count is zero." });
+        }
+    }, [availableQuestions, chapterwiseCount, form, testType, toast]);
 
 
     // --- Form Submission ---
@@ -196,80 +223,81 @@ export default function CreateTestPage() {
              createdAt: new Date().toISOString(),
          };
 
+        let finalQuestions: TestQuestion[] = [];
+        let actualTotalQuestions = 0;
+
 
         try {
 
             if (data.testType === 'chapterwise') {
-                 // Fetch full data for selected questions
-                const selectedQsData = questions.filter(q => data.selectedQuestionIds.includes(q.id));
+                // Ensure selected IDs are valid and fetch full data
+                const selectedQsData = availableQuestions.filter(q => data.selectedQuestionIds.includes(q.id));
+                if (selectedQsData.length === 0) {
+                    throw new Error("No questions selected for the chapterwise test.");
+                }
                  if (selectedQsData.length !== data.selectedQuestionIds.length) {
-                    throw new Error("Could not find all selected question details. Please refresh and try again.");
+                    console.warn("Some selected question IDs were not found in the available pool.");
+                    // Optionally throw error or proceed with found questions
                  }
 
-                const chapterwiseQuestions: TestQuestion[] = selectedQsData.map(q => {
-                    // Construct image URL or use null
+                finalQuestions = selectedQsData.map(q => {
                     const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
                     const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
-
-                    // Create options array
-                    const options = [
-                         `Option A: ${q.options.A}`,
-                         `Option B: ${q.options.B}`,
-                         `Option C: ${q.options.C}`,
-                         `Option D: ${q.options.D}`
-                    ];
-
-                    // Determine correct answer text
+                    const options = [q.options.A, q.options.B, q.options.C, q.options.D].map((opt, i) => `Option ${String.fromCharCode(65 + i)}: ${opt}`);
                     const correctAnswerText = `Option ${q.correct}`;
-
-
                     return {
-                        question: q.question.text || q.question.image || '', // Use text or image filename
+                        question: q.question.text || q.question.image || '', // Text or image filename
                         image_url: imageUrl,
                         options: options,
                         answer: correctAnswerText,
                         marks: 1, // Assuming 1 mark per question for now
                         explanation: q.explanation.text || explanationImageUrl, // Text or explanation image URL
+                        // Optionally add original ID for reference if needed later
+                        // _source_id: q.id
                     };
                  });
+                 actualTotalQuestions = finalQuestions.length;
 
 
                  testDefinition = {
                      ...baseData,
-                     testType: 'chapterwise', // Ensure discriminator is set
-                     count: chapterwiseQuestions.length, // Actual number selected
-                     total_questions: chapterwiseQuestions.length, // Total is same as count
+                     testType: 'chapterwise', // Discriminator
+                     count: data.count, // User specified count
+                     total_questions: actualTotalQuestions, // Actual number included
                      test_subject: [data.subject],
                      lesson: data.lesson,
                      examFilter: data.examFilter,
-                     questions: chapterwiseQuestions, // Array of selected questions
-                 };
+                     questions: finalQuestions, // Array of selected questions
+                 } as GeneratedTest; // Assert type
+
             } else { // Full Length Test
-                 // Fetch all questions for the required subjects based on stream and exam filter
+                 // --- Full Length Logic ---
                  const subjectsToFetch = data.stream === 'PCM' ? ['Physics', 'Chemistry', 'Maths'] : ['Physics', 'Chemistry', 'Biology'];
                  const examTypeFilter = data.examFilter !== 'all' ? data.examFilter : undefined;
                  const allSubjectQuestions: { [key: string]: QuestionBankItem[] } = {};
+                 let totalAvailableBankQuestions = 0;
 
                  setIsLoadingQuestions(true); // Indicate fetching questions
                  try {
                      await Promise.all(subjectsToFetch.map(async (subject) => {
-                         // Fetch all lessons for the subject
                          const lessons = await getLessonsForSubject(subject);
                          let subjectQuestions: QuestionBankItem[] = [];
-                         // Fetch questions from all lessons for this subject
                          await Promise.all(lessons.map(async (lesson) => {
                              const lessonQuestions = await getQuestionsForLesson({ subject, lesson, examType: examTypeFilter });
                              subjectQuestions = subjectQuestions.concat(lessonQuestions);
                          }));
                          allSubjectQuestions[subject] = subjectQuestions;
+                         totalAvailableBankQuestions += subjectQuestions.length;
                      }));
                  } finally {
                      setIsLoadingQuestions(false);
                  }
 
+                  if (totalAvailableBankQuestions < data.totalQuestions) {
+                    throw new Error(`Not enough questions in the bank (${totalAvailableBankQuestions}) to meet the requested total of ${data.totalQuestions} for the selected criteria.`);
+                 }
 
                  const totalQuestionsNeeded = data.totalQuestions;
-                 const finalQuestions: TestQuestion[] = [];
                  const weightages = {
                     Physics: data.weightagePhysics ?? 0,
                     Chemistry: data.weightageChemistry ?? 0,
@@ -277,31 +305,47 @@ export default function CreateTestPage() {
                     Biology: data.stream === 'PCB' ? (data.weightageBiology ?? 0) : 0,
                  };
 
-                  // Shuffle array utility
-                 const shuffleArray = (array: any[]) => {
-                    for (let i = array.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [array[i], array[j]] = [array[j], array[i]];
-                    }
-                    return array;
-                 };
+
+                 // Calculate target counts per subject
+                 const targetCounts: { [key: string]: number } = {};
+                 let calculatedSum = 0;
+                 subjectsToFetch.forEach(subject => {
+                    targetCounts[subject] = Math.round((weightages[subject as keyof typeof weightages] / 100) * totalQuestionsNeeded);
+                    calculatedSum += targetCounts[subject];
+                 });
+
+                 // Adjust counts if rounding caused mismatch
+                 let diff = totalQuestionsNeeded - calculatedSum;
+                 while (diff !== 0) {
+                     const adjustSubject = subjectsToFetch[Math.floor(Math.random() * subjectsToFetch.length)];
+                     if (diff > 0) {
+                         targetCounts[adjustSubject]++;
+                         diff--;
+                     } else {
+                         if(targetCounts[adjustSubject] > 0) {
+                            targetCounts[adjustSubject]--;
+                            diff++;
+                         }
+                     }
+                 }
 
 
-                 let selectedCount = 0;
+                // Select questions per subject
                  for (const subject of subjectsToFetch) {
-                     const subjectWeight = weightages[subject as keyof typeof weightages];
-                     const countForSubject = Math.round((subjectWeight / 100) * totalQuestionsNeeded);
-                     const availableQs = shuffleArray([...allSubjectQuestions[subject] || []]); // Shuffle available questions
+                     const countForSubject = targetCounts[subject];
+                     const availableQs = shuffleArray([...allSubjectQuestions[subject] || []]);
 
-                     const selectedForSubject = availableQs.slice(0, countForSubject);
-                     selectedCount += selectedForSubject.length;
+                     if (availableQs.length < countForSubject) {
+                        console.warn(`Warning: Not enough questions for ${subject} (${availableQs.length} available, ${countForSubject} needed). Selecting all available.`);
+                     }
+
+                     const selectedForSubject = availableQs.slice(0, Math.min(countForSubject, availableQs.length));
 
                      selectedForSubject.forEach(q => {
                          const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
                          const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
-                          const options = [ `Option A: ${q.options.A}`, `Option B: ${q.options.B}`, `Option C: ${q.options.C}`, `Option D: ${q.options.D}`];
-                          const correctAnswerText = `Option ${q.correct}`;
-
+                         const options = [q.options.A, q.options.B, q.options.C, q.options.D].map((opt, i) => `Option ${String.fromCharCode(65 + i)}: ${opt}`);
+                         const correctAnswerText = `Option ${q.correct}`;
                          finalQuestions.push({
                              question: q.question.text || q.question.image || '',
                              image_url: imageUrl,
@@ -309,45 +353,29 @@ export default function CreateTestPage() {
                              answer: correctAnswerText,
                              marks: 1,
                              explanation: q.explanation.text || explanationImageUrl,
+                             _source_subject: q.subject // Keep temporary field
                          });
                      });
                  }
 
-                 // Adjust total count if rounding caused slight mismatch
-                 while (finalQuestions.length < totalQuestionsNeeded) {
-                      // Find a subject pool with remaining questions and add one more randomly
-                     const remainingSubject = subjectsToFetch.find(sub => (allSubjectQuestions[sub]?.length ?? 0) > finalQuestions.filter(fq => fq.question.includes(sub)).length); // Heuristic check
-                     if (remainingSubject) {
-                        const availableQs = allSubjectQuestions[remainingSubject].filter(q => !finalQuestions.some(fq => fq.question === (q.question.text || q.question.image)));
-                        if (availableQs.length > 0) {
-                            const q = availableQs[Math.floor(Math.random() * availableQs.length)];
-                            const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
-                            const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
-                             const options = [ `Option A: ${q.options.A}`, `Option B: ${q.options.B}`, `Option C: ${q.options.C}`, `Option D: ${q.options.D}`];
-                             const correctAnswerText = `Option ${q.correct}`;
-                             finalQuestions.push({
-                                question: q.question.text || q.question.image || '',
-                                image_url: imageUrl,
-                                options: options,
-                                answer: correctAnswerText,
-                                marks: 1,
-                                explanation: q.explanation.text || explanationImageUrl,
-                            });
-                        } else { break; } // No more questions available in any pool
-                     } else { break; } // Should not happen if total needed <= total available
-                 }
-                 // Trim if we somehow added too many (unlikely with Math.round)
-                 finalQuestions.length = Math.min(finalQuestions.length, totalQuestionsNeeded);
-
-                 if (finalQuestions.length < totalQuestionsNeeded) {
-                    console.warn(`Could only select ${finalQuestions.length} questions out of the requested ${totalQuestionsNeeded}.`);
+                 actualTotalQuestions = finalQuestions.length;
+                 if (actualTotalQuestions < totalQuestionsNeeded) {
+                    console.warn(`Final test has ${actualTotalQuestions} questions, fewer than requested ${totalQuestionsNeeded} due to availability.`);
                  }
 
                  // Structure the FullLengthTestJson
-                 const physicsQuestions = finalQuestions.filter(q => subjectsToFetch[0] === 'Physics'); // Adapt based on actual question source info if needed
-                 const chemistryQuestions = finalQuestions.filter(q => subjectsToFetch[1] === 'Chemistry');
-                 const mathsQuestions = data.stream === 'PCM' ? finalQuestions.filter(q => subjectsToFetch[2] === 'Maths') : undefined;
-                 const biologyQuestions = data.stream === 'PCB' ? finalQuestions.filter(q => subjectsToFetch[2] === 'Biology') : undefined;
+                 const physicsQuestions = finalQuestions.filter(q => (q as any)._source_subject === 'Physics');
+                 const chemistryQuestions = finalQuestions.filter(q => (q as any)._source_subject === 'Chemistry');
+                 const mathsQuestions = data.stream === 'PCM' ? finalQuestions.filter(q => (q as any)._source_subject === 'Maths') : undefined;
+                 const biologyQuestions = data.stream === 'PCB' ? finalQuestions.filter(q => (q as any)._source_subject === 'Biology') : undefined;
+
+                 // Remove temporary source subject field before saving
+                 const cleanQuestion = (q: TestQuestion) => { const { _source_subject, ...rest } = q as any; return rest; };
+                 const finalPhysics = physicsQuestions.map(cleanQuestion);
+                 const finalChemistry = chemistryQuestions.map(cleanQuestion);
+                 const finalMaths = mathsQuestions?.map(cleanQuestion);
+                 const finalBiology = biologyQuestions?.map(cleanQuestion);
+
 
                  testDefinition = {
                      ...baseData,
@@ -362,16 +390,17 @@ export default function CreateTestPage() {
                          biology: data.stream === 'PCB' ? (data.weightageBiology ?? 0) : undefined,
                      },
                      count: data.totalQuestions, // User specified total
-                     total_questions: finalQuestions.length, // Actual number included
-                     physics: physicsQuestions.length > 0 ? physicsQuestions : undefined,
-                     chemistry: chemistryQuestions.length > 0 ? chemistryQuestions : undefined,
-                     maths: mathsQuestions,
-                     biology: biologyQuestions,
-                 };
+                     total_questions: actualTotalQuestions, // Actual number included
+                     physics: finalPhysics.length > 0 ? finalPhysics : undefined,
+                     chemistry: finalChemistry.length > 0 ? finalChemistry : undefined,
+                     maths: finalMaths,
+                     biology: finalBiology,
+                 } as GeneratedTest; // Assert type
             }
 
             // Save the generated test definition if it was created
             if (testDefinition) {
+                console.log("Attempting to save test definition:", JSON.stringify(testDefinition, null, 2));
                 const result = await saveGeneratedTest(testDefinition);
 
                 if (!result.success) {
@@ -383,7 +412,7 @@ export default function CreateTestPage() {
                     description: `Test "${data.name}" (${testCode}) has been saved.`,
                 });
                 form.reset(); // Reset form after successful submission
-                setQuestions([]);
+                setAvailableQuestions([]);
                 setSelectedQuestionObjects([]);
             } else {
                  throw new Error("Failed to generate test definition.");
@@ -399,11 +428,11 @@ export default function CreateTestPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }; // Add closing brace for onSubmit function
 
     // Calculate total selected questions for display
      const totalSelectedCount = useMemo(() => selectedQuestionIds?.length ?? 0, [selectedQuestionIds]);
-     const totalAvailableCount = useMemo(() => questions.length, [questions]);
+     const totalAvailableCount = useMemo(() => availableQuestions.length, [availableQuestions]);
 
     return (
         <div className="space-y-6">
@@ -460,7 +489,7 @@ export default function CreateTestPage() {
                     {testType === 'chapterwise' && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>3. Chapterwise Details & Questions</CardTitle>
+                                <CardTitle>3. Chapterwise Details &amp; Questions</CardTitle>
                              </CardHeader>
                             <CardContent className="space-y-4">
                                 {/* Subject Dropdown */}
@@ -534,6 +563,34 @@ export default function CreateTestPage() {
                                     )}
                                 />
 
+                                {/* Question Count (Chapterwise) */}
+                                <FormField
+                                    control={form.control}
+                                    name="count"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Number of Questions *</FormLabel>
+                                             <Select
+                                                onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                                                value={field.value?.toString()}
+                                                disabled={isLoading}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select count (1-50)" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                     {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
+                                                        <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
                                 {/* Question Selection List */}
                                 <FormField
                                     control={form.control}
@@ -542,13 +599,18 @@ export default function CreateTestPage() {
                                     <FormItem>
                                          <div className="mb-2 flex justify-between items-center">
                                              <FormLabel>Select Questions * ({totalSelectedCount} / {totalAvailableCount})</FormLabel>
-                                             {/* Add Select All/Deselect All Buttons */}
-                                             {questions.length > 0 && (
+                                             {/* Add Select All/Deselect All/Auto Buttons */}
+                                             {availableQuestions.length > 0 && (
                                                  <div className="space-x-2">
+                                                     <Button type="button" size="sm" variant="outline"
+                                                        onClick={handleAutoSelect}
+                                                        disabled={isLoading || isLoadingQuestions || chapterwiseCount === 0}>
+                                                        Auto-Pick {chapterwiseCount}
+                                                    </Button>
                                                     <Button type="button" size="sm" variant="outline"
-                                                        onClick={() => field.onChange(questions.map(q => q.id))}
+                                                        onClick={() => field.onChange(availableQuestions.map(q => q.id))}
                                                         disabled={isLoading || isLoadingQuestions}>
-                                                        Select All
+                                                        Select All ({totalAvailableCount})
                                                     </Button>
                                                     <Button type="button" size="sm" variant="outline"
                                                         onClick={() => field.onChange([])}
@@ -562,11 +624,11 @@ export default function CreateTestPage() {
                                             <ScrollArea className="h-72 w-full rounded-md border p-4 bg-muted/20">
                                                 {isLoadingQuestions ? (
                                                     <p className="text-muted-foreground text-center">Loading questions...</p>
-                                                ) : questions.length === 0 ? (
+                                                ) : availableQuestions.length === 0 ? (
                                                     <p className="text-muted-foreground text-center">No questions found for this lesson/filter. Add questions first.</p>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                    {questions.map((item) => (
+                                                    {availableQuestions.map((item) => (
                                                         <FormField
                                                         key={item.id}
                                                         control={form.control}
