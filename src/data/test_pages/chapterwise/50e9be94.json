@@ -1,0 +1,56 @@
+{
+  "test_code": "50e9be94",
+  "name": "Mathematics in Physics",
+  "duration": 60,
+  "type": "FREE_PREMIUM",
+  "audience": "Dropper",
+  "createdAt": "2025-05-06T13:10:49.685Z",
+  "count": 20,
+  "total_questions": 3,
+  "test_subject": [
+    "Physics"
+  ],
+  "lesson": "Mathematics in Physics",
+  "examFilter": "all",
+  "questions": [
+    {
+      "question": "Q_1746514262070_626e41.png",
+      "image_url": "/question_bank_images/Physics/Mathematics in Physics/Q_1746514262070_626e41.png",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "Option C",
+      "marks": 1,
+      "explanation": "/question_bank_images/Physics/Mathematics in Physics/E_1746514262072_85d10d.png"
+    },
+    {
+      "question": "Q_1746514548611_7ce26a.png",
+      "image_url": "/question_bank_images/Physics/Mathematics in Physics/Q_1746514548611_7ce26a.png",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "Option C",
+      "marks": 1,
+      "explanation": "Option C\r\n"
+    },
+    {
+      "question": "Q_1746514913471_bd0a04.png",
+      "image_url": "/question_bank_images/Physics/Mathematics in Physics/Q_1746514913471_bd0a04.png",
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "answer": "Option D",
+      "marks": 1,
+      "explanation": "Option D"
+    }
+  ]
+}

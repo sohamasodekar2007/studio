@@ -1,4 +1,4 @@
-'use client'; // Make this a client component to use usePathname
+{'use client'; // Make this a client component to use usePathname
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation'; // Import usePathname
@@ -9,6 +9,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/auth-context';
 import Script from 'next/script';
+import { ThemeProvider } from 'next-themes'; // Import ThemeProvider
 
 // Metadata should ideally be moved to a parent server component or handled differently
 // export const metadata: Metadata = { ... }; // Cannot export metadata from client component
@@ -26,7 +27,7 @@ export default function RootLayout({
   const showAppLayout = !isAdminRoute && !isAuthRoute;
 
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         {/* Add title and description meta tags here if needed, as metadata export is not possible */}
         <title>STUDY SPHERE - MHT-CET, JEE, NEET Test Series</title>
@@ -58,16 +59,18 @@ export default function RootLayout({
         />
       </head>
       <body className={`antialiased font-sans`}>
-         <AuthProvider> {/* AuthProvider wraps everything */}
-            {showAppLayout ? (
-              <AppLayout> {/* Render AppLayout only for non-admin/non-auth routes */}
-                {children}
-              </AppLayout>
-            ) : (
-              <>{children}</> // Render only children for admin/auth routes (AdminLayout/AuthLayout will take over)
-            )}
-            <Toaster /> {/* Toaster is available globally */}
-         </AuthProvider>
+         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+           <AuthProvider> {/* AuthProvider wraps everything */}
+              {showAppLayout ? (
+                <AppLayout> {/* Render AppLayout only for non-admin/non-auth routes */}
+                  {children}
+                </AppLayout>
+              ) : (
+                <>{children}</> // Render only children for admin/auth routes (AdminLayout/AuthLayout will take over)
+              )}
+              <Toaster /> {/* Toaster is available globally */}
+           </AuthProvider>
+         </ThemeProvider>
       </body>
     </html>
   );

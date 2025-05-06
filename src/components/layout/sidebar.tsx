@@ -1,4 +1,4 @@
-'use client';
+{'use client';
 
 import {
   Sidebar,
@@ -14,6 +14,7 @@ import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldChe
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
+import ThemeToggle from '@/components/theme-toggle'; // Import the ThemeToggle component
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -96,7 +97,10 @@ export function AppSidebar() {
            )}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="mt-auto">
+      <SidebarFooter className="mt-auto flex flex-col items-center gap-2 group-data-[collapsible=icon]:gap-0">
+         <div className="w-full flex justify-center group-data-[collapsible=icon]:mb-2 group-data-[collapsible=icon]:mt-2">
+             <ThemeToggle />
+         </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <Link href="/settings" legacyBehavior passHref>
