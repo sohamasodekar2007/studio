@@ -32,7 +32,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, audienceTypes, testStreams, examOptions } from '@/types'; // Import options
+import { pricingTypes, audienceTypes, testStreams, examOptions, academicStatuses } from '@/types'; // Import options
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions'; // Import query actions
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import Image from 'next/image';
@@ -50,13 +50,13 @@ const BaseTestSchema = z.object({
     name: z.string().min(3, "Test name must be at least 3 characters."),
     duration: z.coerce.number().int().min(1, "Duration must be at least 1 minute.").max(300, "Duration cannot exceed 300 minutes."),
     access: z.enum(pricingTypes, { required_error: "Access type is required." }),
-    audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
+    audience: z.enum(academicStatuses, { required_error: "Target audience is required." }),
     count: z.coerce.number().int().min(1, "Number of questions must be at least 1.").max(50, "Maximum 50 questions per test."),
 });
 
-// Chapterwise schema - MUST include the discriminator `testType`
+// Chapterwise schema - Add testType literal HERE
 const ChapterwiseSchema = BaseTestSchema.extend({
-    testType: z.literal('chapterwise'), // Discriminator
+    testType: z.literal('chapterwise'), // Discriminator defined inside
     subject: z.string().min(1, "Subject is required"),
     lesson: z.string().min(1, "Lesson is required"),
     chapterwiseExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
@@ -66,23 +66,22 @@ const ChapterwiseSchema = BaseTestSchema.extend({
     path: ['selectedQuestionIds'],
 });
 
-// Full-length schema - MUST include the discriminator `testType`
+// Full-length schema - Add testType literal HERE
 const FullLengthSchema = BaseTestSchema.extend({
-    testType: z.literal('full_length'), // Discriminator
+    testType: z.literal('full_length'), // Discriminator defined inside
     stream: z.enum(testStreams, { required_error: "Stream (PCM/PCB) is required." }),
     fullLengthExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
-    physicsWeight: z.number().min(0).max(100).default(34), // Add default values
+    physicsWeight: z.number().min(0).max(100).default(34),
     chemistryWeight: z.number().min(0).max(100).default(33),
     mathsWeight: z.number().min(0).max(100).optional(),
     biologyWeight: z.number().min(0).max(100).optional(),
 }).refine(data => {
-    const totalWeight = (data.physicsWeight || 0) + (data.chemistryWeight || 0) + (data.stream === 'PCM' ? (data.mathsWeight || 0) : (data.biologyWeight || 0));
+    const totalWeight = (data.physicsWeight ?? 0) + (data.chemistryWeight ?? 0) + (data.stream === 'PCM' ? (data.mathsWeight ?? 0) : (data.biologyWeight ?? 0));
     return Math.abs(totalWeight - 100) < 0.1; // Allow for small float inaccuracies
 }, {
     message: "Weightages must add up to 100%",
     path: ["physicsWeight"],
 });
-
 
 // Discriminated union schema
 const TestCreationSchema = z.discriminatedUnion("testType", [
@@ -384,7 +383,7 @@ export default function CreateTestPage() {
   };
 
    // Auto-select questions based on weightage for Full-Length
-   const autoSelectFullLengthQuestions = useCallback((): string[] => {
+   const autoSelectFullLengthQuestions = useCallback((): QuestionBankItem[] => {
         if (testType !== 'full_length' || !selectedStream) return [];
 
         const weights = {
@@ -398,7 +397,7 @@ export default function CreateTestPage() {
 
         console.log("Starting auto-selection with:", { weights, totalQuestionsToSelect, questionsBySubject });
 
-        const selectedIds: string[] = [];
+        const selectedQuestions: QuestionBankItem[] = [];
         const subjectsInStream = ['physics', 'chemistry'];
         if (selectedStream === 'PCM') subjectsInStream.push('maths');
         if (selectedStream === 'PCB') subjectsInStream.push('biology');
@@ -428,11 +427,10 @@ export default function CreateTestPage() {
         let remainingToAdjust = totalQuestionsToSelect - totalTarget;
 
         if (remainingToAdjust > 0) { // Need to add more questions
-            // Prioritize subjects with more remaining capacity relative to their weight
             const capacity = subjectsInStream
                 .map(sub => ({ sub, canAdd: subjectPoolSizes[sub] - targetCounts[sub] }))
                 .filter(s => s.canAdd > 0)
-                .sort((a, b) => b.canAdd - a.canAdd); // Simple sort by capacity
+                .sort((a, b) => b.canAdd - a.canAdd);
 
              capacity.forEach(({ sub, canAdd }) => {
                  const addCount = Math.min(remainingToAdjust, canAdd);
@@ -442,14 +440,13 @@ export default function CreateTestPage() {
              console.log("Adjusted counts (added):", targetCounts);
 
         } else if (remainingToAdjust < 0) { // Need to remove questions
-            // Prioritize removing from subjects that are most over their ideal count or smallest pools
              const overage = subjectsInStream
                 .map(sub => ({ sub, canRemove: targetCounts[sub] }))
                 .filter(s => s.canRemove > 0)
-                .sort((a, b) => a.canRemove - b.canRemove); // Simple sort by smallest count
+                .sort((a, b) => a.canRemove - b.canRemove);
 
              overage.forEach(({ sub, canRemove }) => {
-                if (remainingToAdjust >= 0) return; // Stop if we've removed enough
+                if (remainingToAdjust >= 0) return;
                  const removeCount = Math.min(Math.abs(remainingToAdjust), canRemove);
                  targetCounts[sub] -= removeCount;
                  remainingToAdjust += removeCount;
@@ -465,21 +462,20 @@ export default function CreateTestPage() {
             const count = targetCounts[subject];
             if (questionsBySubject[subject] && count > 0) {
                 const shuffled = [...questionsBySubject[subject]].sort(() => 0.5 - Math.random());
-                selectedIds.push(...shuffled.slice(0, count).map(q => q.id));
+                selectedQuestions.push(...shuffled.slice(0, count));
             }
         });
 
-        console.log(`Final selected question IDs (${selectedIds.length}):`, selectedIds.length);
-        if (selectedIds.length !== totalQuestionsToSelect) {
-             // This might happen if total pool size is less than requested count
+        console.log(`Final selected questions (${selectedQuestions.length}):`, selectedQuestions.length);
+        if (selectedQuestions.length !== totalQuestionsToSelect) {
              toast({
                   variant: "destructive",
                   title: "Question Count Mismatch",
-                  description: `Could only select ${selectedIds.length} questions due to pool limits. Requested ${totalQuestionsToSelect}. Adjust count or add more questions.`,
+                  description: `Could only select ${selectedQuestions.length} questions due to pool limits. Requested ${totalQuestionsToSelect}. Adjust count or add more questions.`,
                   duration: 7000,
              })
         }
-        return selectedIds;
+        return selectedQuestions;
    }, [testType, selectedStream, physicsWeight, chemistryWeight, mathsWeight, biologyWeight, questionCount, allStreamQuestions, toast]);
 
 
@@ -492,22 +488,25 @@ export default function CreateTestPage() {
         try {
             const testCode = generateTestCode();
             let finalTestDefinition: GeneratedTest;
-            let selectedIdsForStructure: string[] = [];
             let actualTotalQuestions = 0;
+             let finalStructuredQuestions: TestQuestion[] | undefined = undefined;
+             let physicsQuestions: TestQuestion[] | undefined = undefined;
+             let chemistryQuestions: TestQuestion[] | undefined = undefined;
+             let mathsQuestions: TestQuestion[] | undefined = undefined;
+             let biologyQuestions: TestQuestion[] | undefined = undefined;
 
             if (data.testType === 'chapterwise') {
-                // Double-check selection matches count before proceeding
+                 // Double-check selection matches count before proceeding
                  if (data.selectedQuestionIds.length !== data.count) {
                     throw new Error(`Selection error: Expected ${data.count} questions, but ${data.selectedQuestionIds.length} were selected.`);
                  }
-                selectedIdsForStructure = data.selectedQuestionIds;
-                actualTotalQuestions = selectedIdsForStructure.length;
-                const structuredQuestions = structureChapterwiseQuestions(selectedIdsForStructure);
+                finalStructuredQuestions = structureChapterwiseQuestions(data.selectedQuestionIds);
+                actualTotalQuestions = finalStructuredQuestions.length;
 
                 const chapterwiseJson: ChapterwiseTestJson = {
                     test_code: testCode,
                     name: data.name,
-                    testType: 'chapterwise', // Ensure discriminator is included
+                    testType: 'chapterwise', // Include discriminator
                     duration: data.duration,
                     count: data.count,
                     total_questions: actualTotalQuestions,
@@ -516,14 +515,14 @@ export default function CreateTestPage() {
                     test_subject: [data.subject], // Array with one subject
                     lesson: data.lesson,
                     examFilter: data.chapterwiseExamFilter,
-                    questions: structuredQuestions,
+                    questions: finalStructuredQuestions, // Include the structured questions
                     createdAt: new Date().toISOString(),
                 };
                  finalTestDefinition = chapterwiseJson;
 
             } else { // Full Length
-                 selectedIdsForStructure = autoSelectFullLengthQuestions(); // Call the memoized auto-selector
-                 actualTotalQuestions = selectedIdsForStructure.length;
+                 const selectedFullLengthQuestions = autoSelectFullLengthQuestions(); // Call the memoized auto-selector
+                 actualTotalQuestions = selectedFullLengthQuestions.length;
 
                  // If auto-selection resulted in fewer questions than requested, show warning but proceed
                   if (actualTotalQuestions !== data.count) {
@@ -539,27 +538,17 @@ export default function CreateTestPage() {
                     throw new Error("No questions could be selected for the Full-Length test based on current filters and pools.");
                   }
 
-
                 // Structure the selected questions by subject
-                const structuredBySubject: Pick<FullLengthTestJson, 'physics' | 'chemistry' | 'maths' | 'biology'> = {
-                    physics: [], chemistry: [], maths: [], biology: [],
-                };
-                 const allQuestionsFlat: QuestionBankItem[] = Object.values(allStreamQuestions).flat();
-                 selectedIdsForStructure.forEach(id => {
-                    const question = allQuestionsFlat.find(q => q.id === id);
-                    if (question) {
-                        const subjectKey = question.subject.toLowerCase() as keyof typeof structuredBySubject;
-                        if (structuredBySubject[subjectKey]) {
-                            (structuredBySubject[subjectKey] as TestQuestion[]).push(formatQuestion(question));
-                        }
-                    }
-                 });
+                 physicsQuestions = selectedFullLengthQuestions.filter(q => q.subject.toLowerCase() === 'physics').map(formatQuestion);
+                 chemistryQuestions = selectedFullLengthQuestions.filter(q => q.subject.toLowerCase() === 'chemistry').map(formatQuestion);
+                 mathsQuestions = selectedFullLengthQuestions.filter(q => q.subject.toLowerCase() === 'maths').map(formatQuestion);
+                 biologyQuestions = selectedFullLengthQuestions.filter(q => q.subject.toLowerCase() === 'biology').map(formatQuestion);
 
                 const weights = {
-                     physics: data.physicsWeight,
-                     chemistry: data.chemistryWeight,
-                     maths: data.stream === 'PCM' ? data.mathsWeight : undefined,
-                     biology: data.stream === 'PCB' ? data.biologyWeight : undefined,
+                     physics: data.physicsWeight ?? 0,
+                     chemistry: data.chemistryWeight ?? 0,
+                     maths: data.stream === 'PCM' ? (data.mathsWeight ?? 0) : undefined,
+                     biology: data.stream === 'PCB' ? (data.biologyWeight ?? 0) : undefined,
                  };
                  // Filter out undefined weights
                  Object.keys(weights).forEach(key => weights[key as keyof typeof weights] === undefined && delete weights[key as keyof typeof weights]);
@@ -568,7 +557,7 @@ export default function CreateTestPage() {
                 const fullLengthJson: FullLengthTestJson = {
                     test_code: testCode,
                     name: data.name,
-                    testType: 'full_length', // Ensure discriminator is included
+                    testType: 'full_length', // Include discriminator
                     duration: data.duration,
                     count: data.count, // Requested count
                     total_questions: actualTotalQuestions, // Actual count included
@@ -576,16 +565,16 @@ export default function CreateTestPage() {
                     audience: data.audience,
                     stream: data.stream,
                      // Dynamically create test_subject array based on which subjects have questions
-                    test_subject: Object.entries(structuredBySubject)
+                    test_subject: Object.entries({ physicsQuestions, chemistryQuestions, mathsQuestions, biologyQuestions })
                         .filter(([_, questions]) => questions && questions.length > 0)
-                        .map(([subjectKey, _]) => subjectKey.charAt(0).toUpperCase() + subjectKey.slice(1)), // Capitalize
+                         .map(([subjectKey, _]) => subjectKey.replace('Questions', '').charAt(0).toUpperCase() + subjectKey.replace('Questions', '').slice(1)), // Capitalize
                     examFilter: data.fullLengthExamFilter,
                     weightage: weights, // Include requested weights
                     // Only include subject arrays if they have questions
-                    physics: structuredBySubject.physics && structuredBySubject.physics.length > 0 ? structuredBySubject.physics : undefined,
-                    chemistry: structuredBySubject.chemistry && structuredBySubject.chemistry.length > 0 ? structuredBySubject.chemistry : undefined,
-                    maths: structuredBySubject.maths && structuredBySubject.maths.length > 0 ? structuredBySubject.maths : undefined,
-                    biology: structuredBySubject.biology && structuredBySubject.biology.length > 0 ? structuredBySubject.biology : undefined,
+                    physics: physicsQuestions.length > 0 ? physicsQuestions : undefined,
+                    chemistry: chemistryQuestions.length > 0 ? chemistryQuestions : undefined,
+                    maths: mathsQuestions.length > 0 ? mathsQuestions : undefined,
+                    biology: biologyQuestions.length > 0 ? biologyQuestions : undefined,
                     createdAt: new Date().toISOString(),
                 };
                 finalTestDefinition = fullLengthJson;
@@ -742,7 +731,7 @@ export default function CreateTestPage() {
                   <FormLabel>Target Audience *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select Audience" /></SelectTrigger></FormControl>
-                    <SelectContent>{audienceTypes.map((aud) => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}</SelectContent>
+                    <SelectContent>{academicStatuses.map((aud) => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
