@@ -32,7 +32,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, ClassLevel, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Import options, use academicStatuses for audienceTypes
+import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Use academicStatuses for audienceTypes
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions'; // Import query actions
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import Image from 'next/image';
@@ -45,26 +45,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // --- Schemas ---
 
+// Base schema without the discriminator field
 const BaseTestSchema = z.object({
     name: z.string().min(3, "Test name must be at least 3 characters."),
     duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").max(300, "Duration cannot exceed 300 minutes."),
     access: z.enum(pricingTypes, { required_error: "Access type is required." }),
     audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
     count: z.coerce.number().min(1, "Number of questions must be at least 1.").max(20, "Maximum 20 questions per test."),
-    // Include the discriminator in the base, but make it specific in the extended schemas
-    testType: z.enum(['chapterwise', 'full_length'], { required_error: "Test type is required." }),
 });
 
+// Chapterwise schema: extends base and adds specific fields + the literal discriminator
 const ChapterwiseSchema = BaseTestSchema.extend({
-    testType: z.literal('chapterwise'), // Correctly define literal here
+    testType: z.literal('chapterwise'), // Explicit literal discriminator
     subject: z.string().min(1, "Subject is required"),
     lesson: z.string().min(1, "Lesson is required"),
     chapterwiseExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
     selectedQuestionIds: z.array(z.string()).min(1, "Please select at least one question."),
 });
 
+// Full-length schema: extends base and adds specific fields + the literal discriminator
 const FullLengthSchema = BaseTestSchema.extend({
-    testType: z.literal('full_length'), // Correctly define literal here
+    testType: z.literal('full_length'), // Explicit literal discriminator
     stream: z.enum(testStreams, { required_error: "Stream (PCM/PCB) is required." }),
     fullLengthExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
     // Weightages - ensure they add up to 100
@@ -132,9 +133,10 @@ export default function CreateTestPage() {
   });
 
   const testType = form.watch('testType');
-  const selectedSubject = form.watch('subject'); // For chapterwise
-  const selectedLesson = form.watch('lesson'); // For chapterwise
-  const selectedStream = form.watch('stream'); // For full length
+  // Need to cast watched values when using discriminated unions sometimes
+  const selectedSubject = useWatch({ control: form.control, name: 'subject' }) as string | undefined;
+  const selectedLesson = useWatch({ control: form.control, name: 'lesson' }) as string | undefined;
+  const selectedStream = useWatch({ control: form.control, name: 'stream' }) as TestStream | undefined;
   const selectedQuestionIds = form.watch('selectedQuestionIds', []);
   const questionCount = form.watch('count'); // Watch the common count field
 
@@ -200,6 +202,7 @@ export default function CreateTestPage() {
      if (testType === 'chapterwise' && selectedSubject && selectedLesson) {
          fetchQuestions();
      }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [testType, selectedSubject, selectedLesson, form.watch('chapterwiseExamFilter'), form, toast]); // Watch filter change too
 
 
@@ -250,6 +253,7 @@ export default function CreateTestPage() {
         }
     };
     fetchAllStreamQuestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [testType, form.watch('stream'), form.watch('fullLengthExamFilter'), form, toast]);
 
 
@@ -301,55 +305,75 @@ export default function CreateTestPage() {
    const structureQuestions = (
        selectedIds: string[],
        allQuestionsMap: Record<string, QuestionBankItem[]> // Map of subject -> questions
-   ): Pick<GeneratedTest, 'physics' | 'chemistry' | 'maths' | 'biology'> => {
-        const structured: Pick<GeneratedTest, 'physics' | 'chemistry' | 'maths' | 'biology'> = {
+   ): Pick<GeneratedTest, 'physics' | 'chemistry' | 'maths' | 'biology' | 'questions'> => {
+        const structured: Pick<GeneratedTest, 'physics' | 'chemistry' | 'maths' | 'biology' | 'questions'> = {
             physics: [],
             chemistry: [],
             maths: [],
             biology: [],
+            questions: [], // For chapterwise
         };
 
         const allQuestionsFlat: QuestionBankItem[] = Object.values(allQuestionsMap).flat();
+        let isChapterwise = true; // Assume chapterwise initially
 
         selectedIds.forEach(id => {
             const question = allQuestionsFlat.find(q => q.id === id);
             if (question) {
-                const subjectKey = question.subject.toLowerCase() as keyof typeof structured;
-                if (structured.hasOwnProperty(subjectKey)) {
-                     const questionContent = question.type === 'image' && question.question.image ? question.question.image : (question.question.text || '[No Question Text]');
-                     const imageUrl = question.type === 'image' && question.question.image ? `/question_bank_images/${question.subject}/${question.lesson}/${question.question.image}` : null;
-                     const explanationContent = question.explanation.image ? question.explanation.image : (question.explanation.text || null);
-                     const explanationImageUrl = question.explanation.image ? `/question_bank_images/${question.subject}/${question.lesson}/${question.explanation.image}` : null;
+                 const subjectKey = question.subject.toLowerCase() as keyof Omit<typeof structured, 'questions'>;
 
-                    const formattedQuestion: TestQuestion = {
-                        question: questionContent,
-                        image_url: imageUrl,
-                         // Keep options as strings like "Option A: ..." for the JSON
-                        options: [
-                             `Option A: ${question.options.A}`,
-                             `Option B: ${question.options.B}`,
-                             `Option C: ${question.options.C}`,
-                             `Option D: ${question.options.D}`
-                        ],
-                         answer: `OPTION ${question.correct}`, // Format answer as "OPTION A", etc.
-                         marks: 1, // Default marks, can be adjusted later
-                         explanation: explanationContent, // Text or explanation image filename
-                         explanation_image_url: explanationImageUrl, // Add explanation image URL
-                    };
-                     // Explicitly cast to any[] to allow push
-                    (structured[subjectKey] as any[]).push(formattedQuestion);
+                 const questionContent = question.type === 'image' && question.question.image ? question.question.image : (question.question.text || '[No Question Text]');
+                 const imageUrl = question.type === 'image' && question.question.image ? `/question_bank_images/${question.subject}/${question.lesson}/${question.question.image}` : null;
+                 const explanationContent = question.explanation.image ? question.explanation.image : (question.explanation.text || null);
+                 const explanationImageUrl = question.explanation.image ? `/question_bank_images/${question.subject}/${question.lesson}/${question.explanation.image}` : null;
+
+                const formattedQuestion: TestQuestion = {
+                    question: questionContent,
+                    image_url: imageUrl,
+                    options: [
+                         `Option A: ${question.options.A}`,
+                         `Option B: ${question.options.B}`,
+                         `Option C: ${question.options.C}`,
+                         `Option D: ${question.options.D}`
+                    ],
+                     answer: `OPTION ${question.correct}`, // Format answer as "OPTION A", etc.
+                     marks: 1, // Default marks, can be adjusted later
+                     explanation: explanationContent, // Text or explanation image filename
+                     explanation_image_url: explanationImageUrl, // Add explanation image URL
+                };
+
+                // Check if we are dealing with multiple subjects (likely full-length)
+                if (Object.keys(allQuestionsMap).length > 1) {
+                    isChapterwise = false;
+                    if (structured.hasOwnProperty(subjectKey)) {
+                         (structured[subjectKey] as TestQuestion[] | undefined)?.push(formattedQuestion);
+                    } else {
+                        console.warn(`Subject key "${subjectKey}" derived from question ${question.id} is not valid for the structure.`);
+                    }
                 } else {
-                    console.warn(`Subject key "${subjectKey}" derived from question ${question.id} is not valid for the structure.`);
+                    // If only one subject, add to the generic 'questions' array
+                    structured.questions?.push(formattedQuestion);
                 }
             }
         });
 
-       // Clean up empty subject arrays
-       (Object.keys(structured) as Array<keyof typeof structured>).forEach(key => {
-            if (!structured[key] || structured[key]?.length === 0) {
-                delete structured[key];
-            }
-       });
+       // Clean up based on type
+       if (isChapterwise) {
+           delete structured.physics;
+           delete structured.chemistry;
+           delete structured.maths;
+           delete structured.biology;
+           if (!structured.questions || structured.questions.length === 0) delete structured.questions;
+       } else {
+           delete structured.questions; // Remove generic questions field for full-length
+            // Clean up empty subject arrays
+            (Object.keys(structured) as Array<keyof typeof structured>).forEach(key => {
+                if (key !== 'questions' && (!structured[key] || (structured[key] as TestQuestion[])?.length === 0)) {
+                    delete structured[key];
+                }
+            });
+       }
+
 
        return structured;
    };
@@ -479,7 +503,7 @@ export default function CreateTestPage() {
                     total_questions: actualTotalQuestions,
                     audience: data.audience,
                     examFilter: data.chapterwiseExamFilter,
-                    questions: structuredData[data.subject.toLowerCase() as keyof typeof structuredData] || [],
+                    questions: structuredData.questions || [], // Use generic questions array
                     createdAt: new Date().toISOString(),
                 };
                  finalTestDefinition = chapterwiseJson;
@@ -520,7 +544,7 @@ export default function CreateTestPage() {
                     stream: data.stream,
                     test_subject: subjectsCovered,
                     duration: data.duration,
-                     count: data.count, // Number requested by user
+                    count: data.count, // Number requested by user
                     total_questions: actualTotalQuestions, // Actual number included
                     audience: data.audience,
                     examFilter: data.fullLengthExamFilter,
