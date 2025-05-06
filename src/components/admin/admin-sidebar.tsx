@@ -15,6 +15,7 @@ import {
   Banknote,
   Edit,
   PlusCircle, // Added icon for Create Test
+  List, // Added icon for Manage Tests
 } from 'lucide-react';
 import {
   Sidebar,
@@ -32,8 +33,8 @@ import { useAuth } from '@/context/auth-context'; // Get user context if needed 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests', label: 'Manage Tests', icon: BookOpen },
-  { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle }, // New Create Test Link
+  { href: '/admin/tests/manage', label: 'Manage Tests', icon: List }, // Updated link and icon
+  { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle },
   { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
   { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit },
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
@@ -54,9 +55,6 @@ export function AdminSidebar() {
 
   // Only render the sidebar if the user is an admin
   if (!isAdmin) {
-    // Optionally, you could redirect here or show an unauthorized message,
-    // but typically middleware or page-level checks handle authorization.
-    // Returning null ensures non-admins don't see the sidebar structure.
     return null;
   }
 
@@ -106,3 +104,4 @@ export function AdminSidebar() {
     </Sidebar>
   );
 }
+

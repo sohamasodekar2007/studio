@@ -1,24 +1,32 @@
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle } from "lucide-react"; // Added PlusCircle
+import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { getTests } from "@/actions/test-actions";
+// Removed getTests import as it's obsolete
 import { readUsers } from "@/actions/user-actions";
+// TODO: Add action to count generated tests later
+// import { countGeneratedTests } from '@/actions/generated-test-actions'; // Assuming this action exists
 
 // Placeholder data fetching - replace with more robust fetching logic
 async function getStats() {
     // In a real app, fetch this from a database or analytics service
     try {
-        const [users, tests] = await Promise.all([readUsers(), getTests()]);
+        // Removed getTests call
+        // const [users, tests] = await Promise.all([readUsers(), getTests()]);
+        const users = await readUsers();
+        // TODO: Fetch actual count of generated tests
+        const generatedTestCount = 0; // Placeholder
         const totalUsers = users.length;
-        const activeTests = tests.filter(t => t.published).length;
+        // const activeTests = tests.filter(t => t.published).length; // This logic is now obsolete
+        const activeTests = generatedTestCount; // Use generated test count
         // Placeholder for recent signups and revenue
         const recentSignups = users.filter(u => u.createdAt && new Date(u.createdAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)).length;
         const totalRevenue = 500; // Example
 
         return {
             totalUsers,
-            activeTests,
+            activeTests, // Represents total generated tests now
             recentSignups,
             totalRevenue,
         };
@@ -55,12 +63,12 @@ export default async function AdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Tests</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Tests</CardTitle> {/* Changed label */}
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeTests}</div>
-            <p className="text-xs text-muted-foreground">Published tests</p>
+            <p className="text-xs text-muted-foreground">Generated tests</p> {/* Changed description */}
           </CardContent>
         </Card>
         <Card>
@@ -97,7 +105,8 @@ export default async function AdminDashboardPage() {
                   <Users className="h-4 w-4" /> Manage Users
               </Button>
            </Link>
-           <Link href="/admin/tests" passHref>
+           {/* Updated link to new Test Management page */}
+           <Link href="/admin/tests/manage" passHref>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <BookOpen className="h-4 w-4" /> Manage Tests
                </Button>
@@ -113,7 +122,7 @@ export default async function AdminDashboardPage() {
                    <ClipboardList className="h-4 w-4" /> Add Question
                </Button>
            </Link>
-           {/* New Edit Questions Button */}
+            {/* New Edit Questions Button */}
             <Link href="/admin/questions/edit" passHref>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <Edit className="h-4 w-4" /> Edit Questions
