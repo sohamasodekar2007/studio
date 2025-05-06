@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -61,9 +62,9 @@ export function AdminHeader() {
 
   return (
     <header className={cn(
-        "sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4",
-         // Adjust margin based on sidebar state on desktop
-         "sm:ml-0 peer-data-[state=expanded]:sm:ml-[--sidebar-width] peer-data-[state=collapsed]:sm:ml-[--sidebar-width-icon]"
+        "sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4"
+         // Removed peer-related margin classes - handled by parent div now
+         // "sm:ml-0 peer-data-[state=expanded]:sm:ml-[--sidebar-width] peer-data-[state=collapsed]:sm:ml-[--sidebar-width-icon]"
     )}>
       {/* Mobile Sidebar Trigger */}
       <Sheet>
