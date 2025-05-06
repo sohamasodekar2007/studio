@@ -60,18 +60,18 @@ const CommonTestFieldsSchema = z.object({
   audience: z.enum(academicStatuses, { required_error: "Target audience is required." }),
 });
 
-// Chapterwise specific fields + common fields
+// Chapterwise specific fields + common fields + discriminator
 const ChapterwiseSchema = CommonTestFieldsSchema.extend({
-  testType: z.literal('chapterwise'), // Discriminator
+  testType: z.literal('chapterwise'), // Discriminator added here
   subject: z.string().min(1, "Subject is required."),
   lesson: z.string().min(1, "Lesson is required."),
   examFilter: z.enum([...examOptions, "Random Exam"], { required_error: "Exam filter is required." }),
   selectedQuestions: z.array(z.string()).min(1, "Select at least one question."), // Store IDs
 });
 
-// Full-Length specific fields + common fields + validation refinement
+// Full-Length specific fields + common fields + discriminator + validation refinement
 const FullLengthSchema = CommonTestFieldsSchema.extend({
-  testType: z.literal('full_length'), // Discriminator
+  testType: z.literal('full_length'), // Discriminator added here
   stream: z.enum(["PCM", "PCB"], { required_error: "Stream is required." }),
   physicsWeight: z.coerce.number().min(0).max(100),
   chemistryWeight: z.coerce.number().min(0).max(100),
@@ -97,6 +97,7 @@ const TestCreationSchema = z.discriminatedUnion("testType", [
   ChapterwiseSchema,
   FullLengthSchema
 ]);
+
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
@@ -125,12 +126,12 @@ export default function CreateTestPage() {
       examFilter: 'Random Exam',
       selectedQuestions: [],
       // Full-Length defaults - Explicitly set PCM/PCB specific defaults to avoid type errors initially
-      stream: undefined, // Start undefined until user selects
-      physicsWeight: 33,
-      chemistryWeight: 34,
-      mathsWeight: 33,
-      biologyWeight: 0, // Initialize to 0
-      totalQuestions: 50, // Default total question count
+      // stream: undefined, // Start undefined until user selects -> Will be set based on testType
+      // physicsWeight: 33, // Let useEffect handle initial weights based on stream
+      // chemistryWeight: 34,
+      // mathsWeight: 33,
+      // biologyWeight: 0,
+      // totalQuestions: 50,
       // Common defaults
       duration: 60,
       access: 'FREE_PREMIUM',
@@ -138,12 +139,13 @@ export default function CreateTestPage() {
     },
   });
 
+  // Use watch to get reactive values, provide default values
   const testType = form.watch('testType');
-  const selectedSubject = form.watch('subject', ''); // Provide default empty string
-  const selectedLesson = form.watch('lesson', ''); // Provide default empty string
-  const chapterExamFilter = form.watch('examFilter'); // Watch chapterwise filter
-  const selectedQuestions = form.watch('selectedQuestions', []); // Provide default empty array
-  const stream = form.watch('stream'); // Watch full_length stream
+  const selectedSubject = form.watch('subject', '');
+  const selectedLesson = form.watch('lesson', '');
+  const chapterExamFilter = form.watch('examFilter', 'Random Exam'); // Default for chapterwise
+  const selectedQuestions = form.watch('selectedQuestions', []);
+  const stream = form.watch('stream'); // May be undefined initially
   const pWeight = form.watch('physicsWeight');
   const cWeight = form.watch('chemistryWeight');
   const mWeight = form.watch('mathsWeight');
@@ -178,14 +180,13 @@ export default function CreateTestPage() {
 
    // Load questions for Chapterwise test
    const fetchChapterQuestions = useCallback(async () => {
-        // Ensure all necessary fields are available in the form state
-        const formValues = form.getValues();
+        const formValues = form.getValues(); // Get current values
+         // Trigger only if it's chapterwise and subject/lesson/filter are selected
         if (formValues.testType === 'chapterwise' && formValues.subject && formValues.lesson && formValues.examFilter) {
             setIsLoadingQuestions(true);
             setAvailableQuestions([]); // Clear previous
             try {
-                // Ensure examFilter is correctly typed for the action
-                const filterValue = formValues.examFilter as ExamOption | 'Random Exam';
+                const filterValue = formValues.examFilter; // Already typed correctly due to schema
                 const questions = await getQuestionsForLesson({
                     subject: formValues.subject,
                     lesson: formValues.lesson,
@@ -202,28 +203,26 @@ export default function CreateTestPage() {
             setAvailableQuestions([]); // Clear if not chapterwise or filters incomplete
             setIsLoadingQuestions(false); // Ensure loading state is off
         }
-   }, [form, toast]); // Depend on form state
+   // Only re-run when these specific dependencies change
+   }, [form.watch('testType'), form.watch('subject'), form.watch('lesson'), form.watch('examFilter'), toast]);
 
 
    useEffect(() => {
-       // Re-fetch questions whenever relevant filters change for chapterwise
-       const formValues = form.getValues();
-       if (formValues.testType === 'chapterwise') {
-           fetchChapterQuestions();
-       }
-   }, [form.watch('subject'), form.watch('lesson'), form.watch('examFilter'), form.watch('testType'), fetchChapterQuestions]); // Watch specific fields
+       // This effect now only *calls* the fetch function when dependencies change
+       fetchChapterQuestions();
+   }, [fetchChapterQuestions]); // Depend on the memoized fetch function
 
 
   // Adjust weights for Full Length stream change
   useEffect(() => {
-    const formValues = form.getValues();
-    if (formValues.testType === 'full_length' && formValues.stream) {
-      const currentPWeight = formValues.physicsWeight ?? 0;
-      const currentCWeight = formValues.chemistryWeight ?? 0;
-      const currentMWeight = formValues.mathsWeight ?? 0;
-      const currentBWeight = formValues.biologyWeight ?? 0;
+    if (testType === 'full_length' && stream) {
+      const currentValues = form.getValues();
+      const currentPWeight = currentValues.physicsWeight ?? 0;
+      const currentCWeight = currentValues.chemistryWeight ?? 0;
+      const currentMWeight = currentValues.mathsWeight ?? 0;
+      const currentBWeight = currentValues.biologyWeight ?? 0;
 
-      if (formValues.stream === 'PCM') {
+      if (stream === 'PCM') {
         form.setValue('biologyWeight', 0);
         const currentTotal = currentPWeight + currentCWeight + currentMWeight;
         if (currentTotal !== 100 && currentTotal > 0) {
@@ -238,7 +237,7 @@ export default function CreateTestPage() {
              form.setValue('mathsWeight', 33);
         }
 
-      } else if (formValues.stream === 'PCB') {
+      } else if (stream === 'PCB') {
         form.setValue('mathsWeight', 0);
         const currentTotal = currentPWeight + currentCWeight + currentBWeight;
         if (currentTotal !== 100 && currentTotal > 0) {
@@ -254,7 +253,7 @@ export default function CreateTestPage() {
         }
       }
     }
-  }, [form, form.watch('stream'), form.watch('testType')]); // Rerun when stream or testType changes
+  }, [form, stream, testType]); // Rerun when stream or testType changes
 
 
   // --- Event Handlers ---
@@ -302,8 +301,12 @@ export default function CreateTestPage() {
             console.log(`Simulating fetch for: ${subject}, Exam: ${examFilter === 'Combined' ? 'All' : examFilter}`);
             // Simulate fetching a large pool - adjust filters as needed
             // NOTE: This is highly inefficient for large banks, needs optimization backend-side
-            return getQuestionsForLesson({ subject: subject, lesson: '', // Fetch across all lessons
-                examType: examFilter === 'Combined' ? undefined : examFilter });
+            // Fetch across all lessons for the subject (lesson '') - ADJUST IF NEEDED
+            return getQuestionsForLesson({
+                subject: subject,
+                lesson: '', // Fetch across all lessons, might need specific logic
+                examType: examFilter === 'Combined' ? undefined : examFilter
+            });
         };
 
       const [physicsPool, chemistryPool, mathsPool, biologyPool] = await Promise.all([
@@ -424,7 +427,7 @@ export default function CreateTestPage() {
                 title: title,
                 subject: data.subject,
                 lesson: data.lesson,
-                examFilter: data.examFilter as ExamOption | 'Random Exam',
+                examFilter: data.examFilter,
                 questions: data.selectedQuestions,
                 duration: data.duration,
                 access: data.access,
@@ -503,7 +506,39 @@ export default function CreateTestPage() {
                     <FormItem className="space-y-3">
                         <FormControl>
                             <RadioGroup
-                                onValueChange={field.onChange}
+                                onValueChange={(value) => {
+                                     field.onChange(value);
+                                     // Reset dependent fields when type changes
+                                    if (value === 'chapterwise') {
+                                        form.reset({
+                                             ...form.getValues(), // Keep common fields
+                                            testType: 'chapterwise',
+                                            stream: undefined,
+                                            physicsWeight: undefined,
+                                            chemistryWeight: undefined,
+                                            mathsWeight: undefined,
+                                            biologyWeight: undefined,
+                                            totalQuestions: undefined,
+                                            // Set chapterwise defaults if needed
+                                            subject: '',
+                                            lesson: '',
+                                            examFilter: 'Random Exam',
+                                            selectedQuestions: [],
+                                        });
+                                    } else { // full_length
+                                         form.reset({
+                                             ...form.getValues(), // Keep common fields
+                                             testType: 'full_length',
+                                             subject: undefined,
+                                             lesson: undefined,
+                                             selectedQuestions: undefined,
+                                             // Set full_length defaults (let useEffect handle weights)
+                                             stream: 'PCM', // Default stream
+                                             examFilter: 'Combined',
+                                             totalQuestions: 50,
+                                         });
+                                    }
+                                }}
                                 defaultValue={field.value}
                                 className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
                                 disabled={isSaving}
@@ -542,7 +577,7 @@ export default function CreateTestPage() {
               <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
                  <FormField control={form.control} name="subject" render={({ field }) => ( <FormItem> <FormLabel>Subject *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingSubjects || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} /> </SelectTrigger> </FormControl> <SelectContent> {subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
                  <FormField control={form.control} name="lesson" render={({ field }) => ( <FormItem> <FormLabel>Lesson *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSubject || isLoadingLessons || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder={isLoadingLessons ? "Loading..." : (selectedSubject ? "Select Lesson" : "Select Subject First")} /> </SelectTrigger> </FormControl> <SelectContent> {lessons.map((lesson) => <SelectItem key={lesson} value={lesson}>{lesson}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={!selectedLesson || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Random Exam">Random Exam Mix</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value ?? 'Random Exam'} disabled={!selectedLesson || isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Random Exam">Random Exam Mix</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
               </CardContent>
               <CardContent>
                 <h3 className="mb-3 font-medium">Select Questions ({selectedQuestions?.length || 0} selected)</h3>
@@ -592,8 +627,16 @@ export default function CreateTestPage() {
                     </TableBody>
                   </Table>
                  </ScrollArea>
-                 <FormField control={form.control} name="selectedQuestions" render={({ field }) => (<FormItem className="mt-2"><FormMessage /></FormItem>)} /> {/* For showing array validation error */}
-
+                 {/* Display validation message for selectedQuestions array */}
+                 <FormField
+                    control={form.control}
+                    name="selectedQuestions"
+                    render={({ fieldState }) => (
+                        <FormMessage className="mt-2">
+                            {fieldState.error?.message}
+                        </FormMessage>
+                    )}
+                    />
               </CardContent>
             </Card>
           )}
@@ -606,7 +649,7 @@ export default function CreateTestPage() {
               </CardHeader>
               <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
                  <FormField control={form.control} name="stream" render={({ field }) => ( <FormItem> <FormLabel>Stream *</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select Stream" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="PCM">PCM (Physics, Chemistry, Maths)</SelectItem> <SelectItem value="PCB">PCB (Physics, Chemistry, Biology)</SelectItem> </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-                 <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Combined">Combined (All Exams)</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+                 <FormField control={form.control} name="examFilter" render={({ field }) => ( <FormItem> <FormLabel>Exam Filter</FormLabel> <Select onValueChange={field.onChange} value={field.value ?? 'Combined'} disabled={isSaving}> <FormControl> <SelectTrigger> <SelectValue placeholder="Filter Questions by Exam" /> </SelectTrigger> </FormControl> <SelectContent> <SelectItem value="Combined">Combined (All Exams)</SelectItem> {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
                   <FormField control={form.control} name="totalQuestions" render={({ field }) => ( <FormItem> <FormLabel>Total Questions *</FormLabel> <FormControl> <Input type="number" {...field} min="10" max="200" disabled={isSaving} /> </FormControl> <FormMessage /> </FormItem> )} />
               </CardContent>
                <CardContent>
