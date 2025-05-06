@@ -32,7 +32,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, ClassLevel, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, audienceTypes, testStreams, examOptions } from '@/types'; // Import options
+import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Import options, use academicStatuses for audienceTypes
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions'; // Import query actions
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import Image from 'next/image';
@@ -51,11 +51,12 @@ const BaseTestSchema = z.object({
     access: z.enum(pricingTypes, { required_error: "Access type is required." }),
     audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
     count: z.coerce.number().min(1, "Number of questions must be at least 1.").max(20, "Maximum 20 questions per test."),
-    testType: z.enum(['chapterwise', 'full_length']), // Add discriminator field here
+    // Include the discriminator in the base, but make it specific in the extended schemas
+    testType: z.enum(['chapterwise', 'full_length'], { required_error: "Test type is required." }),
 });
 
 const ChapterwiseSchema = BaseTestSchema.extend({
-    testType: z.literal('chapterwise'), // Override with literal
+    testType: z.literal('chapterwise'), // Correctly define literal here
     subject: z.string().min(1, "Subject is required"),
     lesson: z.string().min(1, "Lesson is required"),
     chapterwiseExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
@@ -63,7 +64,7 @@ const ChapterwiseSchema = BaseTestSchema.extend({
 });
 
 const FullLengthSchema = BaseTestSchema.extend({
-    testType: z.literal('full_length'), // Override with literal
+    testType: z.literal('full_length'), // Correctly define literal here
     stream: z.enum(testStreams, { required_error: "Stream (PCM/PCB) is required." }),
     fullLengthExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
     // Weightages - ensure they add up to 100
@@ -176,12 +177,12 @@ export default function CreateTestPage() {
        if (testType === 'chapterwise' && selectedSubject && selectedLesson) {
          setIsLoadingQuestions(true);
          setAvailableQuestions([]);
+         const examFilter = form.getValues('chapterwiseExamFilter');
          try {
            const questions = await getQuestionsForLesson({
              subject: selectedSubject,
              lesson: selectedLesson,
-             // Apply exam filter if needed
-             examType: form.getValues('chapterwiseExamFilter') === 'all' ? undefined : form.getValues('chapterwiseExamFilter'),
+             examType: examFilter === 'all' ? undefined : examFilter,
            });
            setAvailableQuestions(questions);
            form.setValue('selectedQuestionIds', []); // Reset selection when questions reload
@@ -195,8 +196,12 @@ export default function CreateTestPage() {
          setAvailableQuestions([]);
        }
      };
-     fetchQuestions();
-   }, [testType, selectedSubject, selectedLesson, form, toast]); // Re-fetch when filters change
+     // Fetch immediately if chapterwise and filters are set
+     if (testType === 'chapterwise' && selectedSubject && selectedLesson) {
+         fetchQuestions();
+     }
+   }, [testType, selectedSubject, selectedLesson, form.watch('chapterwiseExamFilter'), form, toast]); // Watch filter change too
+
 
    // Fetch ALL questions for the selected stream subjects (for Full-Length auto-selection)
    useEffect(() => {
@@ -780,7 +785,9 @@ export default function CreateTestPage() {
                                     field.onChange(value as TestStream);
                                     const isPCM = value === 'PCM';
                                     const defaultMathsBioWeight = Math.round(100 / 3); // Default to ~33%
-                                    const remainingWeight = 100 - (form.getValues('physicsWeight') ?? defaultMathsBioWeight) - (form.getValues('chemistryWeight') ?? defaultMathsBioWeight);
+                                    const currentPhysicsWeight = form.getValues('physicsWeight') ?? defaultMathsBioWeight;
+                                    const currentChemistryWeight = form.getValues('chemistryWeight') ?? defaultMathsBioWeight;
+                                    const remainingWeight = 100 - currentPhysicsWeight - currentChemistryWeight;
 
                                     form.setValue('mathsWeight', isPCM ? Math.max(0, remainingWeight) : 0);
                                     form.setValue('biologyWeight', !isPCM ? Math.max(0, remainingWeight) : 0);
