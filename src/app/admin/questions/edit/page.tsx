@@ -11,65 +11,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Filter, Edit, Trash2, Eye, FileText, Image as ImageIcon } from "lucide-react"; // Renamed Image icon
+import { MoreHorizontal, Search, Filter, Edit, Trash2, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-react"; // Renamed Image icon
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
 import { examOptions, classLevels } from '@/types'; // Import filter options
 import { Badge } from "@/components/ui/badge"; // Import Badge component
-
-// Placeholder for server actions (implement later)
-async function getSubjects(): Promise<string[]> {
-  console.warn("getSubjects action not implemented, returning placeholder data.");
-  return ["Physics", "Chemistry", "Maths", "Biology"]; // Placeholder
-}
-async function getLessons(subject: string): Promise<string[]> {
-  console.warn(`getLessons action for ${subject} not implemented, returning placeholder data.`);
-   // In a real app, read directories under src/data/question_bank/{subject}
-   if (subject === 'Physics') return ['Kinematics', 'Work Energy Power', 'Rotational Motion'];
-   if (subject === 'Chemistry') return ['Mole Concept', 'Atomic Structure', 'Chemical Bonding'];
-   return ['Lesson A', 'Lesson B']; // Placeholder
-}
-async function getQuestions(filters: any): Promise<QuestionBankItem[]> {
-   console.warn("getQuestions action not implemented, returning placeholder data.");
-   // In a real app, read JSON files based on filters
-   // This is complex and needs server-side logic to traverse directories and filter JSON content.
-   // Returning static data for UI layout purposes.
-   const placeholderQuestions: QuestionBankItem[] = [
-    {
-        id: "Q_1715000000001", subject: "Physics", lesson: "Kinematics", class: "11", examType: "JEE Main", difficulty: "Medium", tags: ["motion", "1d"], type: "text",
-        question: { text: "A particle moves with constant velocity $v$. What is its acceleration?", image: null },
-        options: { A: "$0$", B: "$g$", C: "$v^2/r$", D: "Cannot be determined" }, correct: "A",
-        explanation: { text: "Constant velocity means zero acceleration.", image: null }, created: "2024-05-06T10:00:00Z", modified: "2024-05-06T10:00:00Z"
-    },
-     {
-        id: "Q_1715000000002", subject: "Chemistry", lesson: "Mole Concept", class: "11", examType: "NEET", difficulty: "Easy", tags: ["stoichiometry"], type: "text",
-        question: { text: "Calculate the number of moles in 22g of CO2.", image: null },
-        options: { A: "0.5", B: "1", C: "2", D: "0.25" }, correct: "A",
-        explanation: { text: "Molar mass of CO2 = 12 + 2*16 = 44g/mol. Moles = 22g / 44g/mol = 0.5 mol.", image: null }, created: "2024-05-06T10:05:00Z", modified: "2024-05-06T10:05:00Z"
-    },
-    {
-        id: "Q_1715000000003", subject: "Physics", lesson: "Work Energy Power", class: "12", examType: "JEE Advanced", difficulty: "Hard", tags: ["work", "variable force"], type: "image",
-        question: { text: null, image: "Q_placeholder.png" }, // Placeholder image filename
-        options: { A: "A", B: "B", C: "C", D: "D" }, correct: "C",
-        explanation: { text: "Explanation involves integration...", image: "E_placeholder.png" }, created: "2024-05-06T10:10:00Z", modified: "2024-05-06T10:10:00Z"
-    },
-   ];
-    return new Promise(resolve => setTimeout(() => resolve(placeholderQuestions), 500)); // Simulate network delay
-}
-async function deleteQuestionAction(id: string): Promise<{ success: boolean; message?: string }> {
-   console.warn(`deleteQuestionAction for ${id} not implemented.`);
-   // In a real app, delete the JSON file and associated images.
-   return { success: true };
-}
-// Add updateQuestionAction later
+// Import the actual server actions
+import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
 
 export default function EditQuestionsPage() {
   const { toast } = useToast();
   const [subjects, setSubjects] = useState<string[]>([]);
   const [lessons, setLessons] = useState<string[]>([]);
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true); // Renamed for clarity
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,17 +35,17 @@ export default function EditQuestionsPage() {
   const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<ClassLevel | 'all'>('all');
   const [selectedExam, setSelectedExam] = useState<ExamOption | 'all'>('all');
-  const [useBothFilters, setUseBothFilters] = useState(false);
+  const [useBothFilters, setUseBothFilters] = useState(false); // Kept for potential future use
   // --- End Filter State ---
 
 
-  // --- Fetch Initial Data ---
+  // --- Fetch Initial Data (Subjects) ---
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoadingSubjects(true);
     getSubjects()
       .then(setSubjects)
       .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load subjects." }))
-      .finally(() => setIsLoading(false));
+      .finally(() => setIsLoadingSubjects(false));
   }, [toast]);
 
   // --- Fetch Lessons when Subject Changes ---
@@ -98,17 +54,19 @@ export default function EditQuestionsPage() {
       setIsLoadingLessons(true);
       setLessons([]); // Clear previous lessons
       setSelectedLesson(''); // Reset lesson selection
-      getLessons(selectedSubject)
+      setQuestions([]); // Clear questions too
+      getLessonsForSubject(selectedSubject)
         .then(setLessons)
         .catch(err => toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` }))
         .finally(() => setIsLoadingLessons(false));
     } else {
       setLessons([]); // Clear lessons if no subject selected
       setSelectedLesson('');
+      setQuestions([]); // Clear questions if no subject selected
     }
   }, [selectedSubject, toast]);
 
-  // --- Fetch Questions when Filters Change ---
+  // --- Fetch Questions when Subject AND Lesson Change (and other filters) ---
    useEffect(() => {
      // Only fetch if subject AND lesson are selected
      if (selectedSubject && selectedLesson) {
@@ -116,21 +74,22 @@ export default function EditQuestionsPage() {
        setQuestions([]); // Clear previous questions
 
        // Build filter object based on state
-       const filters: any = {
+       const filters = {
          subject: selectedSubject,
          lesson: selectedLesson,
+         class: selectedClass !== 'all' ? selectedClass : undefined,
+         examType: selectedExam !== 'all' ? selectedExam : undefined,
+         // Add 'useBoth' or similar logic if needed based on the toggle state
        };
-       if (selectedClass !== 'all') filters.class = selectedClass;
-       if (selectedExam !== 'all') filters.examType = selectedExam;
-       // Note: 'useBothFilters' toggle doesn't directly change the filter object structure here,
-       // it's more about how the UI presents the options. The backend/action needs to handle
-       // the AND logic if both class and exam are provided.
 
        console.log("Fetching questions with filters:", filters);
 
-       getQuestions(filters)
+       getQuestionsForLesson(filters) // Pass the filter object
          .then(setQuestions)
-         .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not load questions." }))
+         .catch(err => {
+            console.error("Error loading questions:", err);
+            toast({ variant: "destructive", title: "Error", description: "Could not load questions." })
+         })
          .finally(() => setIsLoadingQuestions(false));
      } else {
        setQuestions([]); // Clear questions if subject or lesson is not selected
@@ -138,7 +97,7 @@ export default function EditQuestionsPage() {
    }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, toast]);
 
 
-  // --- Filtered Questions for Display ---
+  // --- Filtered Questions for Display (using search term) ---
   const displayQuestions = useMemo(() => {
     return questions.filter(q =>
       (q.question.text?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -151,19 +110,25 @@ export default function EditQuestionsPage() {
    const handleEdit = (id: string) => {
      console.log("Edit question:", id);
      toast({ title: "Edit Action", description: `Edit functionality for ${id} coming soon.` });
-     // TODO: Implement inline editing or open a modal/dialog
+     // TODO: Implement inline editing or open a modal/dialog using the actual question data
    };
 
    const handleDelete = async (id: string, subject: string, lesson: string) => {
-     console.log("Delete question:", id);
+     console.log("Delete question:", id, subject, lesson);
      if (confirm(`Are you sure you want to delete question ${id} from ${subject}/${lesson}? This cannot be undone.`)) {
        try {
-         const result = await deleteQuestionAction(id);
+         const result = await deleteQuestion({ questionId: id, subject, lesson }); // Pass parameters as an object
          if (result.success) {
            toast({ title: "Question Deleted", description: `${id} has been removed.` });
-           // Re-fetch questions after deletion
+           // Re-fetch questions for the current filters after deletion
            setIsLoadingQuestions(true);
-           getQuestions({ subject: selectedSubject, lesson: selectedLesson, class: selectedClass, examType: selectedExam })
+            const filters = {
+                subject: selectedSubject,
+                lesson: selectedLesson,
+                class: selectedClass !== 'all' ? selectedClass : undefined,
+                examType: selectedExam !== 'all' ? selectedExam : undefined,
+            };
+           getQuestionsForLesson(filters)
             .then(setQuestions)
             .catch(err => toast({ variant: "destructive", title: "Error", description: "Could not reload questions." }))
             .finally(() => setIsLoadingQuestions(false));
@@ -178,10 +143,13 @@ export default function EditQuestionsPage() {
 
     const renderQuestionPreview = (q: QuestionBankItem) => {
         if (q.type === 'image') {
+            // TODO: Fetch actual image path or show placeholder correctly
+            // const imagePath = `/data/question_bank/${q.subject}/${q.lesson}/images/${q.question.image}`; // Adjust path as needed
             return <span className="flex items-center gap-1 text-blue-600"><ImageIcon className="h-4 w-4"/> [Image Question]</span>;
         }
         const text = q.question.text || '[No Text]';
-        return <span className="line-clamp-1" title={text}>{text}</span>;
+        // Basic MathJax preview (relies on MathJax being loaded globally)
+        return <span className="line-clamp-1" title={text} dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') || '[No Text]' }}></span>;
     }
 
 
@@ -208,19 +176,17 @@ export default function EditQuestionsPage() {
                value={selectedSubject}
                onValueChange={(value) => {
                  setSelectedSubject(value);
-                 // Reset dependent filters
-                 setSelectedLesson('');
-                 setLessons([]);
-                 setQuestions([]);
+                 // Reset dependent filters handled by useEffect
                }}
-               disabled={isLoading}
+               disabled={isLoadingSubjects}
              >
                <SelectTrigger id="subject-filter">
-                 <SelectValue placeholder="Select Subject" />
+                 <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} />
                </SelectTrigger>
                <SelectContent>
                  {subjects.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
-                 {isLoading && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                 {isLoadingSubjects && <SelectItem value="loading" disabled>Loading...</SelectItem>}
+                 {!isLoadingSubjects && subjects.length === 0 && <SelectItem value="no-subjects" disabled>No subjects found</SelectItem>}
                </SelectContent>
              </Select>
             </div>
@@ -232,12 +198,12 @@ export default function EditQuestionsPage() {
                     value={selectedLesson}
                     onValueChange={(value) => {
                         setSelectedLesson(value);
-                         setQuestions([]); // Clear questions when lesson changes
+                        // Reset questions handled by useEffect
                     }}
-                    disabled={isLoadingLessons || !selectedSubject}
+                    disabled={isLoadingLessons || !selectedSubject || subjects.length === 0}
                 >
                     <SelectTrigger id="lesson-filter">
-                    <SelectValue placeholder={isLoadingLessons ? "Loading..." : "Select Lesson"} />
+                    <SelectValue placeholder={isLoadingLessons ? "Loading..." : (!selectedSubject ? "Select Subject First" : "Select Lesson")} />
                     </SelectTrigger>
                     <SelectContent>
                     {lessons.map(lesson => <SelectItem key={lesson} value={lesson}>{lesson}</SelectItem>)}
@@ -283,7 +249,7 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
-              {/* TODO: Add 'Use Both Filters' Toggle - needs careful implementation */}
+             {/* 'Use Both Filters' Toggle - kept for potential future implementation */}
              {/* <div className="flex items-center space-x-2 sm:col-span-2 md:col-span-1 lg:col-span-1 justify-self-start pt-5">
                  <Checkbox
                     id="use-both-filters"
@@ -295,12 +261,7 @@ export default function EditQuestionsPage() {
              </div> */}
 
          </CardContent>
-         {/* <CardFooter>
-             <Button onClick={fetchFilteredQuestions} disabled={isLoadingQuestions || !selectedSubject || !selectedLesson}>
-                {isLoadingQuestions ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                Load Questions
-             </Button>
-         </CardFooter> */}
+         {/* Footer button for manual load removed, loads automatically via useEffect */}
        </Card>
 
       {/* Question Table */}
@@ -308,7 +269,11 @@ export default function EditQuestionsPage() {
          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
                 <CardTitle>Question List</CardTitle>
-                 <CardDescription>Showing questions for: {selectedSubject && selectedLesson ? `${selectedSubject} > ${selectedLesson}` : 'Select Subject and Lesson'}</CardDescription>
+                 <CardDescription>
+                    {selectedSubject && selectedLesson
+                        ? `Showing questions for: ${selectedSubject} > ${selectedLesson}`
+                        : 'Select Subject and Lesson above to view questions.'}
+                 </CardDescription>
             </div>
              <div className="relative flex-1 md:grow-0 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -317,7 +282,7 @@ export default function EditQuestionsPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
-                  disabled={questions.length === 0 && !isLoadingQuestions}
+                  disabled={questions.length === 0 && !isLoadingQuestions && (!selectedSubject || !selectedLesson)} // Disable if no lesson selected or no questions
                 />
             </div>
          </CardHeader>
@@ -332,14 +297,13 @@ export default function EditQuestionsPage() {
                         <TableHead>Exam</TableHead>
                         <TableHead>Difficulty</TableHead>
                         <TableHead>Correct Ans</TableHead>
-                        {/* Add Marks later */}
-                        {/* <TableHead>Marks</TableHead> */}
+                        {/* Add Marks later if needed */}
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoadingQuestions ? (
-                        Array.from({ length: 3 }).map((_, index) => (
+                        Array.from({ length: 5 }).map((_, index) => ( // Increased skeleton rows
                         <TableRow key={`skel-${index}`}>
                             <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-full" /></TableCell>
@@ -366,7 +330,6 @@ export default function EditQuestionsPage() {
                              <TableCell>{q.examType}</TableCell>
                              <TableCell>{q.difficulty}</TableCell>
                             <TableCell className="font-medium text-center">{q.correct}</TableCell>
-                             {/* <TableCell>Marks Placeholder</TableCell> */}
                             <TableCell className="text-right">
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -377,7 +340,7 @@ export default function EditQuestionsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => handleEdit(q.id)} disabled> {/* Disable edit for now */}
+                                <DropdownMenuItem onClick={() => handleEdit(q.id)} disabled> {/* Keep edit disabled for now */}
                                     <Edit className="mr-2 h-4 w-4" /> Edit Question
                                 </DropdownMenuItem>
                                 {/* Add other actions like View Full, Clone later */}
@@ -393,7 +356,9 @@ export default function EditQuestionsPage() {
                      ) : (
                          <TableRow>
                             <TableCell colSpan={8} className="h-24 text-center">
-                                {(!selectedSubject || !selectedLesson) ? "Please select a Subject and Lesson to view questions." : "No questions found matching your filters."}
+                                {(!selectedSubject || !selectedLesson)
+                                    ? "Please select a Subject and Lesson to view questions."
+                                    : "No questions found matching your filters."}
                             </TableCell>
                          </TableRow>
                      )}
@@ -403,7 +368,7 @@ export default function EditQuestionsPage() {
           </CardContent>
            <CardFooter>
               <div className="text-xs text-muted-foreground">
-                Showing <strong>{displayQuestions.length}</strong> questions.
+                Showing <strong>{displayQuestions.length}</strong> of <strong>{questions.length}</strong> loaded questions.
               </div>
            </CardFooter>
        </Card>
