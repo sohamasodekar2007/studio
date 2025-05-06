@@ -9,50 +9,19 @@ import path from 'path';
 // Use a proper database like Firestore instead.
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
 
-/**
- * Reads the users.json file.
- * @returns A promise resolving to an array of UserProfile or an empty array on error.
- */
-export async function readUsers(): Promise<UserProfile[]> {
-  try {
-    const fileContent = await fs.readFile(usersFilePath, 'utf-8');
-    const users = JSON.parse(fileContent);
-    if (!Array.isArray(users)) {
-      console.error('users.json does not contain a valid array. Returning empty array.');
-      return [];
-    }
-    // Add basic validation if needed, e.g., checking required fields
-    return users as UserProfile[]; // Assert type based on the new structure
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      console.warn('users.json not found. Creating an empty file.');
-       try {
-           // Define default admin user structure
-           const defaultAdminUser: UserProfile = {
-               id: `local_admin_edunexus_com_${Date.now()}`, // Generate a somewhat unique ID
-               email: 'admin@edunexus.com',
-               password: 'Soham@1234', // Store plain text password (INSECURE)
-               name: 'Admin User',
-               phone: '1234567890',
-               referral: '',
-               class: 'Dropper', // Or null/default
-               model: 'combo', // Give admin highest access
-               expiry_date: '2099-12-31', // Long expiry
-               createdAt: new Date().toISOString()
-           };
-           // Write the file with the admin user in an array
-           await fs.writeFile(usersFilePath, JSON.stringify([defaultAdminUser], null, 2), 'utf-8');
-           console.log('Created users.json with default admin user.');
-           return [defaultAdminUser]; // Return the newly created admin user array
-       } catch (writeError) {
-            console.error('Failed to create users.json with admin user:', writeError);
-            return [];
-       }
-    }
-    console.error('Error reading or parsing users.json:', error);
-    return []; // Return empty array on other errors
-  }
-}
+// Define the default admin user details
+const defaultAdminEmail = 'admin@edunexus.com';
+const defaultAdminPassword = 'Soham@1234';
+const defaultAdminProfileBase: Omit<UserProfile, 'id' | 'createdAt'> = {
+    email: defaultAdminEmail,
+    password: defaultAdminPassword, // Store plain text password (INSECURE)
+    name: 'Admin User',
+    phone: '1234567890',
+    referral: '',
+    class: 'Dropper', // Or null/default
+    model: 'combo', // Give admin highest access
+    expiry_date: '2099-12-31', // Long expiry
+};
 
 /**
  * Writes the users array to the users.json file.
@@ -67,6 +36,95 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
         console.error('Failed to write users.json:', error);
         return false;
     }
+}
+
+
+/**
+ * Reads the users.json file. Ensures the default admin user exists with the correct password.
+ * @returns A promise resolving to an array of UserProfile or an empty array on error.
+ */
+export async function readUsers(): Promise<UserProfile[]> {
+  let users: UserProfile[] = [];
+  let writeNeeded = false;
+
+  try {
+    const fileContent = await fs.readFile(usersFilePath, 'utf-8');
+    const parsedUsers = JSON.parse(fileContent);
+    if (!Array.isArray(parsedUsers)) {
+      console.error('users.json does not contain a valid array. Re-initializing with default admin.');
+      users = []; // Start fresh if format is wrong
+      writeNeeded = true; // Force write
+    } else {
+        users = parsedUsers as UserProfile[];
+    }
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      console.warn('users.json not found. Creating an empty file with default admin.');
+      // File doesn't exist, will create it below
+      writeNeeded = true;
+    } else {
+      console.error('Error reading or parsing users.json:', error);
+      // On other errors, still try to proceed with an empty array and default admin
+      writeNeeded = true;
+    }
+     users = []; // Ensure users is an empty array if read failed
+  }
+
+  // --- Ensure Admin User Exists and is Correct ---
+   const adminUserIndex = users.findIndex(u => u.email === defaultAdminEmail);
+   const defaultAdminUserWithId: UserProfile = {
+       ...defaultAdminProfileBase,
+       id: `local_${defaultAdminEmail.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`, // Generate ID if needed
+       createdAt: new Date().toISOString(),
+   };
+
+
+  if (adminUserIndex !== -1) {
+    // Admin user exists, check if password or model needs correction
+    let adminNeedsUpdate = false;
+    if (users[adminUserIndex].password !== defaultAdminPassword) {
+        console.warn(`Admin user found but password incorrect in users.json. Resetting password for ${defaultAdminEmail}.`);
+        users[adminUserIndex].password = defaultAdminPassword;
+        adminNeedsUpdate = true;
+    }
+     if (users[adminUserIndex].model !== 'combo') {
+          console.warn(`Admin user found but model incorrect in users.json. Setting model to 'combo' for ${defaultAdminEmail}.`);
+         users[adminUserIndex].model = 'combo';
+         adminNeedsUpdate = true;
+     }
+      if (users[adminUserIndex].expiry_date !== defaultAdminProfileBase.expiry_date) {
+         console.warn(`Admin user found but expiry date incorrect in users.json. Setting expiry for ${defaultAdminEmail}.`);
+         users[adminUserIndex].expiry_date = defaultAdminProfileBase.expiry_date;
+         adminNeedsUpdate = true;
+      }
+     if (adminNeedsUpdate) {
+         writeNeeded = true;
+     }
+
+  } else {
+    // Admin user does not exist, add them
+    console.warn(`Default admin user (${defaultAdminEmail}) not found in users.json. Adding default admin user.`);
+    users.push({
+        ...defaultAdminUserWithId, // Use the one with generated ID/createdAt
+        id: users.length > 0 ? `local_admin_${Date.now()}` : defaultAdminUserWithId.id // Ensure unique ID if others exist
+    });
+    writeNeeded = true;
+  }
+
+  // Write back to file if it was missing, malformed, or admin was added/updated
+  if (writeNeeded) {
+      const writeSuccess = await writeUsers(users);
+      if (writeSuccess) {
+          console.log("users.json created or updated with default admin user details.");
+      } else {
+          console.error("Failed to write updated users.json file.");
+          // Depending on severity, you might want to throw an error here
+          // or return the potentially incorrect 'users' array read initially.
+          // For simulation, we'll return the in-memory corrected version.
+      }
+  }
+
+  return users;
 }
 
 
@@ -101,7 +159,7 @@ export async function saveUserToJson(
     };
 
     try {
-        let users = await readUsers();
+        let users = await readUsers(); // Read users (which ensures admin exists)
 
         const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
@@ -131,17 +189,18 @@ export async function saveUserToJson(
 
 
 /**
- * Adds a new user to the users.json file.
+ * Adds a new user to the users.json file. Checks for existing email/ID first.
  * WARNING: Insecure. Stores plain text passwords.
- * This function is now less necessary as saveUserToJson handles adding new users.
- * Kept for potential specific use cases but usually saveUserToJson is preferred.
- * @param newUser The user profile object to add.
+ * @param newUser The user profile object to add. Should have a unique ID already assigned.
  * @returns A promise resolving with success status and optional message.
  */
 export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
-    console.warn("WARNING: Adding user with plain text password to users.json is insecure. Prefer using saveUserToJson.");
+    console.warn("WARNING: Adding user with plain text password to users.json is insecure.");
+    if (!newUser.id) {
+        return { success: false, message: 'New user must have an ID assigned before adding.' };
+    }
     try {
-        let users = await readUsers();
+        let users = await readUsers(); // Ensures admin is present
 
         // Check if email already exists
         if (users.some(u => u.email === newUser.email)) {
@@ -149,6 +208,7 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
         }
          // Check if ID already exists
          if (users.some(u => u.id === newUser.id)) {
+             // This might happen if ID generation isn't robust enough, but check anyway
              return { success: false, message: `User with ID ${newUser.id} already exists.` };
          }
 
@@ -179,7 +239,7 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
 export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id'>>): Promise<{ success: boolean; message?: string }> {
      console.warn("WARNING: Updating user data (potentially including password) in users.json is insecure.");
     try {
-        let users = await readUsers();
+        let users = await readUsers(); // Ensures admin is present
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
@@ -204,18 +264,31 @@ export async function updateUserInJson(userId: string | number, updatedData: Par
 }
 
 /**
- * Deletes a user from the users.json file by ID.
+ * Deletes a user from the users.json file by ID. Prevents deletion of the default admin user.
  * @param userId The ID of the user to delete.
  * @returns A promise resolving with success status and optional message.
  */
 export async function deleteUserFromJson(userId: string | number): Promise<{ success: boolean; message?: string }> {
     try {
-        let users = await readUsers();
+        let users = await readUsers(); // Ensures admin is present
+        const userToDelete = users.find(u => u.id === userId);
+
+        if (!userToDelete) {
+             return { success: false, message: `User with ID ${userId} not found.` };
+        }
+
+        // Prevent deletion of the primary admin user
+        if (userToDelete.email === defaultAdminEmail) {
+            return { success: false, message: `Cannot delete the primary admin user (${defaultAdminEmail}).` };
+        }
+
+
         const initialLength = users.length;
         users = users.filter(u => u.id !== userId);
 
+        // This check is redundant if find worked, but safe to keep
         if (users.length === initialLength) {
-            return { success: false, message: `User with ID ${userId} not found.` };
+            return { success: false, message: `User with ID ${userId} not found (consistency check).` };
         }
 
         const success = await writeUsers(users);
@@ -236,7 +309,7 @@ export async function deleteUserFromJson(userId: string | number): Promise<{ suc
 export async function updateUserPasswordInJson(userId: string | number, newPassword: string): Promise<{ success: boolean; message?: string }> {
     console.warn("WARNING: Updating plain text password in users.json is highly insecure.");
     try {
-        let users = await readUsers();
+        let users = await readUsers(); // Ensures admin is present
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {

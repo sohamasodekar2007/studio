@@ -2,35 +2,11 @@
 'use server';
 
 import type { UserProfile } from '@/types';
-import fs from 'fs/promises';
-import path from 'path';
+import { readUsers } from './user-actions'; // Import from user-actions
 
-// WARNING: This is a highly insecure way to handle authentication and is
-// purely for demonstrating local data storage. Do NOT use in production.
-const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
-
-/**
- * Reads the users.json file.
- * @returns A promise resolving to an array of UserProfile or an empty array on error.
- */
-async function readUsers(): Promise<UserProfile[]> {
-  try {
-    const fileContent = await fs.readFile(usersFilePath, 'utf-8');
-    const users = JSON.parse(fileContent);
-    if (!Array.isArray(users)) {
-      console.error('users.json does not contain a valid array. Returning empty array.');
-      return [];
-    }
-    return users as UserProfile[]; // Assert type based on the new structure
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      console.warn('users.json not found. Returning empty array.');
-      return []; // File doesn't exist, treat as empty
-    }
-    console.error('Error reading or parsing users.json:', error);
-    return []; // Return empty array on other errors
-  }
-}
+// WARNING: This approach is NOT recommended for production due to security and scalability concerns.
+// Use a proper database like Firestore instead.
+// const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json'); // Path managed in user-actions
 
 /**
  * Finds a user by email and password in the local users.json file.
@@ -51,7 +27,7 @@ export async function findUserByCredentials(
   }
 
   try {
-    const users = await readUsers();
+    const users = await readUsers(); // Use the centralized readUsers function
     const foundUser = users.find(
       (u) => u.email?.toLowerCase() === email.toLowerCase()
     );
@@ -87,7 +63,7 @@ export async function findUserByEmail(
     return null;
   }
   try {
-    const users = await readUsers();
+    const users = await readUsers(); // Use the centralized readUsers function
     const foundUser = users.find(
       (u) => u.email?.toLowerCase() === email.toLowerCase()
     );
