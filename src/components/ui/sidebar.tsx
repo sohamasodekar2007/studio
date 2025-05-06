@@ -172,7 +172,7 @@ const SidebarProvider = React.forwardRef<
 SidebarProvider.displayName = "SidebarProvider"
 
 const Sidebar = React.forwardRef<
-  HTMLDivElement, // Changed back to div
+  HTMLDivElement,
   React.ComponentProps<"div"> & {
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
@@ -194,7 +194,7 @@ const Sidebar = React.forwardRef<
 
     if (collapsible === "none") {
       return (
-        <div // Changed back to div
+        <div
           className={cn(
             "flex h-full w-[--sidebar-width] flex-col bg-sidebar text-sidebar-foreground",
             className
@@ -229,17 +229,21 @@ const Sidebar = React.forwardRef<
 
     return (
       // Peer element for desktop sidebar state
-       <div // Changed back to div
+       <div
         ref={ref}
         data-state={state}
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
         data-side={side}
         className={cn(
-            "peer fixed inset-y-0 z-30 hidden h-svh flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out data-[collapsible=icon]:sm:flex", // Use sm:flex for icon collapsible
+            // Base styles for desktop sidebar
+            "peer fixed inset-y-0 z-30 h-svh flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out",
             side === "left" ? "left-0 border-r" : "right-0 border-l",
+            // Width based on state
             state === 'expanded' ? "w-[--sidebar-width]" : "w-[--sidebar-width-icon]",
-             // Handle offcanvas collapsing (though default is icon)
+            // Visibility based on collapsible type and breakpoint
+            collapsible === 'icon' ? "hidden sm:flex" : "flex", // Show icon variant on sm+, hide below
+            // Handle offcanvas collapsing
             collapsible === 'offcanvas' && state === 'collapsed' && (side === 'left' ? "-translate-x-full" : "translate-x-full"),
             className
           )}
@@ -715,5 +719,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-    
