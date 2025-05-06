@@ -32,7 +32,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, ClassLevel, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types';
+import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Import options
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import Image from 'next/image';
@@ -51,12 +51,12 @@ const BaseTestSchema = z.object({
     duration: z.coerce.number().int().min(1, "Duration must be at least 1 minute.").max(300, "Duration cannot exceed 300 minutes."),
     access: z.enum(pricingTypes, { required_error: "Access type is required." }),
     audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
-    count: z.coerce.number().int().min(1, "Number of questions must be at least 1.").max(50, "Maximum 50 questions per test."), // Increased max count
+    count: z.coerce.number().int().min(1, "Number of questions must be at least 1.").max(50, "Maximum 50 questions per test."),
 });
 
 // Chapterwise schema
 const ChapterwiseSchema = BaseTestSchema.extend({
-    testType: z.literal('chapterwise'),
+    testType: z.literal('chapterwise'), // Add the discriminator
     subject: z.string().min(1, "Subject is required"),
     lesson: z.string().min(1, "Lesson is required"),
     chapterwiseExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
@@ -68,7 +68,7 @@ const ChapterwiseSchema = BaseTestSchema.extend({
 
 // Full-length schema
 const FullLengthSchema = BaseTestSchema.extend({
-    testType: z.literal('full_length'),
+    testType: z.literal('full_length'), // Add the discriminator
     stream: z.enum(testStreams, { required_error: "Stream (PCM/PCB) is required." }),
     fullLengthExamFilter: z.enum(['all', ...examOptions], { required_error: "Exam filter is required" }),
     physicsWeight: z.number().min(0).max(100),
@@ -82,6 +82,7 @@ const FullLengthSchema = BaseTestSchema.extend({
     message: "Weightages must add up to 100%",
     path: ["physicsWeight"], // Apply error near the first weightage field
 });
+
 
 // Discriminated union schema
 const TestCreationSchema = z.discriminatedUnion("testType", [
@@ -312,21 +313,23 @@ export default function CreateTestPage() {
   // --- Format and Structure Test Data ---
   const formatQuestion = (q: QuestionBankItem): TestQuestion => {
      const questionContent = q.type === 'image' && q.question.image ? q.question.image : (q.question.text || '[No Question Text]');
-     const imageUrl = q.type === 'image' && q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
+     // Correctly determine image URL path
+     const imageUrl = q.type === 'image' && q.question.image ? `/question_bank/${q.subject}/${q.lesson}/images/${q.question.image}` : null;
      const explanationContent = q.explanation.image ? q.explanation.image : (q.explanation.text || null);
-     const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
+      // Correctly determine explanation image URL path
+     const explanationImageUrl = q.explanation.image ? `/question_bank/${q.subject}/${q.lesson}/images/${q.explanation.image}` : null;
 
      return {
          question: questionContent,
          image_url: imageUrl,
-         options: [
-              `Option A: ${q.options.A}`,
-              `Option B: ${q.options.B}`,
-              `Option C: ${q.options.C}`,
-              `Option D: ${q.options.D}`
+         options: [ // Format options according to the new structure
+              q.options.A,
+              q.options.B,
+              q.options.C,
+              q.options.D
          ],
-          answer: `OPTION ${q.correct}`,
-          marks: 1, // Default marks
+          answer: `OPTION ${q.correct}`, // Keep "OPTION A/B/C/D" format
+          marks: 1, // Default marks, consider making this editable
           explanation: explanationContent,
           explanation_image_url: explanationImageUrl,
      };
@@ -502,7 +505,7 @@ export default function CreateTestPage() {
                     name: data.name,
                     type: data.access,
                     test_subject: [data.subject], // Single subject in an array
-                    lesson: data.lesson,
+                    lesson: data.lesson, // Added lesson field
                     duration: data.duration,
                     count: data.count, // User requested count
                     total_questions: actualTotalQuestions, // Actual count
@@ -891,11 +894,13 @@ export default function CreateTestPage() {
                    <Badge variant="outline">{previewQuestion.difficulty}</Badge>
                </div>
                {previewQuestion.type === 'text' && previewQuestion.question.text && ( <div className="prose prose-sm dark:prose-invert max-w-none border p-3 rounded-md"><p className="font-medium mb-1">Question:</p><p dangerouslySetInnerHTML={{ __html: previewQuestion.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') || '[No Text]' }}></p></div> )}
-               {previewQuestion.type === 'image' && previewQuestion.question.image && ( <div><p className="font-medium mb-1">Question Image:</p><Image src={`/question_bank_images/${previewQuestion.subject}/${previewQuestion.lesson}/${previewQuestion.question.image}`} alt="Question Image" width={500} height={300} className="rounded border"/></div> )}
+                {/* Correct image path */}
+               {previewQuestion.type === 'image' && previewQuestion.question.image && ( <div><p className="font-medium mb-1">Question Image:</p><Image src={`/question_bank/${previewQuestion.subject}/${previewQuestion.lesson}/images/${previewQuestion.question.image}`} alt="Question Image" width={500} height={300} className="rounded border"/></div> )}
                <div><p className="font-medium mb-1">Options:</p><ul className="list-none space-y-1 text-sm"><li><strong>A:</strong> {previewQuestion.options.A}</li><li><strong>B:</strong> {previewQuestion.options.B}</li><li><strong>C:</strong> {previewQuestion.options.C}</li><li><strong>D:</strong> {previewQuestion.options.D}</li></ul></div>
                <p className="text-sm"><strong>Correct Answer:</strong> {previewQuestion.correct}</p>
                {previewQuestion.explanation.text && ( <div className="prose prose-sm dark:prose-invert max-w-none border p-3 rounded-md bg-muted/50"><p className="font-medium mb-1">Explanation:</p><p dangerouslySetInnerHTML={{ __html: previewQuestion.explanation.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') || '[No Text]' }}></p></div> )}
-               {previewQuestion.explanation.image && ( <div><p className="font-medium mb-1">Explanation Image:</p><Image src={`/question_bank_images/${previewQuestion.subject}/${previewQuestion.lesson}/${previewQuestion.explanation.image}`} alt="Explanation Image" width={400} height={200} className="rounded border"/></div> )}
+                {/* Correct image path */}
+               {previewQuestion.explanation.image && ( <div><p className="font-medium mb-1">Explanation Image:</p><Image src={`/question_bank/${previewQuestion.subject}/${previewQuestion.lesson}/images/${previewQuestion.explanation.image}`} alt="Explanation Image" width={400} height={200} className="rounded border"/></div> )}
              </div>
            )}
            <DialogFooter><DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose></DialogFooter>
