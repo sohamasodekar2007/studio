@@ -2,12 +2,13 @@
 // src/actions/generated-test-actions.ts
 'use server';
 
-import type { GeneratedTest } from '@/types';
+import type { GeneratedTest, ChapterwiseTestJson, FullLengthTestJson } from '@/types'; // Use specific types
 import fs from 'fs/promises';
 import path from 'path';
 
-// Define the base path for saving generated test JSON files
-const generatedTestsBasePath = path.join(process.cwd(), 'src', 'data', 'tests_json');
+// Define the base paths for saving generated test JSON files
+const chapterwiseTestsBasePath = path.join(process.cwd(), 'src', 'data', 'test_pages', 'chapterwise');
+const fullLengthTestsBasePath = path.join(process.cwd(), 'src', 'data', 'test_pages', 'full_length');
 
 // Helper function to ensure directory exists
 async function ensureDirExists(dirPath: string): Promise<void> {
@@ -21,7 +22,8 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 }
 
 /**
- * Saves the generated test definition JSON to the tests_json folder.
+ * Saves the generated test definition JSON to the appropriate folder
+ * (chapterwise or full_length) based on the test type.
  * The filename will be the unique test_code.
  *
  * @param testDefinition - The GeneratedTest object containing all test details.
@@ -30,17 +32,41 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 export async function saveGeneratedTest(
     testDefinition: GeneratedTest
 ): Promise<{ success: boolean; message?: string; filePath?: string }> {
-    const targetDir = generatedTestsBasePath;
-    const filePath = path.join(targetDir, `${testDefinition.test_code}.json`);
+    let targetDir: string;
+    let filename: string;
+
+    // Determine save directory and filename based on test type
+    if (testDefinition.testType === 'chapterwise') {
+        targetDir = chapterwiseTestsBasePath;
+        // Example filename: physics_thermodynamics_jee_20240520.json (or use test_code)
+        // Using test_code for uniqueness guarantees
+        filename = `${testDefinition.test_code}.json`;
+        // filename = `${testDefinition.test_subject[0]}_${testDefinition.lesson}_${testDefinition.examFilter}_${testDefinition.test_code}.json`;
+    } else if (testDefinition.testType === 'full_length') {
+        targetDir = fullLengthTestsBasePath;
+        // Example filename: pcm_jee_20240520.json (or use test_code)
+        // Using test_code for uniqueness guarantees
+         filename = `${testDefinition.test_code}.json`;
+        // filename = `${testDefinition.stream}_${testDefinition.examFilter}_${testDefinition.test_code}.json`;
+    } else {
+        // Fallback for safety, though should be covered by types
+        console.error('Unknown test type provided to saveGeneratedTest:', (testDefinition as any).testType);
+        return { success: false, message: 'Invalid test type provided.' };
+    }
+
+    const filePath = path.join(targetDir, filename);
 
     try {
-        await ensureDirExists(targetDir); // Ensure the base directory exists
+        await ensureDirExists(targetDir); // Ensure the target directory exists
+
+        // Remove the temporary 'testType' discriminator property before saving
+        const { testType, ...dataToSave } = testDefinition;
 
         // Optionally add/update a 'modifiedAt' timestamp if needed
-        const dataToSave = {
-            ...testDefinition,
-            // modifiedAt: new Date().toISOString(), // Uncomment if needed
-        };
+        // const finalData = {
+        //     ...dataToSave,
+        //     // modifiedAt: new Date().toISOString(), // Uncomment if needed
+        // };
 
         await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
         console.log(`Generated test definition saved: ${filePath}`);
@@ -54,35 +80,52 @@ export async function saveGeneratedTest(
 
 
 /**
- * Reads all generated test JSON files from the tests_json directory.
+ * Reads all generated test JSON files from BOTH chapterwise and full_length directories.
  * @returns A promise resolving to an array of GeneratedTest objects or an empty array on error.
  */
 export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
-  try {
-    // Ensure the directory exists, create if not
-    await ensureDirExists(generatedTestsBasePath);
-
-    const files = await fs.readdir(generatedTestsBasePath);
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
-
     const allTests: GeneratedTest[] = [];
+    const directoriesToScan = [chapterwiseTestsBasePath, fullLengthTestsBasePath];
 
-    for (const file of jsonFiles) {
-      const filePath = path.join(generatedTestsBasePath, file);
-      try {
-        const fileContent = await fs.readFile(filePath, 'utf-8');
-        const testData = JSON.parse(fileContent) as GeneratedTest;
-        // Basic validation (check for required fields)
-        if (testData.test_code && testData.name && testData.test_subject && testData.type) {
-          allTests.push(testData);
-        } else {
-          console.warn(`Skipping invalid test file (missing core fields): ${filePath}`);
+    for (const baseDir of directoriesToScan) {
+        try {
+            // Ensure the directory exists, create if not
+            await ensureDirExists(baseDir);
+
+            const files = await fs.readdir(baseDir);
+            const jsonFiles = files.filter(file => file.endsWith('.json'));
+
+            for (const file of jsonFiles) {
+                const filePath = path.join(baseDir, file);
+                try {
+                    const fileContent = await fs.readFile(filePath, 'utf-8');
+                    const testData = JSON.parse(fileContent) as Omit<GeneratedTest, 'testType'>; // Read base data
+
+                    // Add back the testType based on the directory it was read from
+                    const testType = baseDir.includes('chapterwise') ? 'chapterwise' : 'full_length';
+                    const fullTestData = { ...testData, testType } as GeneratedTest;
+
+
+                    // Basic validation (check for required fields)
+                    if (fullTestData.test_code && fullTestData.name && fullTestData.test_subject && fullTestData.type) {
+                         allTests.push(fullTestData);
+                    } else {
+                        console.warn(`Skipping invalid test file (missing core fields): ${filePath}`);
+                    }
+                } catch (parseError) {
+                    console.error(`Error parsing test file ${filePath}:`, parseError);
+                }
+            }
+        } catch (error: any) {
+            if (error.code === 'ENOENT') {
+                console.warn(`Directory not found: ${baseDir}. Skipping.`);
+            } else {
+                console.error(`Error reading tests from ${baseDir}:`, error);
+                // Consider throwing a more specific error if needed by the caller
+            }
         }
-      } catch (parseError) {
-        console.error(`Error parsing test file ${filePath}:`, parseError);
-        // Optionally skip this file or handle the error differently
-      }
     }
+
     // Sort tests by creation date descending (newest first) if createdAt exists
     allTests.sort((a, b) => {
         if (a.createdAt && b.createdAt) {
@@ -91,45 +134,54 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
         return 0; // No sorting if createdAt is missing
     });
 
-
     return allTests;
-  } catch (error: any) {
-     if (error.code === 'ENOENT') {
-        // This case should be handled by ensureDirExists, but good fallback
-        console.warn(`Generated tests directory not found: ${generatedTestsBasePath}. Returning empty array.`);
-        return [];
-     }
-     console.error('Error reading generated tests:', error);
-     // Consider throwing a more specific error if needed by the caller
-     return []; // Return empty on other errors
-  }
 }
 
 
 /**
  * Deletes a specific generated test JSON file by its test code.
+ * Searches in both chapterwise and full_length directories.
  * @param testCode The unique code of the test to delete.
  * @returns A promise resolving with success status and optional message.
  */
 export async function deleteGeneratedTest(testCode: string): Promise<{ success: boolean; message?: string }> {
-  if (!testCode) {
-    return { success: false, message: 'Test code is required for deletion.' };
-  }
-
-  const filePath = path.join(generatedTestsBasePath, `${testCode}.json`);
-
-  try {
-    await fs.unlink(filePath);
-    console.log(`Deleted generated test file: ${filePath}`);
-    return { success: true };
-
-  } catch (error: any) {
-    console.error(`Error deleting generated test ${testCode}:`, error);
-    if (error.code === 'ENOENT') {
-      return { success: false, message: `Test file with code ${testCode} not found.` };
+    if (!testCode) {
+        return { success: false, message: 'Test code is required for deletion.' };
     }
-    return { success: false, message: `Failed to delete test ${testCode}. Reason: ${error.message}` };
-  }
+
+    const possibleDirs = [chapterwiseTestsBasePath, fullLengthTestsBasePath];
+    let deleted = false;
+    let filePathTried: string | null = null;
+
+    for (const dir of possibleDirs) {
+        // Assume filename is simply testCode.json as per save logic
+        const filePath = path.join(dir, `${testCode}.json`);
+        filePathTried = filePath; // Store last tried path for error message
+
+        try {
+            await fs.access(filePath); // Check if file exists
+            await fs.unlink(filePath); // Attempt deletion
+            console.log(`Deleted generated test file: ${filePath}`);
+            deleted = true;
+            break; // Stop searching once deleted
+        } catch (error: any) {
+            if (error.code === 'ENOENT') {
+                // File not found in this directory, continue searching
+                continue;
+            } else {
+                // Other error during deletion
+                console.error(`Error deleting generated test ${testCode} from ${filePath}:`, error);
+                return { success: false, message: `Failed to delete test ${testCode} from ${dir}. Reason: ${error.message}` };
+            }
+        }
+    }
+
+    if (deleted) {
+        return { success: true };
+    } else {
+         // If loop finishes and not deleted, it wasn't found
+         return { success: false, message: `Test file with code ${testCode} not found in any directory.` };
+    }
 }
 
 // --- TODO: Add functions for updating a generated test if needed ---
