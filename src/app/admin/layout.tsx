@@ -1,14 +1,15 @@
 
-'use client'; // Required for AuthProvider context
+
+'use client'; // Required for AuthProvider context and SidebarProvider
 
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { AuthProvider } from '@/context/auth-context';
-// Remove SidebarProvider and cn imports
-// import { SidebarProvider } from '@/components/ui/sidebar';
-// import { cn } from '@/lib/utils';
+// Add SidebarProvider import
+import { SidebarProvider } from '@/components/ui/sidebar';
+// import { cn } from '@/lib/utils'; // cn is not used
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -25,18 +26,21 @@ export default function AdminLayout({
 
   return (
     <AuthProvider> {/* Auth context for header/sidebar checks */}
-      {/* Revert to original div structure */}
-      <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
-        <AdminSidebar />
-        {/* Revert flex-1 div */}
-        <div className="flex flex-col flex-1">
-          <AdminHeader />
-          {/* Main content area */}
-          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-            {children}
-          </main>
+     {/* Wrap the main layout div with SidebarProvider */}
+      <SidebarProvider defaultOpen>
+        <div className={`flex min-h-screen bg-muted/40 ${inter.className}`}>
+          <AdminSidebar />
+          {/* Revert flex-1 div */}
+          <div className="flex flex-col flex-1">
+            <AdminHeader />
+            {/* Main content area */}
+            <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </SidebarProvider>
     </AuthProvider>
   );
 }
+
