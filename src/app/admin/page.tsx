@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart } from "lucide-react"; // Added ClipboardList, FileText, LineChart
+import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit } from "lucide-react"; // Added Edit icon
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getTests } from "@/actions/test-actions";
@@ -104,7 +104,13 @@ export default async function AdminDashboardPage() {
            </Link>
             <Link href="/admin/questions" passHref>
                <Button variant="outline" className="w-full justify-start gap-2">
-                   <ClipboardList className="h-4 w-4" /> Question Bank
+                   <ClipboardList className="h-4 w-4" /> Add Question
+               </Button>
+           </Link>
+           {/* New Edit Questions Button */}
+            <Link href="/admin/questions/edit" passHref>
+               <Button variant="outline" className="w-full justify-start gap-2">
+                   <Edit className="h-4 w-4" /> Edit Questions
                </Button>
            </Link>
             <Link href="/admin/notes" passHref>

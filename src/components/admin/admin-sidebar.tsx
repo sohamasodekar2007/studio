@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FileText,
   Banknote,
+  Edit, // Add Edit icon
 } from 'lucide-react';
 import {
   Sidebar,
@@ -30,7 +31,8 @@ const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/tests', label: 'Tests', icon: BookOpen },
-  { href: '/admin/questions', label: 'Question Bank', icon: ClipboardList },
+  { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
+  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit }, // New Edit Questions Link
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
