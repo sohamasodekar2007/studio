@@ -1,4 +1,3 @@
-
 // src/types/index.ts
 
 // Define academic statuses used in signup
@@ -78,60 +77,60 @@ export interface QuestionBankItem {
 
 // ---- Generated Test Definition Types ----
 
+// Define Audience Types (reusing Academic Status)
+export const audienceTypes = academicStatuses;
+export type AudienceType = AcademicStatus;
+
+// Define Test Streams
+export const testStreams = ["PCM", "PCB"] as const;
+export type TestStream = typeof testStreams[number];
+
 // Interface for individual question within a generated test JSON
 interface TestQuestion {
     question: string; // Text or image filename
     image_url?: string | null; // URL if image question
-    options: string[]; // Array of 4 strings ["Option A", "Option B", ...]
-    answer: string; // Correct answer text ("Option A", "Option B", etc.)
+    options: string[]; // Array of 4 strings ["Option A: ...", "Option B: ...", ...]
+    answer: string; // Correct answer text ("OPTION A", "OPTION B", etc.)
     marks: number;
     explanation?: string | null; // Text or image path/URL
 }
 
-// Interface for the main generated test JSON structure (stored in tests_json)
-export interface GeneratedTest {
-  test_code: string; // Unique 8-10 digit randomized code
-  name: string; // User-defined test name
-  duration: number; // in minutes
-  count: number; // Number of questions selected (1-20)
-  total_questions: number; // Actual total number of questions included (might differ from count if limited by bank)
-  test_subject: string[]; // Array of subjects covered (e.g., ["physics", "chemistry"])
-  type: PricingType; // FREE, PAID, FREE_PREMIUM
-  // Questions organized by subject
-  physics?: TestQuestion[];
-  chemistry?: TestQuestion[];
-  maths?: TestQuestion[];
-  biology?: TestQuestion[];
-  // Optional metadata
-  createdAt?: string; // ISO timestamp when the test was generated
+// Base interface for common generated test properties
+interface BaseGeneratedTest {
+    test_code: string;
+    name: string;
+    duration: number; // in minutes
+    count: number; // Number of questions selected/specified by user
+    total_questions: number; // Actual total number of questions included
+    type: PricingType; // FREE, PAID, FREE_PREMIUM
+    audience: AudienceType;
+    createdAt?: string; // ISO timestamp
 }
 
-
-// --- Old Test Type (Obsolete - Kept for reference/migration if needed) ---
-/*
-export const testModelsOld = ["chapterwise", "full_length", "topicwise", "combo", "DPP"] as const;
-export type TestModelOld = typeof testModelsOld[number];
-
-export const testStatuses = ["New", "Popular", ""] as const;
-export type TestStatus = typeof testStatuses[number];
-
-export interface Test {
-  id: string;
-  title: string;
-  description?: string;
-  type: string;
-  exam: Exam;
-  subject: string;
-  model: TestModelOld;
-  pricing: PricingType; // Re-use pricing type
-  status?: TestStatus;
-  questionsCount: number;
-  durationMinutes: number;
-  syllabus: string[];
-  imageUrl?: string;
-  imageHint?: string;
-  published: boolean;
-  createdAt: Date | string;
-  updatedAt?: Date | string;
+// Interface for Chapterwise Test JSON
+export interface ChapterwiseTestJson extends BaseGeneratedTest {
+    test_subject: [string]; // Array with exactly one subject
+    lesson: string;
+    examFilter: ExamOption | 'all'; // Added exam filter
+    questions: TestQuestion[]; // Direct array of questions for the single subject
 }
-*/
+
+// Interface for Full Length Test JSON
+export interface FullLengthTestJson extends BaseGeneratedTest {
+    stream: TestStream;
+    test_subject: string[]; // Can have multiple subjects (Physics, Chemistry, Maths/Bio)
+    examFilter: ExamOption | 'all'; // Added exam filter
+    weightage?: {
+        physics: number;
+        chemistry: number;
+        maths?: number;
+        biology?: number;
+    };
+    physics?: TestQuestion[];
+    chemistry?: TestQuestion[];
+    maths?: TestQuestion[];
+    biology?: TestQuestion[];
+}
+
+// General type covering both generated test structures
+export type GeneratedTest = ChapterwiseTestJson | FullLengthTestJson;
