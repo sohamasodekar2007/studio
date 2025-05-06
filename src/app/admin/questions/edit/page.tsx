@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
 import { examOptions, classLevels } from '@/types'; // Import filter options
+import { Badge } from "@/components/ui/badge"; // Import Badge component
 
 // Placeholder for server actions (implement later)
 async function getSubjects(): Promise<string[]> {
