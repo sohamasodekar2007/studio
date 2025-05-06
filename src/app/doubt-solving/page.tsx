@@ -1,20 +1,24 @@
 // src/app/doubt-solving/page.tsx
 'use client';
 
-import { useState, type ChangeEvent, useRef, useEffect } from 'react';
+import { useState, type ChangeEvent, useRef, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from 'next/image';
-import { Loader2, Upload, X, MessageSquareText, Info, AlertTriangle } from "lucide-react"; // Added Info, AlertTriangle
+import { Loader2, Upload, X, MessageSquareText, Info, AlertTriangle, ClipboardPaste } from "lucide-react"; // Added ClipboardPaste
 import { useToast } from "@/hooks/use-toast";
 import { getDoubtAnswer, type DoubtSolvingInput } from '@/ai/flows/doubt-solving-flow';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip components
 import { Skeleton } from '@/components/ui/skeleton';
+
+// Constants for image handling
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export default function DoubtSolvingPage() {
   const { user, loading: authLoading } = useAuth();
@@ -67,34 +71,61 @@ export default function DoubtSolvingPage() {
   }, [generatedAnswer]); // Re-run when answer changes
   // --- End MathJax Integration ---
 
+  const processImageFile = useCallback((file: File | null) => {
+      if (file) {
+          if (file.size > MAX_FILE_SIZE) {
+              toast({
+                  variant: "destructive",
+                  title: "Image Too Large",
+                  description: `Please upload an image smaller than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+              });
+              return false; // Indicate failure
+          }
+          if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+              toast({
+                  variant: "destructive",
+                  title: "Invalid File Type",
+                  description: "Please use JPG, PNG, or WEBP format.",
+              });
+              return false; // Indicate failure
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              const result = reader.result as string;
+              setImageDataUri(result);
+              setImagePreview(result);
+          };
+          reader.onerror = (error) => {
+              console.error("Error reading file:", error);
+              toast({
+                  variant: "destructive",
+                  title: "File Read Error",
+                  description: "Could not read the selected image.",
+              });
+          };
+          reader.readAsDataURL(file);
+          return true; // Indicate success
+      } else {
+          // Handle case where file is null (e.g., removal)
+          setImageDataUri(null);
+          setImagePreview(null);
+          if (fileInputRef.current) {
+              fileInputRef.current.value = ""; // Reset file input
+          }
+           return false; // No file processed
+      }
+  }, [toast]);
+
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 4 * 1024 * 1024) { // Limit file size (e.g., 4MB)
-        toast({
-          variant: "destructive",
-          title: "Image Too Large",
-          description: "Please upload an image smaller than 4MB.",
-        });
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setImageDataUri(result); // Store the full data URI
-        setImagePreview(result); // For display
-      };
-      reader.onerror = (error) => {
-        console.error("Error reading file:", error);
-        toast({
-          variant: "destructive",
-          title: "File Read Error",
-          description: "Could not read the selected image.",
-        });
-      };
-      reader.readAsDataURL(file);
+      processImageFile(file);
     }
+     // Reset input value to allow re-uploading the same file if needed
+     if (event.target) {
+       event.target.value = "";
+     }
   };
 
   const removeImage = () => {
@@ -104,6 +135,65 @@ export default function DoubtSolvingPage() {
         fileInputRef.current.value = ""; // Reset file input
     }
   };
+
+   const handlePasteImage = useCallback(async () => {
+    if (!navigator.clipboard?.read) {
+      toast({
+        variant: "destructive",
+        title: "Clipboard API Not Supported",
+        description: "Pasting images is not supported in your browser.",
+      });
+      return;
+    }
+
+    try {
+      const items = await navigator.clipboard.read();
+      let imageBlob: Blob | null = null;
+
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          imageBlob = await item.getType(imageType);
+          break;
+        }
+      }
+
+      if (imageBlob) {
+        // Convert Blob to File
+        const timestamp = Date.now();
+        const fileExtension = imageBlob.type.split('/')[1] || 'png'; // Default to png
+        const fileName = `pasted_doubt_${timestamp}.${fileExtension}`;
+        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
+        // Process the pasted file
+        const success = processImageFile(imageFile);
+        if (success) {
+             toast({ title: "Image Pasted Successfully!" });
+        }
+      } else {
+        toast({
+          variant: "destructive",
+          title: "No Image Found",
+          description: "No image data was found on the clipboard.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Failed to paste image:", error);
+       if (error.name === 'NotAllowedError') {
+          toast({
+            variant: "destructive",
+            title: "Clipboard Permission Denied",
+            description: "Please allow clipboard access in your browser settings.",
+          });
+       } else {
+           toast({
+            variant: "destructive",
+            title: "Paste Failed",
+            description: "Could not paste image from clipboard. Try uploading instead.",
+           });
+       }
+    }
+  }, [processImageFile, toast]); // Add dependencies
+
 
   const handleGetAnswer = async () => {
     if (!questionText && !imageDataUri) {
@@ -215,7 +305,7 @@ export default function DoubtSolvingPage() {
                 <Input
                     id="image-upload"
                     type="file"
-                    accept="image/png, image/jpeg, image/webp"
+                    accept={ACCEPTED_IMAGE_TYPES.join(',')}
                     onChange={handleImageChange}
                     className="hidden" // Hide default input
                     ref={fileInputRef}
@@ -229,6 +319,15 @@ export default function DoubtSolvingPage() {
                 >
                     <Upload className="mr-2 h-4 w-4" /> Choose Image
                 </Button>
+                 {/* Paste Image Button */}
+                 <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handlePasteImage}
+                    disabled={isLoading}
+                  >
+                    <ClipboardPaste className="mr-2 h-4 w-4" /> Paste Image
+                  </Button>
                  {imagePreview && (
                     <div className="relative h-20 w-20 border rounded-md overflow-hidden">
                         <Image src={imagePreview} alt="Doubt Preview" layout="fill" objectFit="cover" />
@@ -279,10 +378,10 @@ export default function DoubtSolvingPage() {
           </CardHeader>
           <CardContent>
             {/* Container for MathJax rendering */}
-            <div id="ai-answer-content" className="text-sm text-muted-foreground prose dark:prose-invert max-w-none prose-sm">
-                {/* Render the answer text directly. MathJax will process it. */}
-                {generatedAnswer}
-            </div>
+             {/* Use prose class for better markdown-like styling */}
+             <div id="ai-answer-content" className="prose dark:prose-invert max-w-none prose-sm" dangerouslySetInnerHTML={{ __html: generatedAnswer.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
+               {/* Content set by dangerouslySetInnerHTML */}
+             </div>
           </CardContent>
         </Card>
       )}
