@@ -20,8 +20,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Loader2, Filter, BookOpen, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
-import { pricingTypes, academicStatuses as audienceTypes, testStreams, examOptions } from '@/types'; // Import options
+import type { QuestionBankItem, PricingType, ExamOption, AudienceType, TestStream, GeneratedTest, TestQuestion } from '@/types';
+import { pricingTypes, audienceTypes, testStreams, examOptions } from '@/types'; // Import options
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions'; // Import query actions
 import { saveGeneratedTest } from '@/actions/generated-test-actions'; // Import save action
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,9 +37,9 @@ const BaseTestSchema = z.object({
     audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
 });
 
-// Schema for Chapterwise Test
+// Schema for Chapterwise Test - explicitly add testType literal
 const ChapterwiseSchema = BaseTestSchema.extend({
-    testType: z.literal('chapterwise'),
+    testType: z.literal('chapterwise'), // Discriminator field
     subject: z.string().min(1, "Subject is required."),
     lesson: z.string().min(1, "Lesson name is required."),
     examFilter: z.enum([...examOptions, 'all'], { required_error: "Exam filter is required." }),
@@ -47,9 +47,9 @@ const ChapterwiseSchema = BaseTestSchema.extend({
     // Removed count field, it will be derived from selectedQuestionIds.length
 });
 
-// Schema for Full Length Test
+// Schema for Full Length Test - explicitly add testType literal
 const FullLengthSchema = BaseTestSchema.extend({
-    testType: z.literal('full_length'),
+    testType: z.literal('full_length'), // Discriminator field
     stream: z.enum(testStreams, { required_error: "Stream selection is required." }),
     examFilter: z.enum([...examOptions, 'all'], { required_error: "Exam filter is required." }),
     totalQuestions: z.number().min(10, "Must select at least 10 total questions.").positive(), // Total desired questions
@@ -103,17 +103,18 @@ export default function CreateTestPage() {
             duration: 60,
             type: 'FREE',
             audience: 'Dropper',
+            // Chapterwise defaults
             subject: '',
             lesson: '',
             examFilter: 'all',
             selectedQuestionIds: [],
             // Full Length Defaults (conditional rendering will handle visibility)
-            stream: undefined,
+            stream: 'PCM', // Default stream
             totalQuestions: 50,
             weightagePhysics: 34,
             weightageChemistry: 33,
             weightageMaths: 33,
-            weightageBiology: 33,
+            weightageBiology: 33, // Default values, refine check handles if unused
         },
     });
 
@@ -157,8 +158,7 @@ export default function CreateTestPage() {
             const filters = {
                 subject: selectedSubject,
                 lesson: selectedLesson,
-                // Add other filters if needed based on examFilter, classFilter etc.
-                // examType: form.getValues('examFilter') !== 'all' ? form.getValues('examFilter') : undefined,
+                examType: form.getValues('examFilter') !== 'all' ? form.getValues('examFilter') : undefined,
             };
             getQuestionsForLesson(filters)
                 .then(setQuestions)
@@ -167,7 +167,7 @@ export default function CreateTestPage() {
         } else {
             setQuestions([]); // Clear if subject/lesson not set
         }
-    }, [testType, selectedSubject, selectedLesson, toast, form]); // Re-fetch when lesson changes
+    }, [testType, selectedSubject, selectedLesson, toast, form]); // Re-fetch when lesson/examFilter changes
 
      // --- Update selected questions preview ---
      useEffect(() => {
@@ -185,17 +185,19 @@ export default function CreateTestPage() {
         setIsLoading(true);
         console.log("Form Submitted Data:", data);
 
+         let testDefinition: GeneratedTest | null = null; // Initialize as null
+         const testCode = uuidv4().substring(0, 8); // Generate unique 8-char code
+         const baseData = {
+             test_code: testCode,
+             name: data.name,
+             duration: data.duration,
+             type: data.type,
+             audience: data.audience,
+             createdAt: new Date().toISOString(),
+         };
+
+
         try {
-            let testDefinition: GeneratedTest;
-            const testCode = uuidv4().substring(0, 8); // Generate unique 8-char code
-            const baseData = {
-                test_code: testCode,
-                name: data.name,
-                duration: data.duration,
-                type: data.type,
-                audience: data.audience,
-                createdAt: new Date().toISOString(),
-            };
 
             if (data.testType === 'chapterwise') {
                  // Fetch full data for selected questions
@@ -204,93 +206,188 @@ export default function CreateTestPage() {
                     throw new Error("Could not find all selected question details. Please refresh and try again.");
                  }
 
-                const chapterwiseQuestions: TestQuestion[] = selectedQsData.map(q => ({
-                    question: q.question.text || q.question.image || '', // Use text or image filename
-                    image_url: q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null,
-                    options: [`Option A: ${q.options.A}`, `Option B: ${q.options.B}`, `Option C: ${q.options.C}`, `Option D: ${q.options.D}`],
-                    answer: `Option ${q.correct}`,
-                    marks: 1, // Assuming 1 mark per question for now
-                    explanation: q.explanation.text || q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null,
-                }));
+                const chapterwiseQuestions: TestQuestion[] = selectedQsData.map(q => {
+                    // Construct image URL or use null
+                    const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
+                    const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
 
-                testDefinition = {
-                    ...baseData,
-                    testType: 'chapterwise', // Ensure discriminator is set
-                    count: chapterwiseQuestions.length,
-                    total_questions: chapterwiseQuestions.length,
-                    test_subject: [data.subject],
-                    lesson: data.lesson,
-                    examFilter: data.examFilter,
-                    questions: chapterwiseQuestions,
-                };
+                    // Create options array
+                    const options = [
+                         `Option A: ${q.options.A}`,
+                         `Option B: ${q.options.B}`,
+                         `Option C: ${q.options.C}`,
+                         `Option D: ${q.options.D}`
+                    ];
+
+                    // Determine correct answer text
+                    const correctAnswerText = `Option ${q.correct}`;
+
+
+                    return {
+                        question: q.question.text || q.question.image || '', // Use text or image filename
+                        image_url: imageUrl,
+                        options: options,
+                        answer: correctAnswerText,
+                        marks: 1, // Assuming 1 mark per question for now
+                        explanation: q.explanation.text || explanationImageUrl, // Text or explanation image URL
+                    };
+                 });
+
+
+                 testDefinition = {
+                     ...baseData,
+                     testType: 'chapterwise', // Ensure discriminator is set
+                     count: chapterwiseQuestions.length, // Actual number selected
+                     total_questions: chapterwiseQuestions.length, // Total is same as count
+                     test_subject: [data.subject],
+                     lesson: data.lesson,
+                     examFilter: data.examFilter,
+                     questions: chapterwiseQuestions, // Array of selected questions
+                 };
             } else { // Full Length Test
-                 // TODO: Implement robust question fetching and distribution based on weightage
-                 // This requires fetching questions from *multiple* subjects/lessons filtered by exam type/class
-                 // and then randomly selecting based on calculated counts per subject.
-                 // For now, we'll create a placeholder structure.
+                 // Fetch all questions for the required subjects based on stream and exam filter
+                 const subjectsToFetch = data.stream === 'PCM' ? ['Physics', 'Chemistry', 'Maths'] : ['Physics', 'Chemistry', 'Biology'];
+                 const examTypeFilter = data.examFilter !== 'all' ? data.examFilter : undefined;
+                 const allSubjectQuestions: { [key: string]: QuestionBankItem[] } = {};
 
-                 console.warn("Full-length test question selection logic is not fully implemented.");
+                 setIsLoadingQuestions(true); // Indicate fetching questions
+                 try {
+                     await Promise.all(subjectsToFetch.map(async (subject) => {
+                         // Fetch all lessons for the subject
+                         const lessons = await getLessonsForSubject(subject);
+                         let subjectQuestions: QuestionBankItem[] = [];
+                         // Fetch questions from all lessons for this subject
+                         await Promise.all(lessons.map(async (lesson) => {
+                             const lessonQuestions = await getQuestionsForLesson({ subject, lesson, examType: examTypeFilter });
+                             subjectQuestions = subjectQuestions.concat(lessonQuestions);
+                         }));
+                         allSubjectQuestions[subject] = subjectQuestions;
+                     }));
+                 } finally {
+                     setIsLoadingQuestions(false);
+                 }
 
-                 const subjectCounts: { [key: string]: number } = {};
-                 const subjectQuestions: { [key: string]: TestQuestion[] } = {};
-                 let fetchedQuestions: TestQuestion[] = []; // Placeholder
 
-                if (data.stream === 'PCM') {
-                    subjectCounts['physics'] = Math.round((data.weightagePhysics ?? 0) / 100 * data.totalQuestions);
-                    subjectCounts['chemistry'] = Math.round((data.weightageChemistry ?? 0) / 100 * data.totalQuestions);
-                    subjectCounts['maths'] = data.totalQuestions - subjectCounts['physics'] - subjectCounts['chemistry']; // Ensure total adds up
+                 const totalQuestionsNeeded = data.totalQuestions;
+                 const finalQuestions: TestQuestion[] = [];
+                 const weightages = {
+                    Physics: data.weightagePhysics ?? 0,
+                    Chemistry: data.weightageChemistry ?? 0,
+                    Maths: data.stream === 'PCM' ? (data.weightageMaths ?? 0) : 0,
+                    Biology: data.stream === 'PCB' ? (data.weightageBiology ?? 0) : 0,
+                 };
 
-                     // Placeholder: Fetch random questions (replace with actual logic)
-                     // This would involve calling getQuestionsForLesson for relevant subjects/lessons
-                     // and then sampling according to counts.
-                     subjectQuestions['physics'] = Array(subjectCounts['physics']).fill({ question: 'Placeholder Physics Q', options: [], answer: '', marks: 1 });
-                     subjectQuestions['chemistry'] = Array(subjectCounts['chemistry']).fill({ question: 'Placeholder Chem Q', options: [], answer: '', marks: 1 });
-                     subjectQuestions['maths'] = Array(subjectCounts['maths']).fill({ question: 'Placeholder Maths Q', options: [], answer: '', marks: 1 });
-                } else { // PCB
-                    subjectCounts['physics'] = Math.round((data.weightagePhysics ?? 0) / 100 * data.totalQuestions);
-                    subjectCounts['chemistry'] = Math.round((data.weightageChemistry ?? 0) / 100 * data.totalQuestions);
-                    subjectCounts['biology'] = data.totalQuestions - subjectCounts['physics'] - subjectCounts['chemistry'];
+                  // Shuffle array utility
+                 const shuffleArray = (array: any[]) => {
+                    for (let i = array.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [array[i], array[j]] = [array[j], array[i]];
+                    }
+                    return array;
+                 };
 
-                     subjectQuestions['physics'] = Array(subjectCounts['physics']).fill({ question: 'Placeholder Physics Q', options: [], answer: '', marks: 1 });
-                     subjectQuestions['chemistry'] = Array(subjectCounts['chemistry']).fill({ question: 'Placeholder Chem Q', options: [], answer: '', marks: 1 });
-                     subjectQuestions['biology'] = Array(subjectCounts['biology']).fill({ question: 'Placeholder Bio Q', options: [], answer: '', marks: 1 });
+
+                 let selectedCount = 0;
+                 for (const subject of subjectsToFetch) {
+                     const subjectWeight = weightages[subject as keyof typeof weightages];
+                     const countForSubject = Math.round((subjectWeight / 100) * totalQuestionsNeeded);
+                     const availableQs = shuffleArray([...allSubjectQuestions[subject] || []]); // Shuffle available questions
+
+                     const selectedForSubject = availableQs.slice(0, countForSubject);
+                     selectedCount += selectedForSubject.length;
+
+                     selectedForSubject.forEach(q => {
+                         const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
+                         const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
+                          const options = [ `Option A: ${q.options.A}`, `Option B: ${q.options.B}`, `Option C: ${q.options.C}`, `Option D: ${q.options.D}`];
+                          const correctAnswerText = `Option ${q.correct}`;
+
+                         finalQuestions.push({
+                             question: q.question.text || q.question.image || '',
+                             image_url: imageUrl,
+                             options: options,
+                             answer: correctAnswerText,
+                             marks: 1,
+                             explanation: q.explanation.text || explanationImageUrl,
+                         });
+                     });
+                 }
+
+                 // Adjust total count if rounding caused slight mismatch
+                 while (finalQuestions.length < totalQuestionsNeeded) {
+                      // Find a subject pool with remaining questions and add one more randomly
+                     const remainingSubject = subjectsToFetch.find(sub => (allSubjectQuestions[sub]?.length ?? 0) > finalQuestions.filter(fq => fq.question.includes(sub)).length); // Heuristic check
+                     if (remainingSubject) {
+                        const availableQs = allSubjectQuestions[remainingSubject].filter(q => !finalQuestions.some(fq => fq.question === (q.question.text || q.question.image)));
+                        if (availableQs.length > 0) {
+                            const q = availableQs[Math.floor(Math.random() * availableQs.length)];
+                            const imageUrl = q.question.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}` : null;
+                            const explanationImageUrl = q.explanation.image ? `/question_bank_images/${q.subject}/${q.lesson}/${q.explanation.image}` : null;
+                             const options = [ `Option A: ${q.options.A}`, `Option B: ${q.options.B}`, `Option C: ${q.options.C}`, `Option D: ${q.options.D}`];
+                             const correctAnswerText = `Option ${q.correct}`;
+                             finalQuestions.push({
+                                question: q.question.text || q.question.image || '',
+                                image_url: imageUrl,
+                                options: options,
+                                answer: correctAnswerText,
+                                marks: 1,
+                                explanation: q.explanation.text || explanationImageUrl,
+                            });
+                        } else { break; } // No more questions available in any pool
+                     } else { break; } // Should not happen if total needed <= total available
+                 }
+                 // Trim if we somehow added too many (unlikely with Math.round)
+                 finalQuestions.length = Math.min(finalQuestions.length, totalQuestionsNeeded);
+
+                 if (finalQuestions.length < totalQuestionsNeeded) {
+                    console.warn(`Could only select ${finalQuestions.length} questions out of the requested ${totalQuestionsNeeded}.`);
+                 }
+
+                 // Structure the FullLengthTestJson
+                 const physicsQuestions = finalQuestions.filter(q => subjectsToFetch[0] === 'Physics'); // Adapt based on actual question source info if needed
+                 const chemistryQuestions = finalQuestions.filter(q => subjectsToFetch[1] === 'Chemistry');
+                 const mathsQuestions = data.stream === 'PCM' ? finalQuestions.filter(q => subjectsToFetch[2] === 'Maths') : undefined;
+                 const biologyQuestions = data.stream === 'PCB' ? finalQuestions.filter(q => subjectsToFetch[2] === 'Biology') : undefined;
+
+                 testDefinition = {
+                     ...baseData,
+                     testType: 'full_length', // Discriminator
+                     stream: data.stream!,
+                     test_subject: subjectsToFetch,
+                     examFilter: data.examFilter,
+                     weightage: {
+                         physics: data.weightagePhysics ?? 0,
+                         chemistry: data.weightageChemistry ?? 0,
+                         maths: data.stream === 'PCM' ? (data.weightageMaths ?? 0) : undefined,
+                         biology: data.stream === 'PCB' ? (data.weightageBiology ?? 0) : undefined,
+                     },
+                     count: data.totalQuestions, // User specified total
+                     total_questions: finalQuestions.length, // Actual number included
+                     physics: physicsQuestions.length > 0 ? physicsQuestions : undefined,
+                     chemistry: chemistryQuestions.length > 0 ? chemistryQuestions : undefined,
+                     maths: mathsQuestions,
+                     biology: biologyQuestions,
+                 };
+            }
+
+            // Save the generated test definition if it was created
+            if (testDefinition) {
+                const result = await saveGeneratedTest(testDefinition);
+
+                if (!result.success) {
+                    throw new Error(result.message || "Failed to save generated test.");
                 }
 
-                testDefinition = {
-                    ...baseData,
-                    testType: 'full_length', // Ensure discriminator is set
-                    stream: data.stream!,
-                    test_subject: Object.keys(subjectCounts),
-                    examFilter: data.examFilter,
-                    weightage: {
-                        physics: data.weightagePhysics ?? 0,
-                        chemistry: data.weightageChemistry ?? 0,
-                        maths: data.stream === 'PCM' ? data.weightageMaths ?? 0 : undefined,
-                        biology: data.stream === 'PCB' ? data.weightageBiology ?? 0 : undefined,
-                    },
-                    count: data.totalQuestions, // User specified total
-                    total_questions: data.totalQuestions, // Actual matches specified total here
-                    physics: subjectQuestions['physics'],
-                    chemistry: subjectQuestions['chemistry'],
-                    maths: subjectQuestions['maths'],
-                    biology: subjectQuestions['biology'],
-                };
+                toast({
+                    title: "Test Created Successfully!",
+                    description: `Test "${data.name}" (${testCode}) has been saved.`,
+                });
+                form.reset(); // Reset form after successful submission
+                setQuestions([]);
+                setSelectedQuestionObjects([]);
+            } else {
+                 throw new Error("Failed to generate test definition.");
             }
-
-            // Save the generated test definition
-            const result = await saveGeneratedTest(testDefinition);
-
-            if (!result.success) {
-                throw new Error(result.message || "Failed to save generated test.");
-            }
-
-            toast({
-                title: "Test Created Successfully!",
-                description: `Test "${data.name}" (${testCode}) has been saved.`,
-            });
-            form.reset(); // Reset form after successful submission
-            setQuestions([]);
-            setSelectedQuestionObjects([]);
 
         } catch (error: any) {
             console.error("Failed to create test:", error);
@@ -424,7 +521,7 @@ export default function CreateTestPage() {
                                     name="examFilter"
                                     render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Filter by Exam (Optional)</FormLabel>
+                                        <FormLabel>Filter Questions by Exam (Optional)</FormLabel>
                                         <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                                         <FormControl><SelectTrigger><SelectValue placeholder="All Exams" /></SelectTrigger></FormControl>
                                         <SelectContent>
@@ -466,7 +563,7 @@ export default function CreateTestPage() {
                                                 {isLoadingQuestions ? (
                                                     <p className="text-muted-foreground text-center">Loading questions...</p>
                                                 ) : questions.length === 0 ? (
-                                                    <p className="text-muted-foreground text-center">No questions found for this lesson. Add questions first.</p>
+                                                    <p className="text-muted-foreground text-center">No questions found for this lesson/filter. Add questions first.</p>
                                                 ) : (
                                                     <div className="space-y-2">
                                                     {questions.map((item) => (
@@ -597,7 +694,7 @@ export default function CreateTestPage() {
                                      <AlertTriangle className="h-4 w-4 !text-blue-600" />
                                      <AlertTitle>Question Selection</AlertTitle>
                                      <AlertDescription>
-                                         Questions will be automatically selected from the question bank based on the stream, weightage, and total number specified. Manual selection is not available for full-length tests in this version.
+                                         Questions will be automatically selected from the question bank based on the stream, weightage, total number, and exam filter specified. Ensure sufficient questions exist in the bank for your criteria.
                                      </AlertDescription>
                                  </Alert>
                              </CardContent>
