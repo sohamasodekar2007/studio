@@ -1,6 +1,7 @@
+// src/app/admin/questions/page.tsx
 'use client';
 
-import { useState, useRef, type ChangeEvent, useEffect } from 'react';
+import { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,10 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload } from "lucide-react";
+import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown } from "lucide-react"; // Added ClipboardPaste, Check, ChevronsUpDown
 import { type QuestionBankItem, questionTypes, difficultyLevels, examOptions, classLevels, type QuestionType } from '@/types';
 import Image from 'next/image';
 import { addQuestionToBank } from '@/actions/question-bank-actions'; // Import the server action
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // For Combobox
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"; // For Combobox
+import { cn } from "@/lib/utils";
 
 // --- Zod Schema Definition ---
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
@@ -94,7 +98,11 @@ export default function AdminQuestionBankPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [subjects, setSubjects] = useState<string[]>(["Physics", "Chemistry", "Maths", "Biology"]); // Placeholder
-  const [lessons, setLessons] = useState<string[]>(["Topic 1", "Topic 2"]); // Placeholder
+  const [lessons, setLessons] = useState<{ value: string; label: string }[]>([ // Example structure for Combobox
+    { value: "topic-1", label: "Topic 1" },
+    { value: "topic-2", label: "Topic 2" },
+    { value: "kinematics", label: "Kinematics" },
+  ]);
   const [tags, setTags] = useState<string[]>(["tag1", "tag2"]); // Placeholder
 
   const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null);
@@ -102,15 +110,17 @@ export default function AdminQuestionBankPage() {
 
   const questionFileInputRef = useRef<HTMLInputElement>(null);
   const explanationFileInputRef = useRef<HTMLInputElement>(null);
+  const [lessonPopoverOpen, setLessonPopoverOpen] = useState(false); // State for Combobox popover
 
-  // TODO: Fetch subjects, lessons, tags dynamically in useEffect if needed
+
+  // TODO: Fetch subjects, lessons (based on selected subject), tags dynamically in useEffect if needed
 
   const form = useForm<QuestionFormValues>({
     resolver: zodResolver(questionSchema),
     defaultValues: {
       subject: '',
       class: undefined,
-      lesson: '',
+      lesson: '', // Keep as string, Combobox will handle selection/creation
       examType: undefined,
       difficulty: undefined,
       tags: '',
@@ -129,39 +139,50 @@ export default function AdminQuestionBankPage() {
 
   const questionType = form.watch('questionType'); // Watch for changes
 
-  const handleFileChange = (
+  // --- Image Handling Callbacks ---
+  const processImageFile = useCallback((
+    file: File | null,
+    fieldName: 'questionImage' | 'explanationImage',
+    setPreview: (url: string | null) => void
+  ) => {
+    if (file) {
+      // Basic client-side validation (size, type)
+      if (file.size > MAX_FILE_SIZE) {
+        form.setError(fieldName, { type: 'manual', message: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` });
+        setPreview(null);
+        return;
+      }
+      if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+        form.setError(fieldName, { type: 'manual', message: 'Invalid file type. Use JPG, PNG, or WEBP.' });
+        setPreview(null);
+        return;
+      }
+
+      form.clearErrors(fieldName); // Clear previous errors
+      form.setValue(fieldName, file); // Set the file object in the form state
+      const reader = new FileReader();
+      reader.onloadend = () => setPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      form.setValue(fieldName, null);
+      setPreview(null);
+    }
+  }, [form]); // Include form in dependencies
+
+  const handleFileChange = useCallback((
     event: ChangeEvent<HTMLInputElement>,
     fieldName: 'questionImage' | 'explanationImage',
     setPreview: (url: string | null) => void
   ) => {
-    const file = event.target.files?.[0];
-    if (file) {
-        // Basic client-side validation (size, type)
-        if (file.size > MAX_FILE_SIZE) {
-            form.setError(fieldName, { type: 'manual', message: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` });
-            setPreview(null);
-            event.target.value = ""; // Reset input
-            return;
-        }
-        if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-             form.setError(fieldName, { type: 'manual', message: 'Invalid file type. Use JPG, PNG, or WEBP.' });
-             setPreview(null);
-             event.target.value = ""; // Reset input
-             return;
-        }
-
-        form.clearErrors(fieldName); // Clear previous errors
-        form.setValue(fieldName, file); // Set the file object in the form state
-        const reader = new FileReader();
-        reader.onloadend = () => setPreview(reader.result as string);
-        reader.readAsDataURL(file);
-    } else {
-        form.setValue(fieldName, null);
-        setPreview(null);
+    const file = event.target.files?.[0] || null;
+    processImageFile(file, fieldName, setPreview);
+    // Reset input value to allow re-uploading the same file if needed
+    if (event.target) {
+      event.target.value = "";
     }
-  };
+  }, [processImageFile]);
 
-  const removeImage = (
+  const removeImage = useCallback((
     fieldName: 'questionImage' | 'explanationImage',
     setPreview: (url: string | null) => void,
     fileInputRef: React.RefObject<HTMLInputElement>
@@ -171,8 +192,68 @@ export default function AdminQuestionBankPage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-     form.clearErrors(fieldName);
-  };
+    form.clearErrors(fieldName);
+  }, [form]);
+
+  const handlePasteImage = useCallback(async (
+    fieldName: 'questionImage' | 'explanationImage',
+    setPreview: (url: string | null) => void
+  ) => {
+    if (!navigator.clipboard?.read) {
+      toast({
+        variant: "destructive",
+        title: "Clipboard API Not Supported",
+        description: "Pasting images is not supported in your browser.",
+      });
+      return;
+    }
+
+    try {
+      const items = await navigator.clipboard.read();
+      let imageBlob: Blob | null = null;
+
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          imageBlob = await item.getType(imageType);
+          break;
+        }
+      }
+
+      if (imageBlob) {
+        // Convert Blob to File
+        const timestamp = Date.now();
+        const fileExtension = imageBlob.type.split('/')[1] || 'png'; // Default to png if type is generic
+        const fileName = `pasted_image_${timestamp}.${fileExtension}`;
+        const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
+        processImageFile(imageFile, fieldName, setPreview); // Use the processing callback
+        toast({ title: "Image Pasted Successfully!" });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "No Image Found",
+          description: "No image data was found on the clipboard.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Failed to paste image:", error);
+       if (error.name === 'NotAllowedError') {
+          toast({
+            variant: "destructive",
+            title: "Clipboard Permission Denied",
+            description: "Please allow clipboard access in your browser settings.",
+          });
+       } else {
+           toast({
+            variant: "destructive",
+            title: "Paste Failed",
+            description: "Could not paste image from clipboard. Try uploading instead.",
+           });
+       }
+    }
+  }, [processImageFile, toast]); // Add dependencies
+  // --- End Image Handling ---
+
 
   const onSubmit = async (data: QuestionFormValues) => {
     setIsLoading(true);
@@ -209,6 +290,10 @@ export default function AdminQuestionBankPage() {
             setExplanationImagePreview(null);
             if (questionFileInputRef.current) questionFileInputRef.current.value = "";
             if (explanationFileInputRef.current) explanationFileInputRef.current.value = "";
+            // Optionally, update the lesson list if a new one was added
+            if (!lessons.some(l => l.value === data.lesson || l.label === data.lesson)) {
+                setLessons(prev => [...prev, { value: data.lesson.toLowerCase().replace(/\s+/g, '-'), label: data.lesson }]);
+            }
         } else {
             throw new Error(result.error || "Failed to save question.");
         }
@@ -250,8 +335,7 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Subject *</FormLabel>
-                     {/* TODO: Replace with searchable Select or Combobox if list is long */}
-                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select Subject" />
@@ -271,7 +355,7 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Class *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select Class" />
@@ -285,16 +369,82 @@ export default function AdminQuestionBankPage() {
                   </FormItem>
                 )}
               />
+               {/* Lesson Name Combobox */}
                <FormField
                 control={form.control}
                 name="lesson"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Lesson Name *</FormLabel>
-                     {/* TODO: Implement auto-suggest */}
-                    <FormControl>
-                      <Input placeholder="Enter Lesson Name" {...field} disabled={isLoading} />
-                    </FormControl>
+                    <Popover open={lessonPopoverOpen} onOpenChange={setLessonPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={lessonPopoverOpen}
+                            className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            disabled={isLoading}
+                          >
+                             {field.value
+                               ? lessons.find(
+                                   (lesson) => lesson.label === field.value // Match by label (or value if needed)
+                                 )?.label ?? field.value // Show selected or typed value
+                               : "Select or type Lesson"}
+                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command shouldFilter={true}>
+                          <CommandInput
+                            placeholder="Search or add lesson..."
+                            // Update form value directly on input change for new lessons
+                             onValueChange={(search) => field.onChange(search)}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No lesson found. Type to add.</CommandEmpty>
+                            <CommandGroup>
+                              {lessons.map((lesson) => (
+                                <CommandItem
+                                  value={lesson.label} // Use label for search/display
+                                  key={lesson.value}
+                                  onSelect={() => {
+                                    form.setValue("lesson", lesson.label); // Set the label as value
+                                    setLessonPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      lesson.label === field.value ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {lesson.label}
+                                </CommandItem>
+                              ))}
+                               {/* Show the typed value as an option to select/confirm */}
+                               {field.value && !lessons.some(l => l.label === field.value) && (
+                                   <CommandItem
+                                      value={field.value}
+                                      onSelect={() => {
+                                          form.setValue("lesson", field.value);
+                                          setLessonPopoverOpen(false);
+                                      }}
+                                      className="text-muted-foreground italic"
+                                   >
+                                      <Check className={cn("mr-2 h-4 w-4 opacity-0")} />
+                                      Add new: "{field.value}"
+                                   </CommandItem>
+                               )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -305,7 +455,7 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Exam Type *</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select Exam" />
@@ -325,7 +475,7 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Difficulty *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select Difficulty" />
@@ -345,7 +495,6 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tags (comma-separated)</FormLabel>
-                     {/* TODO: Implement auto-suggest tag input */}
                     <FormControl>
                       <Input placeholder="e.g., algebra, geometry" {...field} disabled={isLoading} />
                     </FormControl>
@@ -407,7 +556,6 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
-                        {/* TODO: Add Rich Text Editor with MathJax/LaTeX */}
                         <FormControl>
                          <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
                         </FormControl>
@@ -426,7 +574,7 @@ export default function AdminQuestionBankPage() {
                 <FormField
                     control={form.control}
                     name="questionImage"
-                    render={({ field }) => ( // field is not directly used for input type="file" but needed for controller
+                    render={({ field }) => (
                     <FormItem>
                         <FormLabel>Question Image *</FormLabel>
                         <FormControl>
@@ -448,6 +596,15 @@ export default function AdminQuestionBankPage() {
                                 >
                                     <Upload className="mr-2 h-4 w-4" /> Upload Image
                                 </Button>
+                                 {/* Paste Button */}
+                                 <Button
+                                     type="button"
+                                     variant="outline"
+                                     onClick={() => handlePasteImage('questionImage', setQuestionImagePreview)}
+                                     disabled={isLoading}
+                                 >
+                                     <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
+                                 </Button>
                                  {questionImagePreview && (
                                     <div className="relative h-24 w-auto border rounded-md overflow-hidden">
                                         <Image src={questionImagePreview} alt="Question Preview" height={96} width={150} objectFit="contain" />
@@ -486,7 +643,7 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Correct Answer *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                         <FormControl>
                             <SelectTrigger className="w-full md:w-[180px]">
                             <SelectValue placeholder="Select Correct Option" />
@@ -507,7 +664,6 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
-                        {/* TODO: Add Rich Text Editor */}
                         <FormControl>
                         <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
                         </FormControl>
@@ -540,6 +696,15 @@ export default function AdminQuestionBankPage() {
                                     disabled={isLoading}
                                 >
                                     <Upload className="mr-2 h-4 w-4" /> Upload Image
+                                </Button>
+                                 {/* Paste Button */}
+                                <Button
+                                     type="button"
+                                     variant="outline"
+                                     onClick={() => handlePasteImage('explanationImage', setExplanationImagePreview)}
+                                     disabled={isLoading}
+                                 >
+                                     <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
                                 </Button>
                                  {explanationImagePreview && (
                                     <div className="relative h-24 w-auto border rounded-md overflow-hidden">
