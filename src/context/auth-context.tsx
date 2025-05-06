@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error reading user from local storage:', error);
       setUser(null);
       localStorage.removeItem('loggedInUser');
+      localStorage.removeItem('simulatedPassword'); // Also clear potentially stored password
     } finally {
       setLoading(false);
       setLocalError(null);
@@ -104,14 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log(`User ${email} logged in (simulated).`);
 
         // --- REDIRECT LOGIC ---
-        console.log(`Found user profile:`, foundUserProfile);
         const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-        console.log(`Admin email from env: ${adminEmail}`);
-        console.log(`Comparing: '${foundUserProfile.email?.toLowerCase()}' === '${adminEmail?.toLowerCase()}'`);
-
-        // Check if the logged-in user is the admin
-        // Use NEXT_PUBLIC_ADMIN_EMAIL from environment variables
-        // Ensure NEXT_PUBLIC_ADMIN_EMAIL is set in your .env file (e.g., NEXT_PUBLIC_ADMIN_EMAIL=admin@edunexus.com)
         if (foundUserProfile.email && adminEmail && foundUserProfile.email.toLowerCase() === adminEmail.toLowerCase()) {
           console.log('Admin user detected, redirecting to /admin');
           router.push('/admin'); // Redirect to admin dashboard
@@ -122,7 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // --- END REDIRECT LOGIC ---
 
       } else {
-        throw new Error('Invalid email or password.'); // More specific error
+        // Throw a more specific error if user not found or password mismatch
+        throw new Error('Login failed: Invalid email or password for local authentication.');
       }
     } catch (error: any) {
       console.error("Simulated login failed:", error);
@@ -254,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
     // Error State UI
-  if (localError) {
+  if (localError && !window.location.pathname.startsWith('/auth')) { // Only show error if not on auth pages
     return (
       <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
          <div className="max-w-md text-center bg-destructive text-white p-6 rounded-lg shadow-lg">
@@ -280,4 +275,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-
