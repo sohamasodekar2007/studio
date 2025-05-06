@@ -94,8 +94,8 @@ const FullLengthSchema = CommonTestFieldsSchema.extend({
 
 // Discriminated union based on 'testType'
 const TestCreationSchema = z.discriminatedUnion("testType", [
-  ChapterwiseSchema.extend({testType: z.literal('chapterwise')}),
-  FullLengthSchema.extend({testType: z.literal('full_length')})
+  ChapterwiseSchema,
+  FullLengthSchema
 ]);
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
@@ -154,27 +154,27 @@ export default function CreateTestPage() {
 
    // Fetch Subjects
    useEffect(() => {
-       setIsLoadingSubjects(true);
-       getSubjects()
-           .then(setSubjects)
-           .catch(() => toast({ variant: "destructive", title: "Error loading subjects" }))
-           .finally(() => setIsLoadingSubjects(false));
+        setIsLoadingSubjects(true);
+        getSubjects()
+        .then(setSubjects)
+        .catch(() => toast({ variant: "destructive", title: "Error loading subjects" }))
+        .finally(() => setIsLoadingSubjects(false));
    }, [toast]);
 
    // Fetch Lessons when Subject Changes
    useEffect(() => {
-       if (selectedSubject) {
-           setIsLoadingLessons(true);
-           setLessons([]); // Clear previous lessons
-           form.setValue('lesson', ''); // Reset lesson selection in form
-           getLessonsForSubject(selectedSubject)
-               .then(setLessons)
-               .catch(() => toast({ variant: "destructive", title: `Error loading lessons for ${selectedSubject}` }))
-               .finally(() => setIsLoadingLessons(false));
-       } else {
-           setLessons([]);
-       }
-   }, [selectedSubject, toast, form]);
+        if (selectedSubject) {
+            setIsLoadingLessons(true);
+            setLessons([]); // Clear previous lessons
+            form.setValue('lesson', ''); // Reset lesson selection in form
+            getLessonsForSubject(selectedSubject)
+                .then(setLessons)
+                .catch(() => toast({ variant: "destructive", title: `Error loading lessons for ${selectedSubject}` }))
+                .finally(() => setIsLoadingLessons(false));
+        } else {
+            setLessons([]);
+        }
+    }, [selectedSubject, toast, form]);
 
    // Load questions for Chapterwise test
    const fetchChapterQuestions = useCallback(async () => {
