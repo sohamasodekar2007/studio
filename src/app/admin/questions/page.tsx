@@ -516,7 +516,7 @@ export default function AdminQuestionBankPage() {
                     <RadioGroup
                         onValueChange={field.onChange}
                         defaultValue={field.value}
-                        className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
+                        className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
                         disabled={isLoading}
                     >
                         <FormItem className="flex items-center space-x-3 space-y-0">
@@ -557,7 +557,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
                         <FormControl>
-                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
+                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -665,7 +665,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
                         <FormControl>
-                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
+                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>

@@ -1,0 +1,29 @@
+{
+  "id": "Q_1746514262075",
+  "subject": "Physics",
+  "lesson": "Mathematics in Physics",
+  "class": "11",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "MHT-CET"
+  ],
+  "type": "image",
+  "question": {
+    "text": null,
+    "image": "Q_1746514262070_626e41.png"
+  },
+  "options": {
+    "A": "A",
+    "B": "B",
+    "C": "C",
+    "D": "D"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": null,
+    "image": "E_1746514262072_85d10d.png"
+  },
+  "created": "2025-05-06T06:51:02.075Z",
+  "modified": "2025-05-06T06:51:02.075Z"
+}
