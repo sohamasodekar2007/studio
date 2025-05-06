@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MoreHorizontal, PlusCircle, Search, Edit, Trash2, Eye, ToggleLeft, ToggleRight, Filter } from "lucide-react"; // Added Icons
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
-import type { Test, TestModel } from '@/types'; // Use the actual Test type and TestModel
+import type { Test, TestModel, PricingType } from '@/types'; // Updated types
 import { testModels } from '@/types'; // Import test model options
 import { getTests, updateTestInJson, deleteTestFromJson } from '@/actions/test-actions'; // Import actions
 import { useToast } from '@/hooks/use-toast';
@@ -41,6 +42,7 @@ export default function AdminTestsPage() {
 
   useEffect(() => {
     fetchAllTests();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter tests based on search term and selected model
@@ -118,17 +120,28 @@ export default function AdminTestsPage() {
     }
   };
 
+   const formatPricing = (pricing: PricingType) => {
+     switch (pricing) {
+       case 'free': return 'Free';
+       case 'paid': return 'Paid';
+       case 'FREE_PREMIUM': return 'Free Premium'; // Display name for the new type
+       default: return pricing;
+     }
+   };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
          <div>
             <h1 className="text-3xl font-bold tracking-tight">Manage Tests</h1>
-            <p className="text-muted-foreground">Add, edit, or remove tests (Chapterwise, Full Length, DPPs).</p>
+            <p className="text-muted-foreground">View, edit, or remove tests (Chapterwise, Full Length, DPPs).</p>
          </div>
-         {/* TODO: Link Add Test button to a creation form/modal */}
-         <Button disabled>
-           <PlusCircle className="mr-2 h-4 w-4" /> Add New Test
-         </Button>
+         {/* Updated Link to point to the new creation page */}
+         <Link href="/admin/tests/create" passHref>
+           <Button>
+             <PlusCircle className="mr-2 h-4 w-4" /> Add New Test
+           </Button>
+         </Link>
       </div>
 
 
@@ -197,9 +210,13 @@ export default function AdminTestsPage() {
                     <TableCell>{test.exam}</TableCell>
                     <TableCell>{formatTestModel(test.model)}</TableCell>
                     <TableCell>
-                       <Badge variant={test.pricing === 'free' ? 'default' : 'outline'}
-                         className={`capitalize ${test.pricing === 'free' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}`}>
-                        {test.pricing}
+                       <Badge variant={test.pricing === 'free' ? 'default' : (test.pricing === 'paid' ? 'destructive' : 'secondary')} // Adjust variant logic
+                         className={`capitalize ${
+                           test.pricing === 'free' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
+                           test.pricing === 'paid' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
+                           'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' // Style for FREE_PREMIUM
+                         }`}>
+                        {formatPricing(test.pricing)}
                       </Badge>
                     </TableCell>
                     <TableCell>{test.questionsCount}</TableCell>
@@ -221,6 +238,7 @@ export default function AdminTestsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                            <DropdownMenuItem asChild>
+                               {/* Link to view test detail page (if it exists) */}
                                <Link href={`/tests/${test.id}`} target="_blank">
                                 <Eye className="mr-2 h-4 w-4" /> View Test
                                </Link>
@@ -264,3 +282,4 @@ export default function AdminTestsPage() {
     </div>
   );
 }
+```

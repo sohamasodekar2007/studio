@@ -13,7 +13,7 @@ export const testModels = ["chapterwise", "full_length", "topicwise", "combo", "
 export type TestModel = typeof testModels[number];
 
 // Define Pricing types
-export const pricingTypes = ["free", "paid"] as const;
+export const pricingTypes = ["free", "paid", "FREE_PREMIUM"] as const; // Added FREE_PREMIUM
 export type PricingType = typeof pricingTypes[number];
 
 // Define Test status types (optional, for badges etc.)
@@ -41,6 +41,7 @@ export interface UserProfile {
 }
 
 // Interface for Test Data (potentially stored in Firestore or tests.json)
+// This represents the data *about* a test series entry shown in lists/details
 export interface Test {
   id: string; // document ID
   title: string;
@@ -49,7 +50,7 @@ export interface Test {
   exam: Exam; // MHT-CET, JEE Main, etc.
   subject: string; // Physics, PCM, Biology
   model: TestModel; // chapterwise, full_length, etc.
-  pricing: PricingType; // free, paid
+  pricing: PricingType; // free, paid, FREE_PREMIUM
   status?: TestStatus; // New, Popular
   questionsCount: number;
   durationMinutes: number;
@@ -70,12 +71,12 @@ export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
 export type DifficultyLevel = typeof difficultyLevels[number];
 
 export const examOptions = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "Other"] as const;
-export type ExamOption = typeof examOptions[number];
+export type ExamOption = typeof examOptions[number]; // Used in Question Bank
 
 export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"] as const;
 export type ClassLevel = typeof classLevels[number];
 
-// Interface for Question Bank Item (to be stored in JSON)
+// Interface for Question Bank Item (stored in individual JSON files)
 export interface QuestionBankItem {
   id: string; // Unique ID, e.g., Q_{timestamp}
   subject: string;
@@ -106,3 +107,43 @@ export interface QuestionBankItem {
   version?: number;
   changeHistory?: { timestamp: string; changes: string }[];
 }
+
+
+// ---- Generated Test Definition Types ----
+
+// Interface for Chapterwise Test JSON structure (saved in test_pages/chapterwise)
+export interface ChapterwiseTestJson {
+  test_id: string; // e.g., phy_thermodynamics_jee_20240520
+  title: string; // Auto-generated or user-defined
+  subject: string;
+  lesson: string;
+  examFilter: ExamOption | 'Random Exam';
+  questions: string[]; // Array of QuestionBankItem IDs (e.g., "Q_1681234567890")
+  duration: number; // in minutes
+  access: PricingType;
+  audience: AcademicStatus;
+  type: 'chapterwise';
+  createdAt: string; // ISO timestamp
+}
+
+// Interface for Full-Length Test JSON structure (saved in test_pages/full_length)
+export interface FullLengthTestJson {
+  test_id: string; // e.g., pcm_neet_20240520
+  title: string; // Auto-generated or user-defined
+  stream: 'PCM' | 'PCB'; // Add 'Commerce' if needed later
+  examFilter: ExamOption | 'Combined';
+  // Store question IDs grouped by subject
+  physics: string[];
+  chemistry: string[];
+  maths?: string[]; // Optional based on stream
+  biology?: string[]; // Optional based on stream
+  weightage: { [subject: string]: number }; // e.g., {"physics": 40, "chemistry": 30, "maths": 30}
+  duration: number; // in minutes
+  access: PricingType;
+  audience: AcademicStatus;
+  type: 'full_length';
+  createdAt: string; // ISO timestamp
+}
+
+// General Test Definition (useful for listing generated tests, maybe?)
+export type GeneratedTestDefinition = ChapterwiseTestJson | FullLengthTestJson;

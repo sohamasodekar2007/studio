@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -12,7 +13,8 @@ import {
   ClipboardList,
   FileText,
   Banknote,
-  Edit, // Add Edit icon
+  Edit,
+  PlusCircle, // Added icon for Create Test
 } from 'lucide-react';
 import {
   Sidebar,
@@ -30,9 +32,10 @@ import { useAuth } from '@/context/auth-context'; // Get user context if needed 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests', label: 'Tests', icon: BookOpen },
+  { href: '/admin/tests', label: 'Manage Tests', icon: BookOpen },
+  { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle }, // New Create Test Link
   { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
-  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit }, // New Edit Questions Link
+  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit },
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },

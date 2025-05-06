@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit } from "lucide-react"; // Added Edit icon
+import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle } from "lucide-react"; // Added PlusCircle
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getTests } from "@/actions/test-actions";
@@ -102,6 +102,12 @@ export default async function AdminDashboardPage() {
                    <BookOpen className="h-4 w-4" /> Manage Tests
                </Button>
            </Link>
+            {/* New Create Test Button */}
+             <Link href="/admin/tests/create" passHref>
+               <Button variant="outline" className="w-full justify-start gap-2">
+                   <PlusCircle className="h-4 w-4" /> Create Test
+               </Button>
+           </Link>
             <Link href="/admin/questions" passHref>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <ClipboardList className="h-4 w-4" /> Add Question
@@ -137,3 +143,4 @@ export default async function AdminDashboardPage() {
     </div>
   );
 }
+```
