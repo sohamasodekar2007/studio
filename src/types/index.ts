@@ -60,3 +60,49 @@ export interface Test {
   createdAt: Date | string; // Timestamp or ISO string
   updatedAt?: Date | string; // Timestamp or ISO string
 }
+
+// ---- Question Bank Types ----
+
+export const questionTypes = ["image", "text"] as const;
+export type QuestionType = typeof questionTypes[number];
+
+export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
+export type DifficultyLevel = typeof difficultyLevels[number];
+
+export const examOptions = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "Other"] as const;
+export type ExamOption = typeof examOptions[number];
+
+export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"] as const;
+export type ClassLevel = typeof classLevels[number];
+
+// Interface for Question Bank Item (to be stored in JSON)
+export interface QuestionBankItem {
+  id: string; // Unique ID, e.g., Q_{timestamp}
+  subject: string;
+  lesson: string;
+  class: ClassLevel;
+  examType: ExamOption; // Renamed from exam to avoid conflict with Exam type above
+  difficulty: DifficultyLevel;
+  tags: string[];
+  type: QuestionType; // 'image' or 'text'
+  question: {
+    text?: string | null; // Text for text questions, null/optional for image
+    image?: string | null; // Filename like Q_{timestamp}_{hash}.ext for image questions
+  };
+  options: {
+    A: string;
+    B: string;
+    C: string;
+    D: string;
+  };
+  correct: "A" | "B" | "C" | "D";
+  explanation: {
+    text?: string | null;
+    image?: string | null; // Filename like E_{timestamp}_{hash}.ext
+  };
+  created: string; // ISO timestamp
+  modified: string; // ISO timestamp
+  // Optional fields for future enhancements
+  version?: number;
+  changeHistory?: { timestamp: string; changes: string }[];
+}
