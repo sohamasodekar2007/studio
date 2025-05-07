@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -155,7 +155,7 @@ export default function TestReviewPage() {
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
         <Button asChild>
-          <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`}>Back to Results</Link>
+          <Link href="/tests">Go to Test Series</Link>
         </Button>
       </div>
     );
@@ -166,7 +166,7 @@ export default function TestReviewPage() {
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Review Data Not Available</h1>
-        <p className="text-muted-foreground mb-6">Could not load the necessary data for this test review.</p>
+        <p className="text-muted-foreground mb-6">We could not load the necessary data for this test review.</p>
          <Button asChild>
           <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`}>Back to Results</Link>
         </Button>
@@ -177,9 +177,8 @@ export default function TestReviewPage() {
   const totalQuestions = allQuestions.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
   // Handle cases where answer might not start with "Option "
-  const correctOptionKey = currentReviewQuestion.answer?.startsWith('Option ')
-                           ? currentReviewQuestion.answer.replace('Option ', '').trim()
-                           : currentReviewQuestion.answer; // Assume it's just the key if format differs
+  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim()
+                           ?? currentReviewQuestion.answer; // Assume it's just the key if format differs
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
@@ -246,13 +245,13 @@ export default function TestReviewPage() {
         <CardContent className="space-y-4">
             {/* Render Question Content */}
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContent(currentReviewQuestion.question, currentReviewQuestion.image_url)}
+                 {renderContent(currentQuestionReviewIndex !== undefined ? currentReviewQuestion?.question : null, currentReviewQuestion?.image_url)}
             </div>
 
 
           <div className="space-y-2 pt-4">
             <p className="font-semibold text-card-foreground">Options:</p>
-            {currentReviewQuestion.options.map((optionText, idx) => {
+            {currentReviewQuestion?.options.map((optionText, idx) => {
               const optionKey = optionKeys[idx];
               const isSelected = userSelectedOptionKey === optionKey;
               const isCorrectOption = correctOptionKey === optionKey;
@@ -292,7 +291,7 @@ export default function TestReviewPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between mt-4 p-6 border-t border-border">
+        <CardFooter className="flex justify-between mt-4 p-8 border-t border-border">
           <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
