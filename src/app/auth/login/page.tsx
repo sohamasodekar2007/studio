@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver from '@hookform/resolvers/zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +35,7 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    if (initializationError && !initializationError.includes("Firebase is not configured")) {
+    if (initializationError) {
         toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
         return;
     }
@@ -44,7 +45,7 @@ export default function LoginPage() {
       // Redirection and success toast handled by AuthContext/login function
     } catch (error: any) {
       // Error toast is handled within AuthContext/login on failure
-      console.error("Login page submission error:", error.message);
+      // console.error("Login page submission error:", error.message); // Already logged in context
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +86,7 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center">
                       <FormLabel>Password</FormLabel>
-                      {/* <Link href="#" className="ml-auto inline-block text-sm underline">
+                       {/* <Link href="#" className="ml-auto inline-block text-sm underline">
                         Forgot your password?
                       </Link> */}
                     </div>

@@ -171,9 +171,9 @@ export default function ManageTestsPage() {
                     <TableCell>
                        <Badge variant={test.type === 'FREE' ? 'default' : (test.type === 'PAID' ? 'destructive' : 'secondary')}
                          className={`capitalize text-xs ${
-                           test.type === 'FREE' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' :
-                           test.type === 'PAID' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300' :
-                           'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' // Style for FREE_PREMIUM
+                           test.type === 'FREE' ? 'bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300 border-green-500/50' :
+                           test.type === 'PAID' ? 'bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300 border-red-500/50' :
+                           'bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300 border-blue-500/50'
                          }`}>
                         {formatPricing(test.type)}
                       </Badge>
@@ -249,4 +249,3 @@ export default function ManageTestsPage() {
     </div>
   );
 }
-

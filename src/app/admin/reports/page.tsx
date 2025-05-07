@@ -10,7 +10,7 @@ import { Eye, Printer, BarChartBig, Users, Info, Loader2, Search } from "lucide-
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GeneratedTest, TestSession, TestResultSummary, UserProfile } from '@/types';
 import { getAllGeneratedTests, getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import { readUsers, getUserById } from '@/actions/user-actions'; // Added getUserById
+import { readUsers, getUserById } from '@/actions/user-actions'; 
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import TestHistoryDialog from '@/components/admin/test-history-dialog';
@@ -18,10 +18,11 @@ import TestRankingDialog from '@/components/admin/test-ranking-dialog';
 import TestReportPrintPreview from '@/components/admin/test-report-print-preview';
 
 // Helper function to calculate results (simplified version, adapt as needed)
-function calculateBasicSummary(session: TestSession, testDef: GeneratedTest | null): Partial<TestResultSummary> & { score: number; percentage: number; correct: number; attempted: number } {
+function calculateBasicSummary(session: TestSession, testDef: GeneratedTest | null): Partial<TestResultSummary> & { score: number; percentage: number; correct: number; attempted: number, totalMarks: number } {
     if (!testDef) {
-      return { testName: 'Unknown Test', submittedAt: new Date(session.startTime).toISOString(), totalQuestions: 0, score: 0, percentage: 0, correct: 0, attempted: 0 };
+      return { testName: 'Unknown Test', submittedAt: new Date(session.startTime).toISOString(), totalQuestions: 0, score: 0, percentage: 0, correct: 0, attempted: 0, totalMarks: 0 };
     }
+    
     let allQuestions = [];
     if (testDef.testType === 'chapterwise' && testDef.questions) {
         allQuestions = testDef.questions;
@@ -64,6 +65,7 @@ function calculateBasicSummary(session: TestSession, testDef: GeneratedTest | nu
         attempted: attemptedCount,
         score,
         percentage,
+        totalMarks: totalMarksPossible,
     };
 }
 
@@ -86,7 +88,7 @@ export default function AdminReportsPage() {
   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [printReportData, setPrintReportData] = useState<{
     test: GeneratedTest;
-    attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>;
+    attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; rank?: number; totalMarks?: number }>;
   } | null>(null);
 
 
@@ -121,15 +123,16 @@ export default function AdminReportsPage() {
     setFilteredTests(currentTests);
   }, [allTests, selectedTestType, searchTerm]);
 
-  const fetchTestAttempts = useCallback(async (testCode: string): Promise<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>> => {
-    const attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }> = [];
-    if (typeof window === 'undefined') return attempts; // Guard for SSR or pre-hydration
+  const fetchTestAttempts = useCallback(async (testCode: string): Promise<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; totalMarks?: number }>> => {
+    const attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; totalMarks?: number }> = [];
+    if (typeof window === 'undefined') return attempts; 
 
-    const testDef = await getGeneratedTestByCode(testCode); // Fetch test definition once
+    const testDef = await getGeneratedTestByCode(testCode); 
 
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(`testResult-${testCode}-`)) {
+      // Key format: testResult-testCode-userId-timestamp
+      if (key && key.startsWith(`testResult-${testCode}-`)) { 
         const sessionJson = localStorage.getItem(key);
         if (sessionJson) {
           try {
@@ -139,7 +142,7 @@ export default function AdminReportsPage() {
 
             attempts.push({
               ...summary,
-              attemptId: key.replace('testResult-', ''),
+              attemptId: key.replace('testResult-', ''), // Store the full unique key part
               testCode: sessionData.testId,
               userId: sessionData.userId,
               user: userProfile || undefined,
@@ -150,7 +153,6 @@ export default function AdminReportsPage() {
         }
       }
     }
-    // Sort by score descending for ranking
     attempts.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     return attempts;
   }, []);
@@ -167,11 +169,16 @@ export default function AdminReportsPage() {
   };
 
   const handlePrintReport = async (test: GeneratedTest) => {
-    setIsLoading(true);
+    setIsLoading(true); // Indicate loading while preparing print data
     try {
-        const attempts = await fetchTestAttempts(test.test_code);
-        setPrintReportData({ test, attempts });
-        setSelectedTestForPrint(test);
+        const attemptsData = await fetchTestAttempts(test.test_code);
+        // Sort attempts by score for ranking in print preview
+        const rankedAttempts = attemptsData
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .map((att, index) => ({ ...att, rank: index + 1 }));
+
+        setPrintReportData({ test, attempts: rankedAttempts });
+        setSelectedTestForPrint(test); // Keep track of which test is being printed
         setIsPrintPreviewOpen(true);
     } catch (e) {
         toast({ variant: "destructive", title: "Error", description: "Could not prepare report for printing." });
@@ -253,7 +260,7 @@ export default function AdminReportsPage() {
                       <Button variant="outline" size="sm" onClick={() => handleViewRanking(test)}>
                         <BarChartBig className="mr-1.5 h-3.5 w-3.5" /> Rank
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoading}>
+                      <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoading && selectedTestForPrint?.test_code === test.test_code}>
                         {isLoading && selectedTestForPrint?.test_code === test.test_code ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Print
                       </Button>
                     </TableCell>

@@ -11,18 +11,16 @@ import { v4 as uuidv4 } from 'uuid';
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
 
 // Define the default admin user details
-const defaultAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com'; // Use env var or fallback
-// WARNING: Storing default password in code is insecure. Use environment variable or secure config.
+const defaultAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234'; // Fallback if not set in env
-const defaultAdminProfileBase: Omit<UserProfile, 'id' | 'createdAt'> = {
+const defaultAdminProfileBase: Omit<UserProfile, 'id' | 'createdAt' | 'password'> = {
     email: defaultAdminEmail,
-    password: defaultAdminPassword, // Store plain text password ONLY for initial local admin setup (INSECURE)
     name: 'Admin User',
-    phone: '1234567890',
+    phone: '0000000000', // Default placeholder phone
     referral: '',
-    class: 'Dropper', // Or null/default
-    model: 'combo', // Give admin highest access
-    expiry_date: '2099-12-31T00:00:00.000Z', // Use ISO format for consistency, long expiry
+    class: 'Dropper',
+    model: 'combo', // Admin always has combo model
+    expiry_date: new Date('2099-12-31T00:00:00.000Z').toISOString(), // Long expiry for admin, ISO format
 };
 
 /**
@@ -46,6 +44,7 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
 /**
  * Reads the users.json file. Ensures the default admin user exists.
  * Assigns UUID to users missing an ID.
+ * Converts date fields to ISO strings if they are not already.
  * Returns user profiles WITHOUT passwords for general use.
  * @returns A promise resolving to an array of UserProfile (without passwords) or an empty array on error.
  */
@@ -56,7 +55,7 @@ export async function readUsers(): Promise<Omit<UserProfile, 'password'>[]> {
 }
 
 /**
- * INTERNAL HELPER: Reads the users.json file, performs initialization (adds admin, assigns IDs),
+ * INTERNAL HELPER: Reads the users.json file, performs initialization (adds admin, assigns IDs, formats dates),
  * and returns the full user list *including* passwords.
  * Used internally by write operations and auth checks.
  * @returns A promise resolving to the array of UserProfile including passwords.
@@ -71,116 +70,122 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
     const parsedUsers = JSON.parse(fileContent);
     if (!Array.isArray(parsedUsers)) {
       console.error('users.json does not contain a valid array. Re-initializing with default admin.');
-      users = []; // Start fresh if format is wrong
-      writeNeeded = true; // Force write
+      users = [];
+      writeNeeded = true;
     } else {
         users = parsedUsers as UserProfile[];
     }
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       console.warn('users.json not found. Creating an empty file with default admin.');
-      // File doesn't exist, will create it below
       writeNeeded = true;
     } else {
       console.error('Error reading or parsing users.json:', error);
-      // On other errors, still try to proceed with an empty array and default admin
-      writeNeeded = true;
+      writeNeeded = true; // Re-initialize on other errors too
     }
      users = []; // Ensure users is an empty array if read failed
   }
 
-  // --- Ensure all users have string IDs (UUIDs) ---
+  // --- Ensure all users have string IDs (UUIDs) and correct date formats ---
   users.forEach(user => {
     if (!user.id || typeof user.id !== 'string') {
-        const oldId = user.id;
-        user.id = uuidv4(); // Assign UUID if missing or invalid type
-        console.warn(`User ${user.email || 'unknown'} (Old ID: ${oldId}) missing or has non-string ID. Assigned new UUID: ${user.id}.`);
+        user.id = uuidv4();
+        console.warn(`User ${user.email || 'unknown'} assigned new UUID: ${user.id}.`);
         writeNeeded = true;
     }
-     // Ensure expiry date is ISO string or null
-     if (user.expiry_date && !(typeof user.expiry_date === 'string' && !isNaN(Date.parse(user.expiry_date))) && user.expiry_date !== null) {
+    if (user.expiry_date && !(user.expiry_date instanceof Date) && isNaN(Date.parse(user.expiry_date))) {
         console.warn(`User ${user.email || user.id} has invalid expiry_date format (${user.expiry_date}). Setting to null.`);
         user.expiry_date = null;
         writeNeeded = true;
-     }
-     // Ensure createdAt is ISO string
-      if (user.createdAt && !(typeof user.createdAt === 'string' && !isNaN(Date.parse(user.createdAt)))) {
-          console.warn(`User ${user.email || user.id} has invalid createdAt format (${user.createdAt}). Setting to current time.`);
-          user.createdAt = new Date().toISOString();
-          writeNeeded = true;
-      } else if (!user.createdAt) {
-           user.createdAt = new Date().toISOString();
-           writeNeeded = true;
-      }
+    } else if (user.expiry_date instanceof Date) {
+        user.expiry_date = user.expiry_date.toISOString(); // Convert Date to ISO string
+        writeNeeded = true;
+    }
+
+    if (user.createdAt && !(user.createdAt instanceof Date) && isNaN(Date.parse(user.createdAt))) {
+        console.warn(`User ${user.email || user.id} has invalid createdAt format (${user.createdAt}). Setting to current time.`);
+        user.createdAt = new Date().toISOString();
+        writeNeeded = true;
+    } else if (user.createdAt instanceof Date) {
+        user.createdAt = user.createdAt.toISOString(); // Convert Date to ISO string
+        writeNeeded = true;
+    } else if (!user.createdAt) {
+        user.createdAt = new Date().toISOString();
+        writeNeeded = true;
+    }
+
+    // Ensure model is valid, default to 'free' if not
+    if (!user.model || !['free', 'chapterwise', 'full_length', 'combo'].includes(user.model)) {
+        console.warn(`User ${user.email || user.id} has invalid model (${user.model}). Setting to 'free'.`);
+        user.model = 'free';
+        writeNeeded = true;
+    }
+    // Nullify expiry_date if model is 'free'
+    if (user.model === 'free' && user.expiry_date !== null) {
+        console.warn(`User ${user.email || user.id} is 'free' model but has expiry_date. Setting to null.`);
+        user.expiry_date = null;
+        writeNeeded = true;
+    }
+
   });
 
-
-  // --- Ensure Default Admin User Exists ---
+  // --- Ensure Default Admin User Exists and is Correct ---
    const adminUserIndex = users.findIndex(u => u.email === defaultAdminEmail);
-   const adminId = users[adminUserIndex]?.id || uuidv4(); // Use existing ID or generate new one
+   const adminId = users[adminUserIndex]?.id || uuidv4();
    const defaultAdminUserWithId: UserProfile = {
        ...defaultAdminProfileBase,
        id: adminId,
-       createdAt: new Date().toISOString(),
-       // Ensure expiry is ISO string
-       expiry_date: defaultAdminProfileBase.expiry_date ? new Date(defaultAdminProfileBase.expiry_date).toISOString() : null
+       password: defaultAdminPassword,
+       createdAt: users[adminUserIndex]?.createdAt || new Date().toISOString(), // Preserve original or set new
+       expiry_date: defaultAdminProfileBase.expiry_date, // Ensure it's ISO
    };
 
-
   if (adminUserIndex !== -1) {
-    // Admin user exists, ensure core properties are set correctly
     let adminNeedsUpdate = false;
     const currentAdmin = users[adminUserIndex];
 
-     // Ensure password exists (only for local setup, highly insecure)
-     if (!currentAdmin.password) {
-         console.warn(`Admin user ${defaultAdminEmail} missing password in users.json. Setting default.`);
+     if (currentAdmin.password !== defaultAdminPassword) {
+         console.warn(`Admin user ${defaultAdminEmail} password incorrect. Resetting.`);
          currentAdmin.password = defaultAdminPassword;
          adminNeedsUpdate = true;
      }
      if (currentAdmin.model !== 'combo') {
-          console.warn(`Admin user ${defaultAdminEmail} model incorrect in users.json. Setting model to 'combo'.`);
+         console.warn(`Admin user ${defaultAdminEmail} model incorrect. Setting to 'combo'.`);
          currentAdmin.model = 'combo';
          adminNeedsUpdate = true;
      }
-      if (currentAdmin.expiry_date !== defaultAdminUserWithId.expiry_date) { // Compare ISO strings
-         console.warn(`Admin user ${defaultAdminEmail} expiry date incorrect in users.json (${currentAdmin.expiry_date} vs ${defaultAdminUserWithId.expiry_date}). Setting default expiry.`);
+      if (currentAdmin.expiry_date !== defaultAdminUserWithId.expiry_date) {
+         console.warn(`Admin user ${defaultAdminEmail} expiry date incorrect. Setting default.`);
          currentAdmin.expiry_date = defaultAdminUserWithId.expiry_date;
          adminNeedsUpdate = true;
       }
-       if (currentAdmin.id !== adminId) { // Ensure ID is correct if regenerated
-           console.warn(`Admin user ${defaultAdminEmail} ID mismatch. Correcting.`);
+       if (currentAdmin.id !== adminId) {
            currentAdmin.id = adminId;
            adminNeedsUpdate = true;
        }
-        if (!currentAdmin.createdAt) {
-             currentAdmin.createdAt = new Date().toISOString();
+        if (!currentAdmin.createdAt || (currentAdmin.createdAt instanceof Date) || isNaN(Date.parse(currentAdmin.createdAt))) {
+             currentAdmin.createdAt = defaultAdminUserWithId.createdAt;
              adminNeedsUpdate = true;
         }
-
      if (adminNeedsUpdate) {
-         users[adminUserIndex] = currentAdmin; // Update the user object in the array
+         users[adminUserIndex] = { ...currentAdmin }; // Ensure a new object for re-rendering if needed
          writeNeeded = true;
      }
-
   } else {
-    // Admin user does not exist, add them
-    console.warn(`Default admin user (${defaultAdminEmail}) not found in users.json. Adding default admin user.`);
+    console.warn(`Default admin user (${defaultAdminEmail}) not found. Adding.`);
     users.push(defaultAdminUserWithId);
     writeNeeded = true;
   }
 
-  // Write back to file if it was missing, malformed, or admin was added/updated, or users needed ID/date backfill
   if (writeNeeded) {
       const writeSuccess = await writeUsers(users);
       if (writeSuccess) {
           console.log("users.json created or updated with default admin user details and user field checks.");
       } else {
           console.error("Failed to write updated users.json file.");
+          // Potentially throw error here if critical
       }
   }
-
-  // Return the full list including passwords for internal use
   return users;
 }
 
@@ -188,129 +193,102 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
 /**
  * Saves or updates user data in the local users.json file.
  * If a user with the same ID exists, it updates; otherwise, it adds.
- * This function handles the password field internally.
  * Converts Date objects for expiry_date to ISO strings before saving.
  *
- * @param userProfileData - The full UserProfile object to save or update (expiry_date can be Date object).
+ * @param userProfileData - The full UserProfile object to save or update.
  * @returns A promise that resolves with success status and optional message.
  */
 export async function saveUserToJson(
-    userProfileData: UserProfile & { expiry_date?: Date | string | null } // Allow Date object input
+    userProfileData: UserProfile
 ): Promise<{ success: boolean; message?: string }> {
 
-    // Ensure ID is present and a string
     if (!userProfileData.id || typeof userProfileData.id !== 'string') {
         console.error("Attempted to save user without a valid string ID:", userProfileData);
         return { success: false, message: 'Invalid user ID provided for saving.' };
     }
 
-    // Prepare user data for saving: Convert Date object to ISO string if necessary
     const userToSave: UserProfile = {
         ...userProfileData,
         expiry_date: userProfileData.expiry_date instanceof Date
                         ? userProfileData.expiry_date.toISOString()
-                        : userProfileData.expiry_date, // Keep string or null as is
-        createdAt: userProfileData.createdAt || new Date().toISOString(), // Ensure createdAt exists
+                        : (userProfileData.expiry_date ? new Date(userProfileData.expiry_date).toISOString() : null),
+        createdAt: userProfileData.createdAt instanceof Date
+                        ? userProfileData.createdAt.toISOString()
+                        : (userProfileData.createdAt ? new Date(userProfileData.createdAt).toISOString() : new Date().toISOString()),
+        model: userProfileData.model || 'free',
     };
+     if (userToSave.model === 'free') userToSave.expiry_date = null;
+
 
     try {
-        // Read full user list including passwords internally for writing
         let users = await readAndInitializeUsersInternal();
-
         const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
         if (existingUserIndex !== -1) {
-            // Update existing user: Merge safely
-            // Ensure the password from the existing record is kept unless explicitly provided in userToSave
-             // Preserve original creation date if it exists, otherwise use provided or new
-            const mergedUser = {
-                ...users[existingUserIndex], // Start with existing data
-                ...userToSave, // Override with new data (name, phone, model, class, expiry_date etc.)
-                password: userToSave.password !== undefined ? userToSave.password : users[existingUserIndex].password, // Keep existing password unless new one provided
-                id: userToSave.id, // Ensure ID remains the same
-                email: userToSave.email, // Ensure email remains the same (though shouldn't change here)
-                createdAt: users[existingUserIndex].createdAt || userToSave.createdAt, // Preserve original creation date
+            // Merge safely: preserve existing password if not explicitly provided in userToSave
+            // Preserve original creation date
+            users[existingUserIndex] = {
+                ...users[existingUserIndex], // Start with existing
+                ...userToSave,             // Override with new data
+                password: userToSave.password !== undefined ? userToSave.password : users[existingUserIndex].password,
+                createdAt: users[existingUserIndex].createdAt || userToSave.createdAt,
             };
-             users[existingUserIndex] = mergedUser;
-            console.log(`User data for ${mergedUser.email} (ID: ${mergedUser.id}) updated in users.json`);
+            console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated.`);
         } else {
-            // Add new user (less common through saveUserToJson, usually via addUserToJson)
+            // Add new user (this path should ideally be handled by addUserToJson)
             users.push(userToSave);
-            console.log(`New user data for ${userToSave.email} (ID: ${userToSave.id}) added to users.json via saveUser`);
+            console.log(`New user ${userToSave.email} (ID: ${userToSave.id}) added via saveUserToJson.`);
         }
 
-        // Write the updated users array back to the file
         const writeSuccess = await writeUsers(users);
-        if (!writeSuccess) {
-             return { success: false, message: 'Failed to write user data to local file.' };
-        }
-
-        return { success: true };
-
+        return { success: writeSuccess, message: writeSuccess ? undefined : 'Failed to write user data.' };
     } catch (error: any) {
-        console.error('Failed to save/update user data in users.json:', error);
-        return { success: false, message: `Failed to save user data locally. Reason: ${error.message}` };
+        console.error('Failed to save/update user in users.json:', error);
+        return { success: false, message: `Failed to save user. Reason: ${error.message}` };
     }
 }
 
 
 /**
  * Adds a new user to the users.json file. Checks for existing email first.
- * Assigns a UUID if ID is missing. Sets default 'free' model if none provided.
- * Stores password as provided (plain text - INSECURE).
- * @param newUser The user profile object to add. Password should be included.
+ * Assigns a UUID. Sets default 'free' model.
+ * @param newUserProfileData - The user profile data for the new user (password should be included).
  * @returns A promise resolving with success status and optional message.
  */
-export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
-
-     // Ensure ID is a string (generate if missing) and other defaults
-    const userToAdd: UserProfile = {
-         ...newUser,
-         id: String(newUser.id || uuidv4()), // Ensure ID is string UUID
-         createdAt: newUser.createdAt || new Date().toISOString(),
-         password: newUser.password, // Expecting plain text password here for local storage
-         model: newUser.model || 'free', // Default to free if not specified
-         // Ensure expiry date is ISO string or null
-         expiry_date: newUser.expiry_date ? new Date(newUser.expiry_date).toISOString() : null,
-         class: newUser.class || null, // Ensure class is null if not provided
-         phone: newUser.phone || null,
-         name: newUser.name || null,
-         referral: newUser.referral || '',
-    };
-     // Ensure free model has null expiry date
-    if (userToAdd.model === 'free') {
-        userToAdd.expiry_date = null;
+export async function addUserToJson(newUserProfileData: Omit<UserProfile, 'id' | 'createdAt'> & {password: string}): Promise<{ success: boolean; message?: string; user?: UserProfile }> {
+    if (!newUserProfileData.email || !newUserProfileData.password) {
+        return { success: false, message: "Email and password are required for new user." };
     }
 
-    // Basic validation
-    if (!userToAdd.email) return { success: false, message: "User email is required." };
-    if (!userToAdd.password) return { success: false, message: "User password is required." };
-
+    const userToAdd: UserProfile = {
+         ...newUserProfileData,
+         id: uuidv4(),
+         createdAt: new Date().toISOString(),
+         model: newUserProfileData.model || 'free',
+         expiry_date: newUserProfileData.model === 'free' ? null : (newUserProfileData.expiry_date ? new Date(newUserProfileData.expiry_date).toISOString() : null),
+         class: newUserProfileData.class || null,
+         phone: newUserProfileData.phone || null,
+         name: newUserProfileData.name || null,
+         referral: newUserProfileData.referral || '',
+    };
 
     try {
-        let users = await readAndInitializeUsersInternal(); // Reads the raw list including passwords
+        let users = await readAndInitializeUsersInternal();
 
-        // Check if email already exists
-        if (users.some(u => u.email === userToAdd.email)) {
+        if (users.some(u => u.email?.toLowerCase() === userToAdd.email?.toLowerCase())) {
             return { success: false, message: 'User with this email already exists.' };
         }
-         // Check if ID already exists (should be rare with UUIDs)
-         if (users.some(u => u.id === userToAdd.id)) {
-             console.warn(`User with ID ${userToAdd.id} conflict during add operation. Regenerating ID.`);
-             userToAdd.id = uuidv4(); // Regenerate ID on conflict
-             // Recheck after regeneration (extremely unlikely to collide again)
-             if (users.some(u => u.id === userToAdd.id)) {
-                return { success: false, message: `User ID conflict even after regeneration.`};
-             }
-         }
 
         users.push(userToAdd);
-
-        const success = await writeUsers(users); // writeUsers saves the updated list
-        return { success, message: success ? undefined : 'Failed to write users file.' };
+        const success = await writeUsers(users);
+        if (success) {
+            return { success: true, user: userToAdd };
+        } else {
+            return { success: false, message: 'Failed to write users file.' };
+        }
     } catch (error: any) {
         console.error('Error adding user to JSON:', error);
-        return { success: false, message: 'Failed to add user.' };
+        return { success: false, message: `Failed to add user. Reason: ${error.message}` };
     }
 }
 
@@ -320,53 +298,47 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
  * Does NOT update email or password via this function.
  * Converts Date objects for expiry_date to ISO strings before saving.
  * @param userId The ID of the user to update (string).
- * @param updatedData Partial user profile data to update (excluding id, email, password, createdAt). Can include Date for expiry_date.
- * @returns A promise resolving with success status and optional message.
+ * @param updatedData Partial user profile data to update.
+ * @returns A promise resolving with success status, optional message, and the updated user profile.
  */
-export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'email' | 'password' | 'createdAt'>> & { expiry_date?: Date | string | null }): Promise<{ success: boolean; message?: string }> {
+export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'email' | 'password' | 'createdAt'>>): Promise<{ success: boolean; message?: string, user?: UserProfile }> {
     if (!userId || typeof userId !== 'string') {
         return { success: false, message: "Invalid user ID provided for update." };
     }
     try {
-        let users = await readAndInitializeUsersInternal(); // Read raw data
+        let users = await readAndInitializeUsersInternal();
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
             return { success: false, message: `User with ID ${userId} not found.` };
         }
 
-        // Prepare the update payload, converting Date to ISO string
-         const updatePayload = { ...updatedData };
-         if (updatePayload.expiry_date instanceof Date) {
-             updatePayload.expiry_date = updatePayload.expiry_date.toISOString();
-         }
-
-        // Merge existing data with updated data, ensuring read-only fields are preserved
         const existingUser = users[userIndex];
         const userWithUpdatesApplied: UserProfile = {
-            ...existingUser, // Start with existing data
-            ...updatePayload, // Apply the allowed updates (name, phone, model, expiry, class, etc.)
-            id: userId,       // Ensure ID remains the same
-            email: existingUser.email, // Ensure email remains the same
-            password: existingUser.password, // Explicitly keep the existing password field
-            createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date
+            ...existingUser,
+            ...updatedData,
+            id: userId,
+            email: existingUser.email, // Email cannot be changed here
+            password: existingUser.password, // Password not changed here
+            createdAt: existingUser.createdAt, // Preserve original creation date
         };
-         // If model changed to 'free', nullify expiry date
-         if (updatePayload.model === 'free') {
-             userWithUpdatesApplied.expiry_date = null;
-         }
 
-         users[userIndex] = userWithUpdatesApplied; // Update the user in the array
+        if (updatedData.model === 'free') {
+            userWithUpdatesApplied.expiry_date = null;
+        } else if (updatedData.expiry_date && !(updatedData.expiry_date instanceof Date)) {
+             userWithUpdatesApplied.expiry_date = new Date(updatedData.expiry_date).toISOString();
+        } else if (updatedData.expiry_date instanceof Date) {
+            userWithUpdatesApplied.expiry_date = updatedData.expiry_date.toISOString();
+        }
 
-         console.log(`Updating user ${userId}. New data merged:`, { ...users[userIndex], password: '***' }); // Log without password
 
+        users[userIndex] = userWithUpdatesApplied;
         const success = await writeUsers(users);
         if (success) {
-             console.log(`Successfully updated user ${userId} in users.json`);
+            return { success: true, user: userWithUpdatesApplied };
         } else {
-             console.error(`Failed to write update for user ${userId} to users.json`);
+            return { success: false, message: 'Failed to write users file.' };
         }
-        return { success, message: success ? undefined : 'Failed to write users file.' };
     } catch (error: any) {
         console.error(`Error updating user ${userId} in JSON:`, error);
         return { success: false, message: `Failed to update user. Reason: ${error.message}` };
@@ -383,28 +355,17 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
         return { success: false, message: "Invalid user ID provided for deletion." };
     }
     try {
-        let users = await readAndInitializeUsersInternal(); // Read raw data
+        let users = await readAndInitializeUsersInternal();
         const userToDelete = users.find(u => u.id === userId);
 
         if (!userToDelete) {
              return { success: false, message: `User with ID ${userId} not found.` };
         }
-
-        // Prevent deletion of the primary admin user based on email
         if (userToDelete.email === defaultAdminEmail) {
             return { success: false, message: `Cannot delete the primary admin user (${defaultAdminEmail}).` };
         }
 
-
-        const initialLength = users.length;
         users = users.filter(u => u.id !== userId);
-
-        if (users.length === initialLength) {
-            // This case should theoretically not happen if find succeeded, but added for safety
-            console.warn(`User ${userId} found but not removed during filter.`);
-            return { success: false, message: `User with ID ${userId} found but could not be filtered out.` };
-        }
-
         const success = await writeUsers(users);
         return { success, message: success ? undefined : 'Failed to write users file after deletion.' };
     } catch (error: any) {
@@ -415,7 +376,7 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
 
 /**
  * Updates the password for a user in the users.json file.
- * WARNING: Highly insecure as it stores plain text. Use ONLY for local demo/admin setup.
+ * WARNING: Highly insecure.
  * @param userId The ID of the user whose password needs updating (string).
  * @param newPassword The new plain text password.
  * @returns A promise resolving with success status and optional message.
@@ -425,21 +386,18 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
      if (!userId || typeof userId !== 'string') {
         return { success: false, message: "Invalid user ID provided for password update." };
     }
-    if (!newPassword || newPassword.length < 6) { // Basic password length validation
+    if (!newPassword || newPassword.length < 6) {
         return { success: false, message: 'Password must be at least 6 characters long.'};
     }
 
     try {
-        let users = await readAndInitializeUsersInternal(); // Read raw data including passwords
+        let users = await readAndInitializeUsersInternal();
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
             return { success: false, message: `User with ID ${userId} not found.` };
         }
-
-        // Update the password field
         users[userIndex].password = newPassword;
-
         const success = await writeUsers(users);
         return { success, message: success ? undefined : 'Failed to write users file after password update.' };
     } catch (error: any) {
@@ -456,18 +414,12 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
  */
 export async function getUserById(userId: string): Promise<Omit<UserProfile, 'password'> | null> {
   if (!userId || typeof userId !== 'string') {
-      console.warn("Attempted to get user by invalid ID:", userId);
     return null;
   }
   try {
-    // Use the helper that reads and initializes (important for consistency)
     const usersWithPasswords = await readAndInitializeUsersInternal();
     const foundUser = usersWithPasswords.find(u => u.id === userId);
-    if (!foundUser) {
-        console.log(`User with ID ${userId} not found in users.json.`);
-        return null;
-    }
-    // Remove password before returning
+    if (!foundUser) return null;
     const { password, ...userWithoutPassword } = foundUser;
     return userWithoutPassword;
   } catch (error) {
@@ -476,3 +428,19 @@ export async function getUserById(userId: string): Promise<Omit<UserProfile, 'pa
   }
 }
 
+// Initialize users.json with default admin if it doesn't exist or is invalid
+// This function is called implicitly by readAndInitializeUsersInternal
+async function initializeDataStore() {
+    try {
+        await readAndInitializeUsersInternal();
+        console.log("User data store initialized/verified.");
+    } catch (error) {
+        console.error("Fatal error initializing user data store:", error);
+        // Handle critical error, e.g., by preventing app startup or showing a global error
+    }
+}
+
+// Call initialization on server start (though 'use server' actions run per request)
+// For a true "on server start", this might be in a different context or a startup script.
+// For this local file-based system, it's checked on first read.
+initializeDataStore();
