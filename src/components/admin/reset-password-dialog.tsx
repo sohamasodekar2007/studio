@@ -9,21 +9,22 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react'; // Added AlertTriangle
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile } from '@/types';
-import { updateUserPasswordInJson } from '@/actions/user-actions'; // Import password update action
+// Import Firebase Auth functions if available, handle potential null auth instance
+import { auth, firebaseInitializationError } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
-// Schema for resetting password
-const resetPasswordSchema = z.object({
-  newPassword: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  confirmPassword: z.string(),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
-
-type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
+// Schema for resetting password (now only needs email)
+// const resetPasswordSchema = z.object({
+//   newPassword: z.string().min(6, { message: "Password must be at least 6 characters." }),
+//   confirmPassword: z.string(),
+// }).refine((data) => data.newPassword === data.confirmPassword, {
+//   message: "Passwords don't match",
+//   path: ["confirmPassword"],
+// });
+// type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
 interface ResetPasswordDialogProps {
   user: UserProfile;
@@ -36,89 +37,86 @@ export default function ResetPasswordDialog({ user, isOpen, onClose }: ResetPass
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  const form = useForm<ResetPasswordFormValues>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      newPassword: '',
-      confirmPassword: '',
-    },
-  });
+  // No form needed if using Firebase password reset email
 
-  const onSubmit = async (data: ResetPasswordFormValues) => {
+  const handleSendResetEmail = async () => {
+    if (firebaseInitializationError || !auth) {
+         toast({
+            variant: 'destructive',
+            title: 'Operation Failed',
+            description: "Password reset unavailable: Firebase Auth not configured.",
+         });
+         return;
+    }
+     if (!user.email) {
+          toast({
+            variant: 'destructive',
+            title: 'Operation Failed',
+            description: "User email is missing, cannot send reset link.",
+         });
+         return;
+     }
+
     setIsLoading(true);
     try {
-      const result = await updateUserPasswordInJson(user.id, data.newPassword);
-
-      if (!result.success) {
-        throw new Error(result.message || 'Failed to reset password.');
-      }
-
+      await sendPasswordResetEmail(auth, user.email);
       toast({
-        title: 'Password Reset Successful',
-        description: `Password for ${user.email} has been updated.`,
+        title: 'Password Reset Email Sent',
+        description: `An email has been sent to ${user.email} with instructions to reset their password.`,
+        duration: 7000,
       });
-      form.reset(); // Clear form
-      onClose(); // Close dialog
+      onClose(); // Close dialog after sending
 
     } catch (error: any) {
-      console.error('Failed to reset password:', error);
+      console.error('Failed to send password reset email:', error);
       toast({
         variant: 'destructive',
         title: 'Reset Failed',
-        description: error.message || 'Could not reset user password.',
+        description: error.message || 'Could not send password reset email.',
       });
     } finally {
       setIsLoading(false);
     }
   };
 
+   // Determine if Firebase Auth is properly initialized
+   const isFirebaseAuthAvailable = !firebaseInitializationError && auth;
+
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Reset Password for {user.email}</DialogTitle>
-          <DialogDescription>
-            Enter a new password for the user. They will need to use this new password to log in.
-          </DialogDescription>
+           {isFirebaseAuthAvailable ? (
+               <DialogDescription>
+                    Click the button below to send a password reset link to the user's email address.
+               </DialogDescription>
+           ) : (
+                <DialogDescription className="text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Password reset requires Firebase Authentication, which is not configured. This feature is disabled.
+                </DialogDescription>
+           )}
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="newPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>New Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} disabled={isLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm New Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} disabled={isLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
-                <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Reset Password
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+
+        {/* Remove the form */}
+         {/* <Form {...form}> ... </Form> */}
+
+        <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
+             <Button
+                type="button"
+                onClick={handleSendResetEmail}
+                disabled={isLoading || !isFirebaseAuthAvailable || !user.email}
+             >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Reset Email
+            </Button>
+        </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
 }
+

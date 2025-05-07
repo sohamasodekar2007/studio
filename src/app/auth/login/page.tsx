@@ -23,8 +23,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { toast } = useToast();
-  const { login, signInWithGoogle } = useAuth(); // Use real signInWithGoogle
-  const [isLoading, setIsLoading] = useState(false);
+  const { login, signInWithGoogle, loading: authLoading, initializationError } = useAuth(); // Use real Firebase functions
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Separate loading state for Google
 
   const form = useForm<LoginFormValues>({
@@ -36,20 +36,27 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    setIsLoading(true);
+    if (initializationError) {
+        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
+        return;
+    }
+    setIsLoadingEmail(true);
     try {
       await login(data.email, data.password);
-      // Redirection is handled within the login function/onAuthStateChanged in AuthContext
-      // toast is handled within AuthContext/login on success now
+      // Redirection and success toast handled by onAuthStateChanged in context
     } catch (error: any) {
       // Error toast is handled within AuthContext/login on failure now
       console.error("Login failed:", error.message); // Keep console log for debugging
     } finally {
-      setIsLoading(false);
+      setIsLoadingEmail(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+     if (initializationError) {
+        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
+        return;
+    }
     setIsGoogleLoading(true);
     try {
       await signInWithGoogle(); // Call the real Firebase Google sign-in function
@@ -61,6 +68,8 @@ export default function LoginPage() {
       setIsGoogleLoading(false);
     }
   };
+
+  const isLoading = isLoadingEmail || isGoogleLoading || authLoading; // Combined loading state
 
 
   return (
@@ -83,7 +92,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading || isGoogleLoading} />
+                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -101,7 +110,7 @@ export default function LoginPage() {
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading || isGoogleLoading} />
+                      <Input type="password" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -109,8 +118,8 @@ export default function LoginPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoadingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Log in
               </Button>
 
@@ -122,7 +131,7 @@ export default function LoginPage() {
               </div>
 
               {/* Google Sign In Button */}
-              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading}>
+              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
                  {isGoogleLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                  ) : (
