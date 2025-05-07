@@ -1,10 +1,9 @@
-
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -35,7 +34,6 @@ const OPTION_STYLES = {
 export default function TestReviewPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
   const testCode = params.testCode as string;
@@ -148,8 +146,8 @@ export default function TestReviewPage() {
         <Card>
           <CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-40 w-full" />
-            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="h-6 w-5/6" />
             <Skeleton className="h-10 w-1/4 mt-4" />
           </CardContent>
         </Card>
@@ -235,7 +233,7 @@ export default function TestReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-            <Badge variant="secondary">Marks: {currentReviewQuestion.marks}</Badge>
+            <Badge variant="outline">Marks: {currentReviewQuestion.marks}</Badge>
           </div>
            {currentUserAnswerDetailed?.status && (
                 <Badge
