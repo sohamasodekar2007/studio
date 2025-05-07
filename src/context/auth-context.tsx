@@ -15,7 +15,7 @@ import {
 } from "firebase/auth";
 import type { UserProfile, UserModel, AcademicStatus } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions';
+import { findUserByEmail, findUserByCredentials } from '@/actions/auth-actions'; // Use findUserByCredentials for local login
 import { saveUserToJson, addUserToJson, getUserById } from '@/actions/user-actions';
 import { useRouter, usePathname } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
@@ -88,8 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log("User not found by UID, trying email lookup:", firebaseUser.email);
             profile = await findUserByEmail(firebaseUser.email);
             if (profile && profile.id !== firebaseUser.uid) {
-              console.warn(`User found by email (${firebaseUser.email}) but UID mismatch. Creating new profile for Firebase UID ${firebaseUser.uid}.`);
-              profile = null; // Force creation with Firebase UID
+              console.warn(`User found by email (${firebaseUser.email}) but UID mismatch. Forcing use of Firebase UID ${firebaseUser.uid}.`);
+              profile = null; // Force creation with Firebase UID if IDs don't match
             }
           }
 
@@ -121,16 +121,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 updates.name = firebaseUser.displayName;
                 needsUpdate = true;
              }
-              if (!profile.id || profile.id !== firebaseUser.uid) {
-                 console.warn(`Local profile ID (${profile.id}) does not match Firebase UID (${firebaseUser.uid}). Updating local ID.`);
-                 updates.id = firebaseUser.uid; // Update local ID to match Firebase UID
+              // Ensure local profile uses Firebase UID if it's different
+              if (profile.id !== firebaseUser.uid) {
+                 console.warn(`Local profile ID (${profile.id}) differs from Firebase UID (${firebaseUser.uid}). Correcting local ID.`);
+                 updates.id = firebaseUser.uid; // Set the correct Firebase UID
+                 // Note: This might overwrite a different user if the email was reused.
+                 // Deletion or merging logic might be needed in complex scenarios.
                  needsUpdate = true;
               }
              // Add more sync logic if needed (e.g., photoURL, phone)
 
              if (needsUpdate) {
                  console.log("Syncing local profile with Firebase data updates:", updates);
-                 // Ensure we pass the correct ID for the update
+                 // Use saveUserToJson which handles replacing based on ID
                  await saveUserToJson({ ...profile, ...updates, id: firebaseUser.uid });
                  profile = { ...profile, ...updates, id: firebaseUser.uid }; // Update profile in memory with correct ID
              } else {
@@ -172,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (auth) await signOut(auth); // Ensure auth exists before calling signOut
           setUser(null);
           localStorage.removeItem('loggedInUser');
-          localStorage.removeItem('simulatedPassword');
+          // localStorage.removeItem('simulatedPassword'); // Don't need this anymore
         }
       } else {
         // User is signed out
@@ -180,10 +183,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         // Clear local storage related to user session
         localStorage.removeItem('loggedInUser');
-        localStorage.removeItem('simulatedPassword'); // Remove insecure password storage
+        // localStorage.removeItem('simulatedPassword'); // Remove insecure password storage
 
         // Redirect from protected routes if logged out (only after mount)
-        if (isMounted && (pathname.startsWith('/admin') || pathname === '/settings' || pathname === '/progress' || pathname.startsWith('/chapterwise-test') || pathname.startsWith('/take-test'))) {
+        if (isMounted && (pathname.startsWith('/admin') || pathname === '/settings' || pathname === '/progress' || pathname.startsWith('/chapterwise-test') || pathname.startsWith('/take-test') || pathname.startsWith('/study-tips') || pathname.startsWith('/doubt-solving'))) {
           console.log(`User logged out on protected page (${pathname}), redirecting to login.`);
           router.push('/auth/login');
         }
@@ -216,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        console.log("Firebase Email/Password Login successful for:", firebaseUser.email);
        // onAuthStateChanged will handle profile loading, state update, and redirection
        // Toast for success will be shown by onAuthStateChanged's profile sync logic
-       localStorage.setItem('simulatedPassword', password); // WARNING: INSECURE - Storing for local fallback/re-login simulation if needed
+       // localStorage.setItem('simulatedPassword', password); // WARNING: INSECURE - REMOVED
 
     } catch (error: any) {
       console.error("Firebase Login failed:", error);
@@ -227,12 +230,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
            message = "Please enter a valid email address.";
       } else if (error.code === 'auth/too-many-requests') {
           message = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
+      } else if (error.code === 'auth/network-request-failed') {
+          message = 'Network error. Please check your internet connection and try again.';
       }
       setLocalError(error.message || message); // Store the error message
       toast({ variant: 'destructive', title: 'Login Failed', description: message }); // Show toast on failure
       setUser(null); // Clear user state
       localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword');
+      // localStorage.removeItem('simulatedPassword'); // Remove insecure storage
       throw new Error(message); // Re-throw for component handling
     } finally {
       setLoading(false);
@@ -240,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast, localError]); // Added localError to dependency
 
 
-  // Logout Function (Local Simulation + Firebase signout)
+  // Logout Function (Local + Firebase signout)
   const logout = useCallback(async () => {
     setLoading(true);
     setLocalError(null);
@@ -248,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        // Clear local state first
        setUser(null);
        localStorage.removeItem('loggedInUser');
-       localStorage.removeItem('simulatedPassword');
+       // localStorage.removeItem('simulatedPassword'); // REMOVED
 
        // Also sign out from Firebase if auth is available
        if (auth) {
@@ -271,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast]);
 
   // Sign Up Function (Local JSON + Firebase)
-   const signUpLocally = useCallback(async (userData, password) => {
+   const signUpLocally = useCallback(async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
     if (!userData.email || !password) {
         toast({ variant: 'destructive', title: 'Signup Failed', description: 'Email and password are required.' });
         throw new Error("Email and password required");
@@ -286,18 +291,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setLocalError(null); // Reset local error
     try {
-        // 1. Check if email exists locally first (optional, Firebase check is primary)
-        // const existingLocalUser = await findUserByEmail(userData.email);
-        // if (existingLocalUser) {
-        //     throw new Error("Email address is already registered locally.");
-        // }
-
-        // 2. Create user in Firebase Auth
+        // 1. Create user in Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
         const firebaseUser = userCredential.user;
         console.log(`Firebase user created: ${firebaseUser.uid} for ${firebaseUser.email}`);
 
-        // 3. Create local profile using Firebase UID
+        // 2. Create local profile using Firebase UID
         const newUserProfile: UserProfile = {
             id: firebaseUser.uid, // Use Firebase UID
             email: userData.email,
@@ -311,7 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             createdAt: new Date().toISOString(),
         };
 
-        // 4. Save local profile to users.json
+        // 3. Save local profile to users.json
         const addResult = await addUserToJson(newUserProfile);
         if (!addResult.success) {
             // Potentially attempt to delete Firebase user if local save fails? Or log inconsistency.
@@ -333,8 +332,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (error.code === 'auth/invalid-email') {
              message = "Please enter a valid email address.";
         }
-        // else if (error.message === "Email address is already registered locally.") {
-        //     message = error.message; // Use the specific local error
+        // else if (error.message === "Email address is already registered locally.") { // Remove local check message
+        //     message = error.message;
         // }
         toast({ variant: 'destructive', title: 'Signup Failed', description: message });
         setLocalError(message);
@@ -405,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
    // Show critical initialization error prominently IF NOT on an auth page
+   // AND only after the component has mounted to avoid hydration issues
    if (localError && isMounted && !pathname.startsWith('/auth')) {
        return (
             <div className="flex min-h-screen items-center justify-center p-4 bg-background">
@@ -429,7 +429,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    }
 
    // Show loading state after mount if auth is still resolving and no init error
-   // Don't show loading skeleton on auth pages after mount, show the actual page
+   // Avoid showing loading skeleton on auth pages after mount to prevent flash of loading state
     if (loading && isMounted && !localError && !pathname.startsWith('/auth')) {
        // Show loading skeleton only for non-auth pages while auth is loading
        return (
