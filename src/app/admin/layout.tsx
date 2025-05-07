@@ -1,10 +1,9 @@
-
-
-'use client'; // Required for AuthProvider context and SidebarProvider
+// src/app/admin/layout.tsx
+'use client';
 
 import { AuthProvider } from '@/context/auth-context';
-// Removed SidebarProvider import from here
-import AdminLayoutContent from '@/components/admin/admin-layout'; 
+import { SidebarProvider } from '@/components/ui/sidebar'; // Import SidebarProvider
+import AdminLayoutContent from '@/components/admin/admin-layout';
 
 export default function AdminRootLayout({
   children,
@@ -13,8 +12,9 @@ export default function AdminRootLayout({
 }>) {
   return (
     <AuthProvider>
-      {/* SidebarProvider is now handled within AdminLayoutContent/AdminSidebar components */}
-      <AdminLayoutContent>{children}</AdminLayoutContent>
+      <SidebarProvider defaultOpen> {/* Ensure SidebarProvider wraps AdminLayoutContent */}
+        <AdminLayoutContent>{children}</AdminLayoutContent>
+      </SidebarProvider>
     </AuthProvider>
   );
 }

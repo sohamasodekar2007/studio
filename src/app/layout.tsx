@@ -10,9 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/auth-context';
 import Script from 'next/script';
 import { ThemeProvider } from 'next-themes'; // Import ThemeProvider
-
-// Metadata should ideally be moved to a parent server component or handled differently
-// export const metadata: Metadata = { ... }; // Cannot export metadata from client component
+// SidebarProvider is now handled within AppLayout and AdminLayout specifically
 
 export default function RootLayout({
   children,
@@ -29,11 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
-        {/* Add title and description meta tags here if needed, as metadata export is not possible */}
         <title>STUDY SPHERE - MHT-CET, JEE, NEET Test Series</title>
         <meta name="description" content="Your ultimate destination for MHT-CET, JEE, and NEET exam preparation. Practice tests, DPPs, performance analysis, and more." />
 
-        {/* MathJax Configuration */}
         <Script id="mathjax-config" strategy="beforeInteractive">
           {`
             window.MathJax = {
@@ -51,24 +47,25 @@ export default function RootLayout({
             };
           `}
         </Script>
-        {/* Load MathJax library */}
         <Script
           id="mathjax-script"
-          strategy="lazyOnload" // Load after page interactive
+          strategy="lazyOnload"
           src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         />
       </head>
       <body className={`antialiased font-sans`}>
          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-           <AuthProvider> {/* AuthProvider wraps everything */}
+           <AuthProvider>
               {showAppLayout ? (
-                <AppLayout> {/* Render AppLayout only for non-admin/non-auth routes */}
+                // AppLayout now contains its own SidebarProvider
+                <AppLayout>
                   {children}
                 </AppLayout>
               ) : (
-                <>{children}</> // Render only children for admin/auth routes (AdminLayout/AuthLayout will take over)
+                // For admin/auth routes, their specific layouts (which also include SidebarProvider if needed) will handle it
+                <>{children}</>
               )}
-              <Toaster /> {/* Toaster is available globally */}
+              <Toaster />
            </AuthProvider>
          </ThemeProvider>
       </body>

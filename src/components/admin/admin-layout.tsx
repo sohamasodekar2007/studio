@@ -1,6 +1,5 @@
-
-
-'use client'; 
+// src/components/admin/admin-layout.tsx
+'use client';
 
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
@@ -8,10 +7,8 @@ import { useAuth } from '@/context/auth-context';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils'; 
-import { SidebarProvider } from '@/components/ui/sidebar'; // Import SidebarProvider
-
-// Metadata can't be exported from Client Components directly.
+import { cn } from '@/lib/utils';
+// SidebarProvider is now handled in src/app/admin/layout.tsx
 
 export default function AdminLayoutContent({
   children,
@@ -36,18 +33,20 @@ export default function AdminLayoutContent({
                 <Skeleton className="h-4 w-48" />
             </div>
        </div>
-    ); 
+    );
   }
 
   return (
-    <SidebarProvider defaultOpen> {/* Wrap with SidebarProvider here */}
       <div className="flex min-h-screen bg-muted/40">
         <AdminSidebar />
         <div
           className={cn(
             "flex flex-col flex-1 transition-[margin-left] duration-300 ease-in-out",
+            // Apply margin only on sm+ screens
+            // When sidebar is expanded (default state, or data-state=expanded)
             "sm:ml-[var(--sidebar-width)]",
-            "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]" 
+             // When sidebar is collapsed (data-state=collapsed)
+            "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]"
           )}
          >
           <AdminHeader />
@@ -56,6 +55,5 @@ export default function AdminLayoutContent({
           </main>
         </div>
       </div>
-    </SidebarProvider>
   );
 }
