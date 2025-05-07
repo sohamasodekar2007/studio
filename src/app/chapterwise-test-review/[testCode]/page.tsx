@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +34,7 @@ const OPTION_STYLES = {
 export default function TestReviewPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
   const testCode = params.testCode as string;
@@ -57,6 +58,43 @@ export default function TestReviewPage() {
        typesetMathJax();
    }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]); // Rerun when index or data changes
 
+  const fetchReviewData = useCallback(async () => {
+    if (!testCode || !userId || !attemptId) {
+      setError("Missing information to load test review.");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const testDefData = await getGeneratedTestByCode(testCode);
+      // Basic validation for test definition structure
+      if (!testDefData) {
+          throw new Error("Original test definition not found.");
+      }
+      // Check if questions array exists based on test type
+       if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
+          throw new Error("Test definition is invalid or has no questions.");
+       }
+
+      setTestDefinition(testDefData);
+
+      const storedSessionJson = localStorage.getItem(`testResult-${attemptId}`);
+      if (!storedSessionJson) {
+        throw new Error("Test attempt data not found for review.");
+      }
+      const sessionData: TestSession = JSON.parse(storedSessionJson);
+      setTestSession(sessionData);
+
+    } catch (err: any) {
+      console.error("Error fetching review data:", err);
+      setError(err.message || "Failed to load test review.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [testCode, userId, attemptId]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -68,53 +106,8 @@ export default function TestReviewPage() {
         setIsLoading(false);
         return;
     }
-
-    async function fetchReviewData() {
-      if (!testCode || !userId || !attemptId) {
-        setError("Missing information to load test review.");
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        const testDefData = await getGeneratedTestByCode(testCode);
-        // Basic validation for test definition structure
-        if (!testDefData) {
-            throw new Error("Original test definition not found.");
-        }
-        // Check if questions array exists based on test type
-         if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
-            throw new Error("Test definition is invalid or has no questions.");
-         }
-         // Add similar check for full_length if needed, combining subject arrays
-         // For now, assuming chapterwise or a structure where questions are directly accessible
-         const hasQuestions = (testDefData.testType === 'chapterwise' && testDefData.questions?.length) ||
-                              (testDefData.testType === 'full_length' && (testDefData.physics?.length || testDefData.chemistry?.length || testDefData.maths?.length || testDefData.biology?.length));
-
-         if (!hasQuestions) {
-            throw new Error("Test definition has no questions.");
-         }
-
-        setTestDefinition(testDefData);
-
-        const storedSessionJson = localStorage.getItem(`testResult-${attemptId}`);
-        if (!storedSessionJson) {
-          throw new Error("Test attempt data not found for review.");
-        }
-        const sessionData: TestSession = JSON.parse(storedSessionJson);
-        setTestSession(sessionData);
-
-      } catch (err: any) {
-        console.error("Error fetching review data:", err);
-        setError(err.message || "Failed to load test review.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchReviewData();
-  }, [testCode, userId, attemptId, authLoading, user, router]);
+  }, [testCode, userId, attemptId, authLoading, user, router, fetchReviewData]);
 
 
    // Consolidate questions from different subjects if it's a full_length test
@@ -293,7 +286,7 @@ export default function TestReviewPage() {
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
                  {renderContent(
                       isExplanationImage(currentReviewQuestion.explanation) ? null : currentReviewQuestion.explanation,
-                      isExplanationImage(currentReviewQuestion.explanation) ? currentReviewQuestion.explanation : null
+                      isExplanationImage(currentReviewQuestion.explanation) ? `/question_bank_images/${testDefinition.test_subject[0]}/${testDefinition.lesson}/${currentReviewQuestion.explanation}` : null
                  )}
               </div>
             </div>
