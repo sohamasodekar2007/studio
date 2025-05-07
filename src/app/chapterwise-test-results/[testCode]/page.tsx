@@ -7,7 +7,7 @@ import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle } from 'lucide-react';
+import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles } from 'lucide-react'; // Added Sparkles
 import Link from 'next/link';
 import type { TestSession, TestResultSummary, GeneratedTest } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -285,3 +285,4 @@ Keep practicing! Consistency is key.`;
     </div>
   );
 }
+

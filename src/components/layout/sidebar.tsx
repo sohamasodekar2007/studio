@@ -10,7 +10,7 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare } from 'lucide-react'; // Replaced MessageSquareQuestion with MessageSquare
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity } from 'lucide-react'; // Added Activity for Progress
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
@@ -73,6 +73,15 @@ export function AppSidebar() {
                </SidebarMenuButton>
              </Link>
            </SidebarMenuItem>
+            {/* New Progress Link */}
+           <SidebarMenuItem>
+             <Link href="/progress" legacyBehavior passHref>
+               <SidebarMenuButton as="a" isActive={isActive('/progress')} tooltip="My Progress">
+                 <Activity />
+                 <span>My Progress</span>
+               </SidebarMenuButton>
+             </Link>
+           </SidebarMenuItem>
            {/* Add Results link later when page exists */}
            {/*
            <SidebarMenuItem>
@@ -123,3 +132,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+
