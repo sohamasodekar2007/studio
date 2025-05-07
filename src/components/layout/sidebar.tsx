@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, BarChartHorizontalSquare } from 'lucide-react';
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck } from 'lucide-react'; // Added ClipboardCheck for DPP
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
@@ -27,13 +27,17 @@ export function AppSidebar() {
   const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const isActive = (href: string) => {
-    // Exact match for home, settings, help, study-tips, doubt-solving, progress
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress'].includes(href)) {
+    // Exact match for home, settings, help, study-tips, doubt-solving, progress, dpp
+    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/dpp'].includes(href)) {
       return pathname === href;
     }
     // Starts with for tests and admin as they have sub-routes
     if (href === '/tests' || href === '/admin') {
       return pathname.startsWith(href);
+    }
+    // Handle potential sub-routes for DPP if needed later
+    if (href === '/dpp') {
+        return pathname.startsWith('/dpp');
     }
     return false;
   };
@@ -53,7 +57,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Main Navigation</SidebarGroupLabel>
             <SidebarMenuItem>
-              <Link href="/" legacyBehavior passHref>
+              <Link href="/" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/')} tooltip="Dashboard">
                   <Home />
                   <span>Dashboard</span>
@@ -61,7 +65,7 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/tests" legacyBehavior passHref>
+              <Link href="/tests" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/tests')} tooltip="Test Series">
                   <ListChecks />
                   <span>Test Series</span>
@@ -69,7 +73,15 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/progress" legacyBehavior passHref>
+                <Link href="/dpp" passHref legacyBehavior>
+                    <SidebarMenuButton as="a" isActive={isActive('/dpp')} tooltip="DPP">
+                        <ClipboardCheck />
+                        <span>DPP</span>
+                    </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Link href="/progress" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/progress')} tooltip="My Progress">
                   <Activity />
                   <span>My Progress</span>
@@ -83,7 +95,7 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">AI Tools</SidebarGroupLabel>
             <SidebarMenuItem>
-              <Link href="/study-tips" legacyBehavior passHref>
+              <Link href="/study-tips" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/study-tips')} tooltip="AI Study Tips">
                   <Wand2 />
                   <span>AI Study Tips</span>
@@ -91,7 +103,7 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/doubt-solving" legacyBehavior passHref>
+              <Link href="/doubt-solving" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/doubt-solving')} tooltip="Doubt Solving">
                   <MessageSquare />
                   <span>Doubt Solving</span>
@@ -106,7 +118,7 @@ export function AppSidebar() {
               <SidebarGroup>
                  <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Administration</SidebarGroupLabel>
                 <SidebarMenuItem>
-                  <Link href="/admin" legacyBehavior passHref>
+                  <Link href="/admin" passHref legacyBehavior>
                     <SidebarMenuButton as="a" isActive={isActive('/admin')} tooltip="Admin Panel">
                       <ShieldCheck />
                       <span>Admin Panel</span>
@@ -126,7 +138,7 @@ export function AppSidebar() {
         <SidebarSeparator className="my-1 group-data-[state=collapsed]:hidden"/>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/settings" legacyBehavior passHref>
+            <Link href="/settings" passHref legacyBehavior>
               <SidebarMenuButton as="a" isActive={isActive('/settings')} tooltip="Settings">
                 <Settings />
                 <span className="group-data-[state=collapsed]:hidden">Settings</span>
@@ -134,7 +146,7 @@ export function AppSidebar() {
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <Link href="/help" legacyBehavior passHref>
+            <Link href="/help" passHref legacyBehavior>
               <SidebarMenuButton as="a" isActive={isActive('/help')} tooltip="Help & Support">
                 <HelpCircle />
                 <span className="group-data-[state=collapsed]:hidden">Help & Support</span>
