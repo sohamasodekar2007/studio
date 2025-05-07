@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,20 +12,20 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Loader2, AlertTriangle, Star, CalendarClock } from "lucide-react";
+import { User, Loader2, AlertTriangle, Star, CalendarClock } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { saveUserToJson, getUserById } from '@/actions/user-actions';
 import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/types'; // Ensure ContextUser is imported
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from "@/components/ui/badge";
 
 // --- Profile Form Schema ---
 // Allow updating name, phone. Class, model, expiry are read-only here.
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }),
+  phone: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
   // class is not editable here
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -31,7 +33,7 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 export default function SettingsPage() {
   const { user, loading, logout } = useAuth(); // Get logout as well
   const { toast } = useToast();
-  const router = useRouter();
+  const [router] = useState(useRouter());
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [fullUserProfile, setFullUserProfile] = useState<UserProfile | null>(null); // State to hold the full profile
 
@@ -89,7 +91,19 @@ export default function SettingsPage() {
   }, [user, loading, router, toast, profileForm]);
 
 
-  // --- Profile Update Logic ---
+  const mapUserProfileToContextUser = (userProfile: UserProfile | null): ContextUser => {
+      if (!userProfile) return null;
+      return {
+          id: userProfile.id,
+          email: userProfile.email,
+          displayName: userProfile.name,
+          phone: userProfile.phone,
+          className: userProfile.class,
+          model: userProfile.model,
+          expiry_date: userProfile.expiry_date,
+      };
+  }
+
   const onProfileSubmit = async (data: ProfileFormValues) => {
     if (!user || !fullUserProfile || !fullUserProfile.id || !fullUserProfile.email) { // Check fullUserProfile now
       toast({ title: 'Error', description: 'User session or profile data is invalid. Please log in again.', variant: 'destructive' });
@@ -154,9 +168,13 @@ export default function SettingsPage() {
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric', month: 'long', day: 'numeric'
-      });
+      // Attempt to parse if it's a string, otherwise assume it's a Date object
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      // Check if the date is valid after parsing/using
+      if (isNaN(date.getTime())) {
+          return 'Invalid Date';
+      }
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     } catch {
       return 'Invalid Date';
     }
