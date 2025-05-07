@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -41,8 +42,6 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const [isLoading, setIsLoading] = useState(false);
 
   // Determine if the current user IS the primary admin based on email
-  // Note: This check prevents changing the *primary* admin's plan via this dialog.
-  // The "Make Admin Equivalent" button grants equivalent access via 'combo' plan.
   const isPrimaryAdminAccount = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const form = useForm<ChangePlanFormValues>({
@@ -125,7 +124,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[480px]"> {/* Increased width slightly */}
         <DialogHeader>
           <DialogTitle>Change Plan for {user.email}</DialogTitle>
           <DialogDescription>
@@ -135,14 +134,14 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
         </DialogHeader>
         <Form {...form}>
           {/* We use handleSubmit with the specific handler */}
-          <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6 py-4">
             {/* User Model Select */}
             <FormField
               control={form.control}
               name="model"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subscription Model</FormLabel>
+                  <FormLabel>Subscription Model *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isPrimaryAdminAccount}>
                     <FormControl>
                       <SelectTrigger>
@@ -210,18 +209,19 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
               />
             )}
 
-            <DialogFooter className="pt-4">
-                {/* "Make Admin Equivalent" Button */}
-                <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleMakeAdminEquivalent}
-                    disabled={isLoading || isPrimaryAdminAccount}
-                    className="mr-auto" // Push to the left
-                 >
-                    <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin Equivalent
-                </Button>
-                 {/* Regular Buttons */}
+            {/* "Make Admin Equivalent" Button */}
+            <Button
+                type="button"
+                variant="outline"
+                onClick={handleMakeAdminEquivalent}
+                disabled={isLoading || isPrimaryAdminAccount}
+                className="w-full justify-start" // Align left
+                size="sm" // Smaller button
+            >
+                <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin Equivalent (Combo Plan, Long Expiry)
+            </Button>
+
+            <DialogFooter className="pt-6 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2"> {/* Adjusted footer layout */}
                 <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>Cancel</Button>
                 <Button type="submit" disabled={isLoading || isPrimaryAdminAccount}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
