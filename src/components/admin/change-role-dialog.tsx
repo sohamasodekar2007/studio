@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -6,29 +7,28 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input"; // Keep Input for potential future use, though not needed for date/select
+// Input removed as it's not used for select/date
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar"; // Import Calendar
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Import Popover
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2, Checkbox } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, type UserModel } from '@/types';
 import { updateUserInJson } from '@/actions/user-actions';
 
-// Schema for changing user role/model and expiry
-const changeRoleSchema = z.object({
+// Schema for changing user model and expiry date
+const changePlanSchema = z.object({
   model: z.enum(userModels, { required_error: "Please select a user model." }),
   expiry_date: z.date().nullable().optional(), // Allow null or date
-  isAdmin: z.boolean().optional(), // Added isAdmin field
 }).refine(data => data.model === 'free' || (data.model !== 'free' && data.expiry_date), {
   message: "Expiry date is required for paid models.",
   path: ["expiry_date"],
 });
 
-type ChangeRoleFormValues = z.infer<typeof changeRoleSchema>;
+type ChangePlanFormValues = z.infer<typeof changePlanSchema>;
 
 interface ChangeRoleDialogProps {
   user: UserProfile;
@@ -41,59 +41,65 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  const isCurrentUserAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  // Determine if the current user IS the primary admin based on email
+  const isPrimaryAdminAccount = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  const form = useForm<ChangeRoleFormValues>({
-    resolver: zodResolver(changeRoleSchema),
+  const form = useForm<ChangePlanFormValues>({
+    resolver: zodResolver(changePlanSchema),
     defaultValues: {
       model: user.model || 'free',
       expiry_date: user.expiry_date ? new Date(user.expiry_date) : null, // Convert string to Date or null
-      isAdmin: isCurrentUserAdmin,
     },
   });
 
     const currentModel = form.watch("model"); // Watch model field for conditional rendering
-    const isAdminAccount = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL; // Check if it's the main admin
 
-  const onSubmit = async (data: ChangeRoleFormValues) => {
+  const onSubmit = async (data: ChangePlanFormValues) => {
     setIsLoading(true);
+
+    // Primary admin's model should always be 'combo' and have a long expiry
+    if (isPrimaryAdminAccount) {
+         toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: 'Cannot change the subscription model or expiry date for the primary admin account.',
+         });
+         setIsLoading(false);
+         return;
+    }
+
+
     try {
        // Format expiry_date to ISO string or null BEFORE updating
        const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
        // Prepare the data payload specifically for the update action
        // Only include fields that are changing (model, expiry_date)
-       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class'>> = { // Keep email/password immutable here
+       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class'>> = {
          model: data.model,
          expiry_date: expiryDateString,
        };
 
        const result = await updateUserInJson(user.id, updatedDataPayload);
 
-       if (!result.success) {
-         throw new Error(result.message || 'Failed to update user role/plan.');
+       if (!result.success || !result.user) { // Check if the updated user is returned
+         throw new Error(result.message || 'Failed to update user plan.');
        }
 
        toast({
-         title: 'User Role/Plan Updated',
+         title: 'User Plan Updated',
          description: `${user.email}'s plan has been updated to ${data.model}.`,
        });
 
-       // Construct the fully updated user profile object to pass back
-       // This ensures the local state in the parent component reflects the saved changes
-       const fullyUpdatedUser: UserProfile = {
-         ...user, // Start with original user data
-         model: data.model, // Apply the new model
-         expiry_date: expiryDateString, // Apply the new expiry date (string or null)
-       };
-
-        onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
+       // Use the user data returned from the successful update action
+       onUserUpdate(result.user);
+       onClose(); // Close dialog
 
     } catch (error: any) {
-      console.error('Failed to update user role/plan:', error);
+      console.error('Failed to update user plan:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: error.message || 'Could not update user role/plan.',
+        description: error.message || 'Could not update user plan.',
       });
     } finally {
       setIsLoading(false);
@@ -104,9 +110,10 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Change Role/Plan for {user.email}</DialogTitle>
+          <DialogTitle>Change Plan for {user.email}</DialogTitle>
           <DialogDescription>
             Select the user's subscription model and set an expiry date if applicable.
+            The primary admin plan cannot be changed.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -118,7 +125,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Subscription Model</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading || isAdminAccount}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isPrimaryAdminAccount}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select model" />
@@ -133,18 +140,19 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                   {isPrimaryAdminAccount && <p className="text-xs text-muted-foreground">Primary admin must have 'Combo' plan.</p>}
                 </FormItem>
               )}
             />
 
-            {/* Expiry Date Picker (Conditional) */}
+            {/* Expiry Date Picker (Conditional and disabled for admin) */}
             {currentModel !== 'free' && (
               <FormField
                 control={form.control}
                 name="expiry_date"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Expiry Date</FormLabel>
+                    <FormLabel>Expiry Date {currentModel !== 'free' ? '*' : ''}</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -154,7 +162,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
                               "w-full pl-3 text-left font-normal",
                               !field.value && "text-muted-foreground"
                             )}
-                            disabled={isLoading || isAdminAccount}
+                            disabled={isLoading || isPrimaryAdminAccount}
                           >
                             {field.value ? (
                               format(field.value, "PPP") // Format date nicely
@@ -171,7 +179,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
                           selected={field.value ?? undefined} // Pass undefined if null
                           onSelect={field.onChange}
                           disabled={(date) =>
-                            date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading || isAdminAccount// Disable past dates and for admin
+                            date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading || isPrimaryAdminAccount// Disable past dates and for admin
                           }
                           initialFocus
                         />
@@ -185,7 +193,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
 
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
-                <Button type="submit" disabled={isLoading || isAdminAccount}>
+                <Button type="submit" disabled={isLoading || isPrimaryAdminAccount}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Update Plan
                 </Button>
