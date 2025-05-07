@@ -5,6 +5,7 @@ import { getAuth, type Auth } from "firebase/auth"; // Import Auth type explicit
 // NOTE: Firestore/Storage imports removed as they are not currently used. Re-add if needed.
 // import { getFirestore } from "firebase/firestore";
 // import { getStorage } from "firebase/storage";
+// import { getAnalytics, isSupported } from "firebase/analytics"; // Import analytics only if needed client-side
 
 // --- Firebase configuration ---
 // Reads from environment variables. Ensure your .env file is correctly set up.
@@ -31,42 +32,55 @@ const requiredEnvVars = [
 let firebaseInitializationError: string | null = null;
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-// Check for missing environment variables only if running client-side or if env vars are accessible server-side during build
-if (typeof window !== 'undefined' || process.env.NODE_ENV === 'development') { // Added check for environment
-    if (missingEnvVars.length > 0) {
-        firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing: ${missingEnvVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
-        console.error("**********************************************************************************");
-        console.error(firebaseInitializationError);
-        console.error("**********************************************************************************");
-    } else if (!firebaseConfig.apiKey || !firebaseConfig.apiKey.startsWith("AIza")) {
-        // Basic check even if env vars are present
-        firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY in your .env file appears invalid (missing, empty, or doesn't start with 'AIza').`;
-        console.error("**********************************************************************************");
-        console.error(firebaseInitializationError);
-        console.error("**********************************************************************************");
-    }
+// Perform checks more robustly, considering client/server contexts
+if (missingEnvVars.length > 0) {
+    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing: ${missingEnvVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
+    console.error("**********************************************************************************");
+    console.error(firebaseInitializationError);
+    console.error("**********************************************************************************");
+} else if (!firebaseConfig.apiKey || typeof firebaseConfig.apiKey !== 'string' || !firebaseConfig.apiKey.startsWith("AIza")) {
+    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY in your .env file appears invalid (missing, empty, or doesn't start with 'AIza'). Please verify it against your Firebase project settings.`;
+    console.error("**********************************************************************************");
+    console.error(firebaseInitializationError);
+    console.error("**********************************************************************************");
 }
+
 
 // --- Initialization ---
 let app = null;
 let authInstance: Auth | null = null;
+// let analyticsInstance = null;
 
 // Only attempt initialization if there are no critical config errors found above
 if (!firebaseInitializationError) {
     try {
         if (!getApps().length) {
-            console.log("Initializing Firebase App..."); // Simpler log
+            console.log("Initializing Firebase App...");
             app = initializeApp(firebaseConfig);
             console.log("Firebase App Initialized successfully.");
         } else {
             app = getApp();
             console.log("Firebase App Re-used.");
         }
-        // Attempt to get Auth only if app initialized successfully
+
+        // Initialize Auth
         authInstance = getAuth(app);
         console.log("Firebase Auth Initialized successfully.");
+
+        // Initialize Analytics only on the client-side where it's supported
+        // if (typeof window !== 'undefined') {
+        //   isSupported().then(supported => {
+        //     if (supported) {
+        //       analyticsInstance = getAnalytics(app);
+        //       console.log("Firebase Analytics Initialized successfully.");
+        //     } else {
+        //       console.log("Firebase Analytics is not supported in this environment.");
+        //     }
+        //   });
+        // }
+
     } catch (error: any) {
-        // Catch errors during initializeApp or getAuth, often related to config or console setup
+        // Catch errors during initializeApp or getAuth
         let specificHint = "";
         if (error.code === 'auth/configuration-not-found') {
              specificHint = " This usually means Authentication isn't enabled in your Firebase project console, or the required sign-in providers (Email/Password, Google) are disabled. Check the 'Authentication > Sign-in method' tab in your Firebase console.";
@@ -80,6 +94,7 @@ if (!firebaseInitializationError) {
         console.error("**********************************************************************************");
         app = null; // Ensure app is null on error
         authInstance = null; // Ensure auth is null on error
+        // analyticsInstance = null;
     }
 } else {
      console.warn("Firebase initialization skipped due to configuration errors. Please check your .env file and restart the server.");
@@ -89,6 +104,7 @@ if (!firebaseInitializationError) {
 const auth = authInstance;
 // const db = app ? getFirestore(app) : null; // Uncomment if using Firestore
 // const storage = app ? getStorage(app) : null; // Uncomment if using Storage
+// const analytics = analyticsInstance; // Export analytics
 
 // Export the error message so AuthProvider can potentially display it
 export { app, auth, firebaseInitializationError };
