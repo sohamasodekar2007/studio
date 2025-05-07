@@ -86,13 +86,17 @@ export const testStreams = ["PCM", "PCB"] as const;
 export type TestStream = typeof testStreams[number];
 
 // Interface for individual question within a generated test JSON
-interface TestQuestion {
+export interface TestQuestion {
     question: string; // Text or image filename
     image_url?: string | null; // URL if image question
     options: string[]; // Array of 4 strings ["Option A: ...", "Option B: ...", ...]
-    answer: string; // Correct answer text ("OPTION A", "OPTION B", etc.)
+    answer: string; // Correct answer text ("Option A", "Option B", etc.) // This should represent the correct option key like "A", "B"
     marks: number;
     explanation?: string | null; // Text or image path/URL
+    // Fields from QuestionBankItem that might be useful for display or logic in test
+    id?: string; // Original question ID from bank
+    type?: QuestionType; // 'text' or 'image'
+    originalOptions?: { A: string; B: string; C: string; D: string }; // Store original options structure if needed
 }
 
 // Base interface for common generated test properties
@@ -105,32 +109,99 @@ interface BaseGeneratedTest {
     type: PricingType; // FREE, PAID, FREE_PREMIUM
     audience: AudienceType;
     createdAt?: string; // ISO timestamp
+    // Common field for the test questions
+    questions?: TestQuestion[]; // Array of questions, structure might vary slightly or be standardized
 }
 
-// Interface for Chapterwise Test JSON
+// Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
+// Ensure 'testType' is added for discriminated union if needed at schema level
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
+    testType: 'chapterwise'; // Discriminator
     test_subject: [string]; // Array with exactly one subject
     lesson: string;
-    examFilter: ExamOption | 'all'; // Added exam filter
-    questions: TestQuestion[]; // Direct array of questions for the single subject
+    examFilter: ExamOption | 'all';
+    // 'questions' field is inherited from BaseGeneratedTest and used here
+    physics?: undefined; // Ensure these are not present for chapterwise
+    chemistry?: undefined;
+    maths?: undefined;
+    biology?: undefined;
+    stream?: undefined;
+    weightage?: undefined;
 }
 
-// Interface for Full Length Test JSON
+// Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
+    testType: 'full_length'; // Discriminator
     stream: TestStream;
     test_subject: string[]; // Can have multiple subjects (Physics, Chemistry, Maths/Bio)
-    examFilter: ExamOption | 'all'; // Added exam filter
+    examFilter: ExamOption | 'all';
     weightage?: {
         physics: number;
         chemistry: number;
         maths?: number;
         biology?: number;
     };
+    // Subject-specific question arrays for full length tests
     physics?: TestQuestion[];
     chemistry?: TestQuestion[];
     maths?: TestQuestion[];
     biology?: TestQuestion[];
+    // 'questions' from BaseGeneratedTest might be undefined or used differently for full length
+    lesson?: undefined; // Ensure this is not present for full_length
 }
 
-// General type covering both generated test structures
+// Discriminated union for generated tests
 export type GeneratedTest = ChapterwiseTestJson | FullLengthTestJson;
+
+
+// ---- Test Taking Interface Types ----
+export enum QuestionStatus {
+  Unanswered = 'unanswered',
+  Answered = 'answered',
+  MarkedForReview = 'marked',
+  AnsweredAndMarked = 'answered_marked',
+  NotVisited = 'not_visited', // Default
+}
+
+export interface UserAnswer {
+  questionId: string; // Or index if using array index
+  selectedOption: string | null; // e.g., "A", "B", "C", "D", or null if unanswered
+  status: QuestionStatus;
+  timeTaken?: number; // Optional: time spent on this question
+}
+
+export interface TestSession {
+  testId: string;
+  userId: string;
+  startTime: number; // Timestamp
+  endTime?: number; // Timestamp, set on submit
+  answers: UserAnswer[];
+  score?: number;
+  // Add other relevant session data
+}
+
+export interface TestResultSummary {
+    testCode: string;
+    userId: string;
+    userName?: string;
+    testName: string;
+    attemptId: string; // Unique ID for this attempt
+    submittedAt: string; // ISO timestamp
+    totalQuestions: number;
+    attempted: number;
+    correct: number;
+    incorrect: number;
+    unanswered: number;
+    score: number;
+    percentage: number;
+    timeTakenMinutes: number; // Total time taken for the test
+    detailedAnswers: Array<{
+        questionIndex: number; // or questionId
+        questionTextOrImage: string; // A representation of the question
+        userAnswer: string | null; // e.g. "A"
+        correctAnswer: string; // e.g. "C"
+        isCorrect: boolean;
+        status: QuestionStatus; // From UserAnswer
+        explanation?: string | null;
+    }>;
+}
