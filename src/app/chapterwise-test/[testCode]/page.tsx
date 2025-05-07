@@ -4,29 +4,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
+import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types'; // Added QuestionStatus
+import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Import enum directly for usage
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, Sparkles, XSquare, Send } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, Sparkles, XSquare, Send, Clock } from 'lucide-react'; // Added Clock
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge'; // Added Badge import
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 // Placeholder for server action to save test results
 // import { saveChapterwiseTestAttempt } from '@/actions/test-submission-actions';
 
 const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
-  [QuestionStatus.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700',
-  [QuestionStatus.Unanswered]: 'bg-red-400 hover:bg-red-500 text-white',
-  [QuestionStatus.Answered]: 'bg-green-500 hover:bg-green-600 text-white',
-  [QuestionStatus.MarkedForReview]: 'bg-purple-500 hover:bg-purple-600 text-white',
-  [QuestionStatus.AnsweredAndMarked]: 'bg-blue-500 hover:bg-blue-600 text-white',
+  [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700',
+  [QuestionStatusEnum.Unanswered]: 'bg-red-400 hover:bg-red-500 text-white',
+  [QuestionStatusEnum.Answered]: 'bg-green-500 hover:bg-green-600 text-white',
+  [QuestionStatusEnum.MarkedForReview]: 'bg-purple-500 hover:bg-purple-600 text-white',
+  [QuestionStatusEnum.AnsweredAndMarked]: 'bg-blue-500 hover:bg-blue-600 text-white',
 };
 
 export default function ChapterwiseTestPage() {
@@ -74,12 +76,12 @@ export default function ChapterwiseTestPage() {
         setTimeLeft(data.duration * 60);
         const initialStatuses: Record<number, QuestionStatus> = {};
         data.questions.forEach((_, index) => {
-          initialStatuses[index] = QuestionStatus.NotVisited;
+          initialStatuses[index] = QuestionStatusEnum.NotVisited;
         });
         setQuestionStatuses(initialStatuses);
         // Mark first question as unanswered (or not visited if preferred)
         if (data.questions.length > 0) {
-             setQuestionStatuses(prev => ({...prev, 0: QuestionStatus.Unanswered}));
+             setQuestionStatuses(prev => ({...prev, 0: QuestionStatusEnum.Unanswered}));
         }
       }
     } catch (err: any) {
@@ -126,6 +128,7 @@ export default function ChapterwiseTestPage() {
       });
     }, 1000);
     return () => clearInterval(timerId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, showInstructions, testData]); // handleSubmitTest dependency will be added if it's memoized
 
   const formatTime = (seconds: number) => {
@@ -140,40 +143,40 @@ export default function ChapterwiseTestPage() {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: optionKey }));
     setQuestionStatuses(prev => ({
       ...prev,
-      [currentQuestionIndex]: prev[currentQuestionIndex] === QuestionStatus.MarkedForReview || prev[currentQuestionIndex] === QuestionStatus.AnsweredAndMarked
-        ? QuestionStatus.AnsweredAndMarked
-        : QuestionStatus.Answered,
+      [currentQuestionIndex]: prev[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || prev[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked
+        ? QuestionStatusEnum.AnsweredAndMarked
+        : QuestionStatusEnum.Answered,
     }));
   };
 
   const navigateQuestion = (index: number) => {
     if (index >= 0 && testData && index < testData.questions.length) {
       // Update status of current question before navigating if it was 'NotVisited' or 'Unanswered' and no answer was made
-      if (questionStatuses[currentQuestionIndex] === QuestionStatus.NotVisited && !userAnswers[currentQuestionIndex]) {
-           setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatus.Unanswered}));
+      if (questionStatuses[currentQuestionIndex] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
+           setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
       }
 
       setCurrentQuestionIndex(index);
       // Update status of new question to 'Unanswered' if it's 'NotVisited'
-       if (questionStatuses[index] === QuestionStatus.NotVisited) {
-           setQuestionStatuses(prev => ({...prev, [index]: QuestionStatus.Unanswered}));
+       if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
+           setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
        }
     }
   };
 
   const handleMarkForReview = () => {
     const currentStatus = questionStatuses[currentQuestionIndex];
-    if (currentStatus === QuestionStatus.Answered) {
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatus.AnsweredAndMarked }));
-    } else if (currentStatus === QuestionStatus.AnsweredAndMarked) {
+    if (currentStatus === QuestionStatusEnum.Answered) {
+      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
+    } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         // Toggle back to Answered if already AnsweredAndMarked
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatus.Answered }));
-    } else if (currentStatus === QuestionStatus.MarkedForReview) {
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
+    } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
         // Toggle back to Unanswered (or NotVisited if preferred)
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatus.Answered : QuestionStatus.Unanswered }));
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
     }
     else { // Unanswered or NotVisited
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatus.MarkedForReview }));
+      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
 
@@ -181,10 +184,10 @@ export default function ChapterwiseTestPage() {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
     // If it was answered/marked, revert to just marked or unanswered
     const currentStatus = questionStatuses[currentQuestionIndex];
-    if (currentStatus === QuestionStatus.AnsweredAndMarked) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatus.MarkedForReview }));
+    if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     } else {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatus.Unanswered }));
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
     }
   };
 
@@ -196,7 +199,7 @@ export default function ChapterwiseTestPage() {
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
       questionId: q.id || `q-${index}`, // Fallback if question ID from bank isn't in TestQuestion
       selectedOption: userAnswers[index] || null,
-      status: questionStatuses[index] || QuestionStatus.NotVisited,
+      status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
 
     const sessionData: TestSession = {
@@ -333,7 +336,7 @@ export default function ChapterwiseTestPage() {
             <div className="flex gap-2">
                  <Button variant="outline" onClick={handleMarkForReview} className="text-purple-600 border-purple-600 hover:bg-purple-50">
                     <Flag className="mr-2 h-4 w-4" />
-                    {questionStatuses[currentQuestionIndex] === QuestionStatus.MarkedForReview || questionStatuses[currentQuestionIndex] === QuestionStatus.AnsweredAndMarked ? 'Unmark' : 'Mark for Review'}
+                    {questionStatuses[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || questionStatuses[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked ? 'Unmark' : 'Mark for Review'}
                 </Button>
                 <Button variant="outline" onClick={handleClearResponse} disabled={!userAnswers[currentQuestionIndex]}>
                     <XSquare className="mr-2 h-4 w-4" /> Clear Response
@@ -387,7 +390,7 @@ export default function ChapterwiseTestPage() {
                 size="icon"
                 className={cn(
                   "h-9 w-9 text-xs font-medium",
-                  QUESTION_STATUS_COLORS[questionStatuses[index] || QuestionStatus.NotVisited],
+                  QUESTION_STATUS_COLORS[questionStatuses[index] || QuestionStatusEnum.NotVisited],
                   currentQuestionIndex === index && "ring-2 ring-offset-2 ring-primary"
                 )}
                 onClick={() => navigateQuestion(index)}
@@ -397,11 +400,11 @@ export default function ChapterwiseTestPage() {
             ))}
           </div>
           <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatus.Answered])}></span> Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatus.Unanswered])}></span> Not Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatus.NotVisited])}></span> Not Visited</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatus.MarkedForReview])}></span> Marked for Review</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatus.AnsweredAndMarked])}></span> Answered & Marked</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.NotVisited])}></span> Not Visited</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.MarkedForReview])}></span> Marked for Review</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.AnsweredAndMarked])}></span> Answered & Marked</p>
           </div>
            <div className="mt-6 text-center">
                  <AlertDialog>
@@ -433,3 +436,4 @@ export default function ChapterwiseTestPage() {
     </div>
   );
 }
+

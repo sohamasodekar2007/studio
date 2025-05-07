@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus } from '@/types';
+import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus } from '@/types'; // Added QuestionStatus
+import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Import enum directly for usage
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import Image from 'next/image';
@@ -16,11 +17,11 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const QUESTION_STATUS_DISPLAY_CLASSES: Record<QuestionStatus, string> = {
-    [QuestionStatus.Answered]: "border-green-500 bg-green-50",
-    [QuestionStatus.Unanswered]: "border-red-500 bg-red-50",
-    [QuestionStatus.MarkedForReview]: "border-purple-500 bg-purple-50",
-    [QuestionStatus.AnsweredAndMarked]: "border-blue-500 bg-blue-50",
-    [QuestionStatus.NotVisited]: "border-gray-300 bg-gray-50",
+    [QuestionStatusEnum.Answered]: "border-green-500 bg-green-50",
+    [QuestionStatusEnum.Unanswered]: "border-red-500 bg-red-50",
+    [QuestionStatusEnum.MarkedForReview]: "border-purple-500 bg-purple-50",
+    [QuestionStatusEnum.AnsweredAndMarked]: "border-blue-500 bg-blue-50",
+    [QuestionStatusEnum.NotVisited]: "border-gray-300 bg-gray-50",
 };
 
 
@@ -94,7 +95,13 @@ export default function TestReviewPage() {
   }, [testCode, userId, attemptId, authLoading, user, router]);
 
   const currentReviewQuestion = testDefinition?.questions?.[currentQuestionReviewIndex];
-  const currentUserAnswer = testSession?.answers.find(ans => ans.questionId === (currentReviewQuestion?.id || `q-${currentQuestionReviewIndex}`));
+  const currentUserAnswerDetailed = testSession?.answers.find(ans => {
+    // Heuristic: Try to match by question text/image if ID is not available from TestQuestion
+    const qDef = testDefinition?.questions?.[ans.questionId ? parseInt(ans.questionId.replace('q-','')) : -1 ];
+    if (qDef && ans.questionId === (currentReviewQuestion?.id || `q-${currentQuestionReviewIndex}`)) return true;
+    // Fallback match by index if questionId is not available or doesn't match
+    return testDefinition?.questions?.[currentQuestionReviewIndex] === qDef;
+  });
 
 
   if (isLoading || authLoading) {
@@ -142,7 +149,8 @@ export default function TestReviewPage() {
   const totalQuestions = testDefinition.questions?.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
   const correctOptionKey = currentReviewQuestion.answer.replace('Option ', '').trim();
-  const userSelectedOptionKey = currentUserAnswer?.selectedOption;
+  const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
+  const isUserCorrect = userSelectedOptionKey === correctOptionKey;
 
 
   return (
@@ -157,18 +165,18 @@ export default function TestReviewPage() {
       </div>
 
 
-      <Card className={cn("shadow-md", currentUserAnswer && QUESTION_STATUS_DISPLAY_CLASSES[currentUserAnswer.status])}>
+      <Card className={cn("shadow-md", currentUserAnswerDetailed && QUESTION_STATUS_DISPLAY_CLASSES[currentUserAnswerDetailed.status])}>
         <CardHeader>
           <CardTitle className="flex justify-between items-center">
             <span>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</span>
             <Badge variant="secondary">Marks: {currentReviewQuestion.marks}</Badge>
           </CardTitle>
-           {currentUserAnswer?.status && (
+           {currentUserAnswerDetailed?.status && (
                 <Badge
-                    variant={currentUserAnswer.isCorrect ? 'default' : 'destructive'}
-                    className={cn("text-xs w-fit", currentUserAnswer.isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}
+                    variant={isUserCorrect ? 'default' : 'destructive'}
+                    className={cn("text-xs w-fit", isUserCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}
                  >
-                   Status: {currentUserAnswer.status.replace('_', ' ')}
+                   Status: {currentUserAnswerDetailed.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} {/* Nicer formatting */}
                 </Badge>
             )}
         </CardHeader>
@@ -209,7 +217,7 @@ export default function TestReviewPage() {
           </div>
 
           {/* Explanation Section */}
-          {(currentReviewQuestion.explanation || (currentUserAnswer && !currentUserAnswer.isCorrect)) && (
+          {(currentReviewQuestion.explanation || (currentUserAnswerDetailed && !isUserCorrect)) && (
             <div className="mt-6 pt-4 border-t">
               <h4 className="font-semibold text-lg mb-2 flex items-center">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
@@ -235,4 +243,5 @@ export default function TestReviewPage() {
     </div>
   );
 }
+
 
