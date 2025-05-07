@@ -1,16 +1,26 @@
-// src/app/study-tips/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect, ChangeEvent } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, Wand2, MessageSquareText, Info, AlertTriangle, ClipboardPaste } from "lucide-react"; // Added ClipboardPaste
 import { useToast } from "@/hooks/use-toast";
 import { getStudyTips, type StudyTipInput } from '@/ai/flows/study-tip-flow'; // Import the flow
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Import Alert components
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip components
+import { Skeleton } from '@/components/ui/skeleton';
+import Image from 'next/image';
+
+// Constants for image handling
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 
 export default function StudyTipsPage() {
+  const { user, loading: authLoading } = useAuth();
   const [exam, setExam] = useState<string>('');
   const [subject, setSubject] = useState<string>('');
   const [topic, setTopic] = useState<string>('');
@@ -24,6 +34,8 @@ export default function StudyTipsPage() {
   // Add more specific topics later or fetch dynamically
   const topics = ["Calculus", "Organic Chemistry", "Mechanics", "Genetics", "Thermodynamics", "Optics"];
   const difficulties = ["Beginner", "Intermediate", "Advanced"];
+
+  const isPremiumUser = user && user.model !== 'free';
 
   const handleGenerateTips = async () => {
     if (!exam || !subject || !topic || !difficulty) {
@@ -64,8 +76,28 @@ export default function StudyTipsPage() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isPremiumUser) {
+    return (
+      <div className="container mx-auto py-8 px-4 text-center">
+        <AlertTriangle className="h-12 w-12 text-primary mx-auto mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Premium Access Required</h1>
+        <p className="text-muted-foreground">AI Study Tips are a premium feature. Upgrade to access personalized advice.</p>
+         {/* TODO:  Add Upgrade Button Here */}
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight text-center">AI Study Tips Generator</h1>
       <p className="text-muted-foreground text-center">Get personalized study tips based on your selected exam, subject, topic, and difficulty.</p>
 
@@ -77,9 +109,9 @@ export default function StudyTipsPage() {
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Exam Select */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Exam</label>
+            <Label htmlFor="exam">Exam</Label>
             <Select onValueChange={setExam} value={exam} disabled={isLoading}>
-              <SelectTrigger>
+              <SelectTrigger id="exam">
                 <SelectValue placeholder="Select Exam" />
               </SelectTrigger>
               <SelectContent>
@@ -90,9 +122,9 @@ export default function StudyTipsPage() {
 
           {/* Subject Select */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Subject</label>
+            <Label htmlFor="subject">Subject</Label>
             <Select onValueChange={setSubject} value={subject} disabled={isLoading}>
-              <SelectTrigger>
+              <SelectTrigger id="subject">
                 <SelectValue placeholder="Select Subject" />
               </SelectTrigger>
               <SelectContent>
@@ -103,9 +135,9 @@ export default function StudyTipsPage() {
 
            {/* Topic Select */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Topic</label>
+            <Label htmlFor="topic">Topic</Label>
              <Select onValueChange={setTopic} value={topic} disabled={isLoading}>
-              <SelectTrigger>
+              <SelectTrigger id="topic">
                 <SelectValue placeholder="Select Topic" />
               </SelectTrigger>
               <SelectContent>
@@ -116,9 +148,9 @@ export default function StudyTipsPage() {
 
           {/* Difficulty Select */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Difficulty Level</label>
+            <Label htmlFor="difficulty">Difficulty Level</Label>
              <Select onValueChange={setDifficulty} value={difficulty} disabled={isLoading}>
-              <SelectTrigger>
+              <SelectTrigger id="difficulty">
                 <SelectValue placeholder="Select Difficulty" />
               </SelectTrigger>
               <SelectContent>
@@ -128,7 +160,7 @@ export default function StudyTipsPage() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleGenerateTips} disabled={isLoading || !exam || !subject || !topic || !difficulty}>
+          <Button onClick={handleGenerateTips} disabled={isLoading || !exam || !subject || !topic || !difficulty} className="w-full sm:w-auto">
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
             Generate Tips
           </Button>
@@ -138,13 +170,29 @@ export default function StudyTipsPage() {
       {/* Display Generated Tips */}
       {generatedTips && (
         <Card>
-          <CardHeader>
-            <CardTitle>Generated Study Tips</CardTitle>
-            <CardDescription>Tips tailored for {topic} ({difficulty}) in {subject} for {exam}.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CardTitle>Generated Study Tips</CardTitle>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="start" className="max-w-xs">
+                    <p className="text-xs">AI models can make mistakes. Verify critical information and use the answer as a guide, not a definitive solution.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Use whitespace-pre-wrap to preserve line breaks from AI */}
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{generatedTips}</p>
+            <Textarea
+              value={generatedTips}
+              readOnly
+              className="min-h-[100px] text-sm text-muted-foreground whitespace-pre-wrap"
+            />
           </CardContent>
         </Card>
       )}
@@ -152,7 +200,7 @@ export default function StudyTipsPage() {
          <Card>
             <CardContent className="p-6 flex items-center justify-center text-muted-foreground">
                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-               Generating tips...
+               Thinking...
             </CardContent>
          </Card>
        )}

@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
@@ -6,6 +9,13 @@ import { Search, LifeBuoy, Mail } from "lucide-react";
 import Link from "next/link"; // Import Link
 
 export default function HelpPage() {
+  const [currentDate, setCurrentDate] = useState('');
+
+  useEffect(() => {
+    setCurrentDate(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }));
+  }, []);
+
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold tracking-tight text-center">Help & Support</h1>
@@ -76,7 +86,7 @@ export default function HelpPage() {
             Chat with Support (Coming Soon)
           </Button>
           <Button variant="outline" size="lg" asChild>
-             <a href="mailto:support@examprephub.app"> {/* Updated email */}
+             <a href="mailto:support@examprephub.app" className="text-muted-foreground hover:text-primary"> {/* Updated email & styled link as button */}
                  <Mail className="mr-2 h-5 w-5" />
                  Email Us
              </a>
