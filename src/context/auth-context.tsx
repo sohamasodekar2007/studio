@@ -86,7 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             // Fetch the LATEST user profile from the backend (users.json)
-             console.log(`AuthProvider: Fetching latest profile for user ID: ${storedUser.id}`);
+             // Modify console.log to use standard string concatenation
+             console.log("AuthProvider: Fetching latest profile for user ID: " + storedUser.id);
              const latestProfile = await getUserById(storedUser.id); // getUserById returns Omit<UserProfile, 'password'>
 
              if (!latestProfile) {
@@ -210,12 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              } else {
                 // Password mismatch
                  console.warn(`AuthProvider: Login failed for ${email}. Invalid password.`);
-                 throw new Error('Login failed: Invalid email or password.');
+                 throw new Error('Login failed: Invalid email or password for local authentication.');
              }
         } else {
             // User not found or has no password hash stored
              console.warn(`AuthProvider: Login failed for ${email}. User not found or password not set.`);
-            throw new Error('Login failed: Invalid email or password.');
+            throw new Error('Login failed: Invalid email or password for local authentication.');
         }
     } catch (error: any) {
       console.error("Simulated login failed:", error);
@@ -263,24 +264,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
       // Hash the password
-      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+      // const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS); // Hashing is now done in addUserToJson
 
       // Create UserProfile for local JSON storage
-      const newUserProfile: Omit<UserProfile, 'id' | 'createdAt'> & { password: string } = { // Type for data passed to addUserToJson
+      // Pass plain text password to addUserToJson, it will handle hashing
+      const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral'> & { password: string } = { // Adjust type
         email: email,
-        password: password, // Pass plain text to addUserToJson, it will hash
+        password: password, // Pass plain text
         name: displayName || null,
         phone: phoneNumber || null,
         class: academicStatus || null,
         model: 'free', // Default to 'free'
-        expiry_date: null,
-        avatarUrl: null, // Default avatar
-        referral: '' // Ensure referral is initialized
+        expiry_date: null, // Free model has no expiry
       };
+
 
        console.log(`AuthProvider: Attempting to add new user: ${email}`);
       // Save to users.json using the server action (which now handles hashing)
-       const saveResult = await addUserToJson(newUserProfile);
+       const saveResult = await addUserToJson(newUserProfileData);
        if (!saveResult.success || !saveResult.user) { // Check if user object is returned
          console.error("CRITICAL: Failed to save new user profile to local JSON:", saveResult.message);
          throw new Error(saveResult.message || 'Could not create user profile.');
@@ -335,7 +336,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check if the current path matches any public route or specific pattern
      const isPublicRoute = publicRoutes.some(route => {
          if (route.includes('[')) { // Basic check for dynamic route patterns
-             return pathname.startsWith(route.split('[')[0]);
+             // Check if pathname starts with the static part of the route pattern
+             const staticPart = route.split('[')[0];
+             return pathname.startsWith(staticPart) && pathname !== staticPart; // Match sub-paths but not the index
          }
          return pathname === route;
      });
