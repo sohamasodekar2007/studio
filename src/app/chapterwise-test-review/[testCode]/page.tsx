@@ -30,6 +30,9 @@ const OPTION_STYLES = {
   selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
   selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
   correctUnselected: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
+  // For image questions where there's no explicit "selected" state but we want to highlight the correct one
+  correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
+
 };
 
 
@@ -73,12 +76,10 @@ export default function TestReviewPage() {
       if (!testDefData) {
           throw new Error("Original test definition not found.");
       }
-       if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
-          throw new Error("Test definition is invalid or has no questions.");
-       } else if (testDefData.testType === 'full_length' &&
-                  !(testDefData.physics || testDefData.chemistry || testDefData.maths || testDefData.biology)?.some(arr => arr && arr.length > 0)
-       ) {
-           throw new Error("Full length test definition is invalid or has no questions in any subject section.");
+      
+      const allQuestions = (testDefData.testType === 'chapterwise' ? testDefData.questions : [...(testDefData.physics || []), ...(testDefData.chemistry || []), ...(testDefData.maths || []), ...(testDefData.biology || [])]);
+      if (!allQuestions || allQuestions.length === 0) {
+           throw new Error("Test definition is invalid or has no questions.");
        }
 
       setTestDefinition(testDefData);
@@ -118,12 +119,13 @@ export default function TestReviewPage() {
         if (testDefinition.testType === 'chapterwise' && testDefinition.questions) {
             return testDefinition.questions;
         } else if (testDefinition.testType === 'full_length') {
-            return [
+             const questions = [
                 ...(testDefinition.physics || []),
                 ...(testDefinition.chemistry || []),
                 ...(testDefinition.maths || []),
                 ...(testDefinition.biology || []),
-            ].filter(q => q);
+            ].filter(q => q); // filter out undefined subject arrays if any
+            return questions;
         }
         return [];
     }, [testDefinition]);
@@ -178,56 +180,70 @@ export default function TestReviewPage() {
 
   const totalQuestions = allQuestions.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
-  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim() || currentReviewQuestion.answer;
+  
+  // Handle cases where answer might not start with "Option "
+  const correctOptionKey = currentReviewQuestion.answer?.startsWith('Option ') 
+                           ? currentReviewQuestion.answer.replace('Option ', '').trim() 
+                           : currentReviewQuestion.answer?.trim();
+                           
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
     const renderContent = (
-        text: string | undefined | null,
+        textContent: string | undefined | null,
         imageUrl: string | undefined | null,
-        isQuestionContext: boolean = false,
-        questionTypeContext?: QuestionType | null
+        context: 'question' | 'explanation',
+        // QuestionType is only relevant for question context
+        questionType?: QuestionType | null 
     ) => {
-        let displayImageUrl: string | null = null;
 
-        if (isQuestionContext) {
-            // If type is explicitly 'image' and imageUrl exists
-            if (questionTypeContext === 'image' && imageUrl) {
-                displayImageUrl = imageUrl;
+        // Prioritize image if it's an image question or if explanation has an image
+        let displayImage = false;
+        if (context === 'question') {
+            // If type is explicitly 'image' and imageUrl (filename) exists, construct full path
+            if (questionType === 'image' && imageUrl && testDefinition) {
+                 displayImage = true;
             }
             // Heuristic for older data: if type is missing, but imageUrl exists and text does not, assume image
-            else if (!questionTypeContext && imageUrl && !text) {
-                displayImageUrl = imageUrl;
+            else if (!questionType && imageUrl && !textContent && testDefinition) {
+                 displayImage = true;
             }
         } else { // For explanation
-            if (imageUrl) { // If explanation has an image, prioritize it
-                displayImageUrl = imageUrl;
+            if (imageUrl && testDefinition) { // If explanation has an image, prioritize it
+                 displayImage = true;
             }
         }
 
-        if (displayImageUrl) {
+        if (displayImage && imageUrl && testDefinition) {
+            // Construct the full public image path for question or explanation images
+             const imagePath = (context === 'question' && testDefinition.testType === 'chapterwise' && testDefinition.lesson) 
+                 ? `/question_bank_images/${testDefinition.test_subject[0]}/${testDefinition.lesson}/images/${imageUrl}` 
+                 : (context === 'explanation' && testDefinition.testType === 'chapterwise' && testDefinition.lesson)
+                 ? `/question_bank_images/${testDefinition.test_subject[0]}/${testDefinition.lesson}/images/${imageUrl}`
+                 : imageUrl; // Fallback to imageUrl if path construction isn't straightforward (e.g. full_length or direct URL)
+            
             return (
                  <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
                     <Image
-                        src={displayImageUrl}
-                        alt={isQuestionContext ? "Question Image" : "Explanation Image"}
+                        src={imagePath} // Use the constructed imagePath
+                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
                         layout="fill"
                         objectFit="contain"
                         className="rounded-md border"
-                        data-ai-hint={isQuestionContext ? "question diagram" : "explanation image"}
+                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
                     />
                  </div>
              );
-        } else if (text) {
+        } else if (textContent) {
              return (
                  <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground"
-                    dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                    dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                  />
              );
         }
-        return <p className="text-muted-foreground text-sm">{isQuestionContext ? "[Question content not available]" : "[Explanation not available]"}</p>;
+        return <p className="text-muted-foreground text-sm">{context === 'question' ? "[Question content not available]" : "[Explanation not available]"}</p>;
     };
 
 
@@ -235,9 +251,10 @@ export default function TestReviewPage() {
     <>
     <Script
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-        strategy="lazyOnload"
+        strategy="lazyOnload" 
         onLoad={() => {
-            if (isOpen) typesetMathJax();
+            console.log('MathJax loaded for review page.');
+            typesetMathJax();
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -273,7 +290,7 @@ export default function TestReviewPage() {
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContent(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url, true, currentReviewQuestion?.type)}
+                 {renderContent(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url || currentReviewQuestion?.question, 'question', currentReviewQuestion?.type)}
             </div>
 
           <div className="space-y-2 pt-4">
@@ -282,10 +299,16 @@ export default function TestReviewPage() {
               const optionKey = optionKeys[idx];
               const isSelected = userSelectedOptionKey === optionKey;
               const isCorrectOption = correctOptionKey === optionKey;
+              
               let optionStyleClass = OPTION_STYLES.base;
-              if (isSelected && isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
-              else if (isSelected && !isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
-              else if (isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
+              if (currentReviewQuestion.type === 'image' && isCorrectOption) { // For image type, highlight correct directly
+                  optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
+              } else { // For text type or image type with selection logic
+                  if (isSelected && isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
+                  else if (isSelected && !isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
+                  else if (isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
+              }
+
 
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
@@ -299,19 +322,19 @@ export default function TestReviewPage() {
                    </div>
                   {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
-                  {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
+                  {!isSelected && isCorrectOption && currentReviewQuestion.type !== 'image' && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
                 </div>
               );
             })}
           </div>
 
-          {(currentReviewQuestion.explanation_text || currentReviewQuestion.explanation_image_url) && (
+          {(currentReviewQuestion.explanation_text || currentReviewQuestion.explanation_image_url || currentReviewQuestion.explanation) && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
-                 {renderContent(currentReviewQuestion.explanation_text, currentReviewQuestion.explanation_image_url, false)}
+                 {renderContent(currentReviewQuestion.explanation_text || (typeof currentReviewQuestion.explanation === 'string' ? currentReviewQuestion.explanation : null) , currentReviewQuestion.explanation_image_url, 'explanation')}
               </div>
             </div>
           )}
