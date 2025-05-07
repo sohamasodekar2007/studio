@@ -189,6 +189,36 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
   return users;
 }
 
+// Export the internal function so it can be used by auth-context
+export { readAndInitializeUsersInternal as readUsersWithPasswordsInternal };
+
+/**
+ * Finds a user by email in the local users.json file *without* checking password.
+ * Useful for checking if an email exists or for profile lookups during signup.
+ * IMPORTANT: Does NOT verify the user's identity or password.
+ * @param email The email to search for.
+ * @returns A promise resolving to the UserProfile if found, otherwise null.
+ */
+export async function findUserByEmail(
+  email: string,
+): Promise<UserProfile | null> {
+  if (!email) {
+    return null;
+  }
+  try {
+    // Read users with passwords internally for the search
+    const users = await readUsersWithPasswordsInternal();
+    const foundUser = users.find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase()
+    );
+    // Return the full profile including password hash/plain text for internal use
+    return foundUser || null;
+  } catch (error) {
+    console.error(`Error finding user by email ${email}:`, error);
+    return null; // Return null on error
+  }
+}
+
 
 /**
  * Saves or updates user data in the local users.json file.
@@ -241,6 +271,9 @@ export async function saveUserToJson(
             console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated.`);
         } else {
             // Add new user (this path should ideally be handled by addUserToJson)
+             // This case might need review: adding a user via `saveUserToJson` might bypass
+             // checks in `addUserToJson` (like email uniqueness if ID doesn't exist).
+             // For robust behavior, prefer using addUserToJson for new users.
             users.push(userToSave);
             console.log(`New user ${userToSave.email} (ID: ${userToSave.id}) added via saveUserToJson.`);
         }
@@ -328,17 +361,24 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
             createdAt: existingUser.createdAt, // Preserve original creation date
         };
 
-        if (updatedData.model === 'free') {
+        // Ensure expiry_date is null if model is 'free', otherwise format it
+        if (userWithUpdatesApplied.model === 'free') {
             userWithUpdatesApplied.expiry_date = null;
-        } else if (updatedData.expiry_date && !(updatedData.expiry_date instanceof Date)) {
-             userWithUpdatesApplied.expiry_date = new Date(updatedData.expiry_date).toISOString();
-        } else if (updatedData.expiry_date instanceof Date) {
-            userWithUpdatesApplied.expiry_date = updatedData.expiry_date.toISOString();
+        } else if (updatedData.expiry_date !== undefined) { // Check if expiry_date was part of the update
+            userWithUpdatesApplied.expiry_date = updatedData.expiry_date instanceof Date
+                                                ? updatedData.expiry_date.toISOString()
+                                                : (updatedData.expiry_date ? new Date(updatedData.expiry_date).toISOString() : null);
         }
+
 
         users[userIndex] = userWithUpdatesApplied;
         const success = await writeUsers(users);
         if (success) {
+            // Immediately clear local storage for the affected user to force logout on plan change
+            // This requires client-side access, which isn't ideal in a server action.
+            // A better approach would involve signaling the client, or having the client re-validate on navigation.
+            // For simulation, we'll assume the client side logic handles logout on detected change.
+             console.log(`User ${userId} updated. Plan change requires re-login.`);
             return { success: true, user: userWithUpdatesApplied };
         } else {
             return { success: false, message: 'Failed to write users file.' };
@@ -445,7 +485,5 @@ async function initializeDataStore() {
 }
 
 // Call initialization on server start (though 'use server' actions run per request)
-// For a true "on server start", this might be in a different context or a startup script.
 // For this local file-based system, it's checked on first read.
 initializeDataStore();
-
