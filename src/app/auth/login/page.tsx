@@ -23,7 +23,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { toast } = useToast();
-  const { login, signInWithGoogleLocally } = useAuth(); // Get login and simulated Google sign-in
+  const { login, signInWithGoogle } = useAuth(); // Use real signInWithGoogle
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Separate loading state for Google
 
@@ -39,18 +39,11 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
-      // Redirection is handled within the login function in AuthContext
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-      });
+      // Redirection is handled within the login function/onAuthStateChanged in AuthContext
+      // toast is handled within AuthContext/login on success now
     } catch (error: any) {
-      console.error("Login failed (simulated):", error);
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error.message || "Invalid credentials or local error.",
-      });
+      // Error toast is handled within AuthContext/login on failure now
+      console.error("Login failed:", error.message); // Keep console log for debugging
     } finally {
       setIsLoading(false);
     }
@@ -59,19 +52,11 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      await signInWithGoogleLocally(); // Call the simulated Google sign-in function
-      // Redirection is handled within the signInWithGoogleLocally/login function
-       toast({
-        title: "Google Sign-In Successful (Simulated)",
-        description: "Welcome!",
-      });
+      await signInWithGoogle(); // Call the real Firebase Google sign-in function
+      // Redirection and success toast handled within onAuthStateChanged
     } catch (error: any) {
-      console.error("Google Sign-in failed (simulated):", error);
-      toast({
-        variant: "destructive",
-        title: "Google Sign-In Failed",
-        description: error.message || "Could not sign in with Google (Simulated).",
-      });
+      // Error toast is handled within AuthContext/signInWithGoogle on failure now
+      console.error("Google Sign-in failed:", error.message); // Keep console log
     } finally {
       setIsGoogleLoading(false);
     }
@@ -143,7 +128,7 @@ export default function LoginPage() {
                  ) : (
                     <Chrome className="mr-2 h-4 w-4" /> // Using Chrome icon for Google
                  )}
-                 Sign in with Google (Simulated)
+                 Sign in with Google
               </Button>
 
 

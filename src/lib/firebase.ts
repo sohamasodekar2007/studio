@@ -1,13 +1,10 @@
 // src/lib/firebase.ts
-// import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-// import { getAuth, type Auth } from "firebase/auth"; // Import Auth type explicitly
+import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth"; // Import Auth type explicitly
 // import { getFirestore } from "firebase/firestore"; // Uncomment if using Firestore
 // import { getStorage } from "firebase/storage"; // Uncomment if using Storage
 
-// --- Firebase initialization is removed as requested to use local storage ---
-// --- Previous configuration verification and initialization code is commented out or removed ---
-
-/*
+// --- Firebase configuration validation ---
 const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
@@ -43,8 +40,9 @@ let authInstance: Auth | null = null; // Explicitly type as Auth | null
 
 if (!firebaseInitializationError) {
    // CRITICAL CHECK: Ensure the API key is present and looks potentially valid before initializing.
-   if (!firebaseConfig.apiKey || firebaseConfig.apiKey.length < 10) { // Basic length check
-      firebaseInitializationError = "CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_API_KEY is missing, empty, or too short in your .env file. Expected format: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSy...";
+   // A very basic check, Firebase SDK does more thorough validation.
+   if (!firebaseConfig.apiKey || firebaseConfig.apiKey.length < 10 || !firebaseConfig.apiKey.startsWith("AIza")) {
+      firebaseInitializationError = "CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_API_KEY is missing, empty, too short, or doesn't look like a valid Firebase Web API Key in your .env file. Expected format: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSy...";
       console.error("**********************************************************************************");
       console.error(firebaseInitializationError);
       console.error("**********************************************************************************");
@@ -52,12 +50,14 @@ if (!firebaseInitializationError) {
        try {
            if (!getApps().length) {
                app = initializeApp(firebaseConfig);
+               console.log("Firebase App Initialized.");
            } else {
                app = getApp();
+                console.log("Firebase App Re-used.");
            }
            // Attempt to get Auth only if app initialized successfully
            authInstance = getAuth(app);
-            console.log("Firebase initialized successfully."); // Add success log
+            console.log("Firebase Auth Initialized successfully."); // Add success log
        } catch (error: any) {
             firebaseInitializationError = `FATAL ERROR DURING FIREBASE INITIALIZATION: ${error.message}. This likely means your Firebase config in .env is incorrect, incomplete, or the API key is invalid. Please verify all NEXT_PUBLIC_FIREBASE_* variables match your Firebase project settings.`;
             console.error("**********************************************************************************");
@@ -79,14 +79,3 @@ const auth = authInstance;
 
 // Export the error message so AuthProvider can potentially display it
 export { app, auth, firebaseInitializationError };
-*/
-
-// Since Firebase is removed for Auth/DB, we export null placeholders or nothing.
-// This prevents import errors in other files, but they need to be adapted.
-export const app = null;
-export const auth = null; // No Firebase Auth instance
-export const firebaseInitializationError = null; // No initialization error
-
-console.warn(
-  "Firebase initialization is disabled. Using local JSON for data storage and simulated authentication. This is INSECURE and for DEMONSTRATION only."
-);

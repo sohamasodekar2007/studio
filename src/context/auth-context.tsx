@@ -2,286 +2,333 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { auth, firebaseInitializationError } from '@/lib/firebase'; // Use real auth instance
+import {
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider, // Import Google Provider
+  type User as FirebaseUser, // Alias Firebase User type
+} from "firebase/auth";
 import type { UserProfile, UserModel, AcademicStatus } from '@/types'; // Use our UserProfile type
 import { Skeleton } from '@/components/ui/skeleton';
 import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions'; // Import actions to find user locally
-import { saveUserToJson, addUserToJson } from '@/actions/user-actions'; // Import actions to save/add user
-import { useRouter } from 'next/navigation'; // Import useRouter for redirection
+import { saveUserToJson, addUserToJson, getUserById } from '@/actions/user-actions'; // Import actions to save/add user
+import { useRouter, usePathname } from 'next/navigation'; // Import useRouter for redirection
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
+import { useToast } from '@/hooks/use-toast';
 
-// Define simulated User type based on UserProfile, omitting sensitive/unused fields for context
-type SimulatedUser = {
-  id: string; // User ID is now always a string (UUID or existing string ID)
+// Update SimulatedUser to include photoURL and use Firebase User ID
+type ContextUser = {
+  id: string; // Firebase UID is a string
   email: string | null;
   displayName: string | null;
+  photoURL?: string | null; // Add photoURL for Google Sign-in
   phone: string | null;
-  className: AcademicStatus | null; // Changed from academicStatus
+  className: AcademicStatus | null;
   model: UserModel;
   expiry_date: string | null;
 } | null;
 
 interface AuthContextProps {
-  user: SimulatedUser; // Use updated simulated user type
+  user: ContextUser;
   loading: boolean;
-  initializationError: string | null; // Keep for potential non-Firebase errors
+  initializationError: string | null;
   login: (email: string, password?: string) => Promise<void>;
   logout: () => Promise<void>;
-  signUpLocally: (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => Promise<void>; // Signature remains the same
-  signInWithGoogleLocally: () => Promise<void>; // Add simulated Google sign-in
+  signUpLocally: (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>; // Rename to reflect real Google Sign-in
 }
 
 const AuthContext = createContext<AuthContextProps>({
   user: null,
   loading: true,
-  initializationError: null,
+  initializationError: firebaseInitializationError, // Pass error from firebase module
   login: async () => { console.warn('Login function not implemented'); },
   logout: async () => { console.warn('Logout function not implemented'); },
   signUpLocally: async () => { console.warn('signUpLocally function not implemented'); },
-  signInWithGoogleLocally: async () => { console.warn('signInWithGoogleLocally function not implemented'); }, // Add default impl
+  signInWithGoogle: async () => { console.warn('signInWithGoogle function not implemented'); },
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SimulatedUser>(null);
+  const [user, setUser] = useState<ContextUser>(null);
   const [loading, setLoading] = useState(true);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const router = useRouter(); // Initialize useRouter
+  const [localError, setLocalError] = useState<string | null>(firebaseInitializationError); // Use error from init
+  const router = useRouter();
+  const pathname = usePathname();
+  const { toast } = useToast();
 
-  // Effect to load user state from local storage on mount (client-side only)
+  // Effect to listen for Firebase auth state changes
   useEffect(() => {
-    setLoading(true);
-    try {
-      const storedUserJson = localStorage.getItem('loggedInUser');
-      if (storedUserJson) {
-        const parsedUserProfile: UserProfile = JSON.parse(storedUserJson);
-        setUser({
-            id: String(parsedUserProfile.id),
-            email: parsedUserProfile.email,
-            displayName: parsedUserProfile.name,
-            phone: parsedUserProfile.phone,
-            className: parsedUserProfile.class,
-            model: parsedUserProfile.model,
-            expiry_date: parsedUserProfile.expiry_date,
-        });
-      } else {
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Error reading user from local storage:', error);
-      setUser(null);
-      localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword');
-    } finally {
-      setLoading(false);
-      setLocalError(null);
+    if (!auth) {
+      setLoading(false); // Stop loading if Firebase Auth isn't initialized
+      return;
     }
-  }, []);
 
-  // Simulated Login Function using Server Action
-  const login = async (email: string, password?: string) => {
-    setLoading(true);
-    setLocalError(null);
-    try {
-      const foundUserProfile = await findUserByCredentials(email, password);
-
-      if (foundUserProfile) {
-        const loggedInUser: SimulatedUser = {
-          id: String(foundUserProfile.id),
-          email: foundUserProfile.email,
-          displayName: foundUserProfile.name,
-          phone: foundUserProfile.phone,
-          className: foundUserProfile.class,
-          model: foundUserProfile.model,
-          expiry_date: foundUserProfile.expiry_date,
-        };
-        setUser(loggedInUser);
-        // Store full profile *excluding* password in local storage
-        const { password: _, ...profileToStore } = foundUserProfile;
-        localStorage.setItem('loggedInUser', JSON.stringify(profileToStore));
-        // Store password separately only for simulation - INSECURE
-        if (password) {
-            localStorage.setItem('simulatedPassword', password);
-        }
-        console.log(`User ${email} logged in (simulated).`);
-
-        // --- REDIRECT LOGIC ---
-        const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-        if (foundUserProfile.email && adminEmail && foundUserProfile.email.toLowerCase() === adminEmail.toLowerCase()) {
-          console.log('Admin user detected, redirecting to /admin');
-          router.push('/admin'); // Redirect to admin dashboard
-        } else {
-          console.log('Regular user detected, redirecting to /');
-          router.push('/'); // Redirect regular users to home dashboard
-        }
-
-      } else {
-        throw new Error('Login failed: Invalid email or password for local authentication.');
-      }
-    } catch (error: any) {
-      console.error("Simulated login failed:", error);
-      setLocalError(error.message || 'Login failed.');
-      setUser(null);
-      localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Simulated Logout Function
-  const logout = async () => {
-    setLoading(true);
-    setLocalError(null);
-    try {
-      setUser(null);
-      localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword');
-      console.log("User logged out (simulated).");
-       router.push('/auth/login');
-    } catch (error: any) {
-      console.error("Simulated logout failed:", error);
-      setLocalError(error.message || 'Logout failed.');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Simulated Sign Up (OTP verification happens in the component)
-   const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
-    setLoading(true);
-    setLocalError(null);
-    try {
-       if (!userData.email || !password) {
-         throw new Error("Email and password are required for signup.");
-       }
-
-       const existingUser = await findUserByEmail(userData.email);
-       if (existingUser) {
-            throw new Error("An account with this email already exists.");
-       }
-
-      const userId = uuidv4();
-      const newUserProfile: UserProfile = {
-        id: userId,
-        email: userData.email,
-        password: password,
-        name: userData.name || null,
-        phone: userData.phone || null,
-        referral: "",
-        class: userData.class || null,
-        model: 'free',
-        expiry_date: null,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Use addUserToJson which internally handles existing email checks again
-      const saveResult = await addUserToJson(newUserProfile);
-
-      if (!saveResult.success) {
-        throw new Error(saveResult.message || "Could not save user details locally.");
-      }
-
-      console.log(`User data for ${userData.email} saved to users.json`);
-
-      // Automatically log in the new user
-      await login(newUserProfile.email, newUserProfile.password); // Will set context and local storage
-
-      console.log(`User ${userData.email} signed up and logged in (simulated).`);
-
-      // Redirection handled by the login function called above
-
-    } catch (error: any) {
-      console.error("Simulated local signup failed:", error);
-      setLocalError(error.message || 'Local signup failed.');
-      setUser(null);
-      localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-   // Simulated Sign In with Google
-   const signInWithGoogleLocally = async () => {
-        setLoading(true);
-        setLocalError(null);
-        const googleEmail = 'google.user@example.com'; // Predefined email
-        const googleName = 'Google User';
-        const simulatedPassword = 'googlePassword123'; // Use a dummy password for local credential check
-
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      setLoading(true);
+      if (firebaseUser) {
         try {
-            let userProfile = await findUserByEmail(googleEmail);
+          // User is signed in via Firebase (Email/Pass or Google)
+          console.log("Firebase Auth State Changed: User found", firebaseUser.uid, firebaseUser.email);
 
-            if (!userProfile) {
-                console.log("Simulated Google user not found, creating...");
-                const newUserProfile: UserProfile = {
-                    id: uuidv4(),
-                    email: googleEmail,
-                    name: googleName,
-                    password: simulatedPassword, // Store dummy password
-                    phone: '1234567890', // Placeholder
-                    referral: "",
-                    class: '12th Class', // Example class
-                    model: 'free',
-                    expiry_date: null,
-                    createdAt: new Date().toISOString(),
-                };
-                const addResult = await addUserToJson(newUserProfile);
-                if (!addResult.success) {
-                     throw new Error(addResult.message || "Could not create simulated Google user.");
-                }
-                userProfile = newUserProfile; // Use the newly created profile
-                console.log("Simulated Google user created.");
-             } else {
-                 // Ensure the existing Google user has the dummy password for login simulation
-                 if (userProfile.password !== simulatedPassword) {
-                     console.warn(`Updating dummy password for simulated Google user ${googleEmail}`);
-                     userProfile.password = simulatedPassword;
-                     await saveUserToJson(userProfile);
-                 }
+          // Attempt to find/sync with local JSON profile using Firebase UID
+          let profile = await getUserById(firebaseUser.uid);
+
+          if (!profile && firebaseUser.email) {
+             // Try finding by email (maybe user signed up locally first, then Google)
+             console.log("User not found by UID, trying email lookup:", firebaseUser.email);
+             profile = await findUserByEmail(firebaseUser.email);
+
+             if (profile && profile.id !== firebaseUser.uid) {
+                 console.warn(`User found by email (${firebaseUser.email}) but UID mismatch. This case needs handling (e.g., link accounts or prompt user). For now, treating as new user.`);
+                 profile = null; // Reset profile to force creation with correct UID
              }
+          }
 
-            // Now attempt to log in using the (potentially created) user's details
-            await login(googleEmail, simulatedPassword);
-            console.log("Simulated Google Sign-in successful.");
-             // Redirect handled within login
+          if (!profile) {
+            // If still not found, create a new local profile entry for this Firebase user
+            console.log("No local profile found for Firebase UID:", firebaseUser.uid, ". Creating local profile...");
+            const newUserProfile: UserProfile = {
+              id: firebaseUser.uid, // Use Firebase UID as the primary ID
+              email: firebaseUser.email,
+              password: undefined, // No password for Google/Firebase users in JSON
+              name: firebaseUser.displayName || `User_${firebaseUser.uid.substring(0, 5)}`, // Use Google name or generate one
+              phone: firebaseUser.phoneNumber || null, // Use Google phone if available
+              referral: "",
+              class: null, // Default class (can be set later in settings)
+              model: 'free', // Default model
+              expiry_date: null, // Default expiry
+              createdAt: new Date().toISOString(),
+            };
+            const addResult = await addUserToJson(newUserProfile);
+            if (!addResult.success) {
+                throw new Error(addResult.message || "Failed to create local profile for Firebase user.");
+            }
+            profile = newUserProfile; // Use the newly created profile
+            console.log("Local profile created for Firebase user:", firebaseUser.uid);
+          } else {
+            // Sync: Optionally update local profile name/photo from Firebase if needed
+            // (Could add logic here if desired)
+            console.log("Found existing local profile for Firebase user:", profile.id);
+          }
+
+          // Set the context user state
+          const contextUser: ContextUser = {
+            id: profile.id,
+            email: profile.email,
+            displayName: profile.name,
+            photoURL: firebaseUser.photoURL, // Add photoURL from Firebase
+            phone: profile.phone,
+            className: profile.class,
+            model: profile.model,
+            expiry_date: profile.expiry_date,
+          };
+          setUser(contextUser);
+           // --- REDIRECT LOGIC (On Auth State Change) ---
+           const isAdmin = profile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+           console.log(`User: ${profile.email}, Is Admin: ${isAdmin}, Current Path: ${pathname}`);
+            if (isAdmin && !pathname.startsWith('/admin')) {
+                console.log('Redirecting admin to /admin');
+                router.push('/admin');
+            } else if (!isAdmin && pathname.startsWith('/admin')) {
+                console.log('Redirecting non-admin from /admin to /');
+                router.push('/');
+            } else if (pathname.startsWith('/auth')) {
+                 // If user is logged in and on an auth page, redirect based on role
+                console.log(`User logged in on auth page (${pathname}), redirecting...`);
+                 router.push(isAdmin ? '/admin' : '/');
+            }
+            // No else needed, stay on current page if already appropriate
+
 
         } catch (error: any) {
-            console.error("Simulated Google Sign-in failed:", error);
-            setLocalError(error.message || 'Google Sign-in simulation failed.');
-            setUser(null);
-            localStorage.removeItem('loggedInUser');
-            localStorage.removeItem('simulatedPassword');
-            throw error; // Re-throw for the component
-        } finally {
-            setLoading(false);
+          console.error("Error fetching/creating local user profile:", error);
+          toast({ variant: 'destructive', title: 'Profile Sync Error', description: error.message });
+          await signOut(auth); // Log out Firebase user if profile sync fails
+          setUser(null);
         }
-   };
+      } else {
+        // User is signed out
+        console.log("Firebase Auth State Changed: No user");
+        setUser(null);
+         // If logged out, redirect from protected routes
+         if (pathname.startsWith('/admin') || pathname === '/settings' || pathname === '/progress' || pathname.startsWith('/chapterwise-test') || pathname.startsWith('/take-test')) {
+             console.log(`User logged out on protected page (${pathname}), redirecting to login.`);
+             router.push('/auth/login');
+         }
+      }
+      setLoading(false);
+    });
 
+    return () => unsubscribe(); // Cleanup listener on unmount
+  }, [router, toast, pathname]); // Add dependencies
+
+  // Login Function (using Firebase Email/Password)
+  const login = async (email: string, password?: string) => {
+    if (!auth) throw new Error("Firebase Auth not initialized.");
+    if (!password) throw new Error("Password is required for email login.");
+
+    setLoading(true);
+    setLocalError(null);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+       // onAuthStateChanged will handle setting user context and redirecting
+       console.log("Firebase Email/Password Sign-In successful for:", userCredential.user.email);
+       toast({ title: "Login Successful", description: "Welcome back!" });
+       // Redirect is now handled by the onAuthStateChanged listener
+    } catch (error: any) {
+      console.error("Firebase login failed:", error);
+      // Map Firebase error codes to user-friendly messages
+      let message = "Login failed. Please check your credentials.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        message = "Invalid email or password.";
+      } else if (error.code === 'auth/invalid-email') {
+        message = "Invalid email format.";
+      } else if (error.code === 'auth/too-many-requests'){
+         message = "Access temporarily disabled due to too many failed login attempts. Please reset your password or try again later.";
+      }
+      setLocalError(message);
+      setUser(null);
+      throw new Error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout Function (using Firebase)
+  const logout = async () => {
+    if (!auth) throw new Error("Firebase Auth not initialized.");
+    setLoading(true);
+    setLocalError(null);
+    try {
+      await signOut(auth);
+      // onAuthStateChanged will set user to null and handle redirects
+      console.log("Firebase Sign Out successful.");
+      // Redirecting to login is now handled by onAuthStateChanged effect
+    } catch (error: any) {
+      console.error("Firebase logout failed:", error);
+      setLocalError(error.message || 'Logout failed.');
+      throw error; // Re-throw for component handling if needed
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sign Up Function (using Firebase Email/Password + Local JSON)
+   const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
+      if (!auth) throw new Error("Firebase Auth not initialized.");
+      if (!userData.email || !password) {
+        throw new Error("Email and password are required for signup.");
+      }
+      setLoading(true);
+      setLocalError(null);
+      try {
+        // 1. Check if email already exists in local JSON (optional but good practice)
+        const localCheck = await findUserByEmail(userData.email);
+        if (localCheck) {
+          throw new Error("An account with this email might already exist locally.");
+        }
+
+        // 2. Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
+        const firebaseUser = userCredential.user;
+        console.log("Firebase user created:", firebaseUser.uid);
+
+        // 3. Create corresponding profile in local JSON using Firebase UID
+        const newUserProfile: UserProfile = {
+          id: firebaseUser.uid, // Use Firebase UID
+          email: userData.email,
+          password: undefined, // DO NOT store password in JSON
+          name: userData.name || null,
+          phone: userData.phone || null,
+          referral: "",
+          class: userData.class || null,
+          model: 'free',
+          expiry_date: null,
+          createdAt: new Date().toISOString(),
+        };
+
+        const addResult = await addUserToJson(newUserProfile);
+        if (!addResult.success) {
+          // Consider deleting the Firebase user if local save fails (more robust)
+          // await firebaseUser.delete();
+          throw new Error(addResult.message || "Could not save user profile locally after Firebase signup.");
+        }
+
+        console.log(`Local profile created for ${userData.email} with UID ${firebaseUser.uid}`);
+        // onAuthStateChanged will now pick up the logged-in user and set context/redirect
+        toast({ title: "Account Created", description: "Welcome! Your account has been created." });
+
+      } catch (error: any) {
+        console.error("Signup failed:", error);
+        let message = "Signup failed. Please try again.";
+        if (error.code === 'auth/email-already-in-use') {
+          message = "This email address is already registered.";
+        } else if (error.code === 'auth/invalid-email') {
+          message = "Invalid email format.";
+        } else if (error.code === 'auth/weak-password') {
+          message = "Password is too weak. Please choose a stronger password.";
+        }
+        setLocalError(message);
+        setUser(null);
+        throw new Error(message); // Re-throw for component handling
+      } finally {
+        setLoading(false);
+      }
+  };
+
+  // Sign In with Google (using Firebase)
+  const signInWithGoogle = async () => {
+      if (!auth) throw new Error("Firebase Auth not initialized.");
+      setLoading(true);
+      setLocalError(null);
+      const provider = new GoogleAuthProvider();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        // onAuthStateChanged will handle the user creation/login flow and redirection
+        console.log("Firebase Google Sign-In successful for:", result.user.email);
+        toast({ title: "Google Sign-In Successful", description: "Welcome!" });
+      } catch (error: any) {
+        console.error("Firebase Google Sign-in failed:", error);
+        let message = "Google Sign-In failed. Please try again.";
+         if (error.code === 'auth/popup-closed-by-user') {
+             message = "Google Sign-In cancelled.";
+         } else if (error.code === 'auth/account-exists-with-different-credential') {
+            message = "An account already exists with this email address using a different sign-in method.";
+         } else if (error.code === 'auth/popup-blocked'){
+             message = "Google Sign-In popup was blocked by the browser. Please allow popups for this site.";
+         }
+        setLocalError(message);
+        setUser(null); // Ensure user is null on error
+        throw new Error(message); // Re-throw for component handling
+      } finally {
+        setLoading(false);
+      }
+  };
 
   // Loading State UI
-  if (loading) {
+  if (loading && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth') && !user) { // Show loading only if not on auth pages and user isn't loaded yet
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="space-y-4 w-full max-w-md p-4">
-          <Skeleton className="h-14 w-full" />
-          <div className="flex gap-4">
-            <Skeleton className="h-[calc(100vh-7rem)] w-16 hidden sm:block" />
-            <div className="flex-1 space-y-4">
-              <Skeleton className="h-10 w-3/4" />
-              <Skeleton className="h-40 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
+          {/* Simplified Skeleton */}
+          <Skeleton className="h-10 w-3/4 mx-auto" />
+          <Skeleton className="h-6 w-1/2 mx-auto" />
+          <div className="p-4 border rounded-md">
+             <Skeleton className="h-8 w-full mb-2" />
+             <Skeleton className="h-8 w-full mb-2" />
+             <Skeleton className="h-8 w-full" />
           </div>
         </div>
       </div>
     );
   }
 
-    // Error State UI (Only shown if NOT on an auth page)
+  // Error State UI (Only shown if NOT on an auth page)
   if (localError && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
@@ -301,10 +348,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, loading, initializationError: localError, login, logout, signUpLocally, signInWithGoogleLocally }}>
+    <AuthContext.Provider value={{ user, loading, initializationError: localError, login, logout, signUpLocally, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
+

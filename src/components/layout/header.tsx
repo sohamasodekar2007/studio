@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -8,9 +7,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Settings, LogOut, HelpCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context'; // Use our AuthContext
-// Remove Firebase imports
-// import { auth } from '@/lib/firebase';
-// import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
@@ -24,16 +20,14 @@ export function AppHeader() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout(); // Call the simulated logout function from context
-      toast({
-        title: "Logged Out",
-        description: "You have been successfully logged out.",
-      });
-      // No need to manually push to login, AuthProvider might handle redirect or UI update
-       // If AuthProvider doesn't redirect, uncomment the line below:
-       // router.push('/auth/login');
+      await logout(); // Call the Firebase logout function from context
+       toast({
+         title: "Logged Out",
+         description: "You have been successfully logged out.",
+       });
+      // Redirection is handled by onAuthStateChanged in context
     } catch (error: any) {
-      console.error("Logout failed (simulated):", error);
+      console.error("Logout failed:", error);
       toast({
         variant: "destructive",
         title: "Logout Failed",
@@ -46,12 +40,8 @@ export function AppHeader() {
 
   // Get first letter of display name or email for fallback
   const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
-    if (name) {
-      return name.charAt(0).toUpperCase();
-    }
-    if (email) {
-      return email.charAt(0).toUpperCase();
-    }
+    if (name) return name.charAt(0).toUpperCase();
+    if (email) return email.charAt(0).toUpperCase();
     return <User />; // Default icon if no name/email
   }
 
@@ -68,8 +58,8 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
               <Avatar>
-                 {/* Use a placeholder avatar for local auth */}
-                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                 {/* Use Firebase photoURL if available, otherwise fallback */}
+                <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
                 <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
               </Avatar>
             </Button>
