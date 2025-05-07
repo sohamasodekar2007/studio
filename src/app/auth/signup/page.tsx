@@ -1,22 +1,20 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone, Mail } from "lucide-react"; // Removed Chrome icon
+import { GraduationCap, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
-import { useAuth } from '@/context/auth-context'; // Import useAuth
-// import { Separator } from '@/components/ui/separator'; // No longer needed
+import { useAuth } from '@/context/auth-context';
 
-// Schema remains the same
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -33,10 +31,8 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const { toast } = useToast();
-  // Use local signup function from AuthContext
   const { signUpLocally, loading: authLoading, initializationError } = useAuth();
-  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
-  // Removed Google loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -51,33 +47,27 @@ export default function SignupPage() {
   });
 
   const onSubmit = async (data: SignupFormValues) => {
-     if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Authentication system not ready.", duration: 7000 });
-        return;
+    if (initializationError && !initializationError.includes("Firebase is not configured")) {
+      toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
+      return;
     }
-    setIsLoadingEmail(true);
+    setIsLoading(true);
     try {
-        // Prepare data for signUpLocally (context handles profile creation)
         const userDataForContext = {
             name: data.name,
             email: data.email,
             class: data.academicStatus,
             phone: data.phoneNumber,
         };
-
         await signUpLocally(userDataForContext, data.password);
-        // Success toast and redirection handled by signUpLocally
     } catch (error: any) {
-        // Error toast handled by signUpLocally in context
-        console.error("Signup failed:", error.message);
+        console.error("Signup page submission error:", error.message);
     } finally {
-      setIsLoadingEmail(false);
+      setIsLoading(false);
     }
   };
 
-  // Removed handleGoogleSignIn
-
-  const isLoading = isLoadingEmail || authLoading; // Combined loading state
+  const combinedLoading = isLoading || authLoading;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -99,7 +89,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your Name" {...field} disabled={isLoading} />
+                      <Input placeholder="Your Name" {...field} disabled={combinedLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -112,7 +102,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                      <FormControl>
-                       <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading} />
+                       <Input type="email" placeholder="m@example.com" {...field} disabled={combinedLoading} />
                      </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -127,7 +117,7 @@ export default function SignupPage() {
                     <FormControl>
                      <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={isLoading} className="pl-10" />
+                        <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={combinedLoading} className="pl-10" />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -140,7 +130,7 @@ export default function SignupPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Current Academic Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={combinedLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your status" />
@@ -165,7 +155,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={combinedLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -178,7 +168,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={combinedLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -186,13 +176,10 @@ export default function SignupPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-               <Button type="submit" className="w-full" disabled={isLoading}>
-                 {isLoadingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+               <Button type="submit" className="w-full" disabled={combinedLoading}>
+                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                  Sign Up
                </Button>
-
-                {/* Removed OR Separator and Google Sign In Button */}
-
               <p className="px-8 text-center text-sm text-muted-foreground">
                 By clicking continue, you agree to our{" "}
                 <Link

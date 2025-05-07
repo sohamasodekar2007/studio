@@ -2,17 +2,16 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { GraduationCap, Loader2 } from "lucide-react"; // Removed Chrome icon
+import { GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
-// import { Separator } from '@/components/ui/separator'; // No longer needed
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -23,10 +22,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { toast } = useToast();
-  // Use local login function from AuthContext
   const { login, loading: authLoading, initializationError } = useAuth();
-  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
-  // Removed Google loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,27 +34,23 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Authentication system not ready.", duration: 7000 });
+    if (initializationError && !initializationError.includes("Firebase is not configured")) {
+        toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
         return;
     }
-    setIsLoadingEmail(true);
+    setIsLoading(true);
     try {
-      // Call local login function
       await login(data.email, data.password);
       // Redirection and success toast handled by AuthContext/login function
     } catch (error: any) {
-      // Error toast is handled within AuthContext/login on failure now
-      console.error("Login failed:", error.message);
+      // Error toast is handled within AuthContext/login on failure
+      console.error("Login page submission error:", error.message);
     } finally {
-      setIsLoadingEmail(false);
+      setIsLoading(false);
     }
   };
 
-  // Removed handleGoogleSignIn
-
-  const isLoading = isLoadingEmail || authLoading; // Combined loading state
-
+  const combinedLoading = isLoading || authLoading;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -79,7 +72,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading} />
+                      <Input type="email" placeholder="m@example.com" {...field} disabled={combinedLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -92,12 +85,12 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center">
                       <FormLabel>Password</FormLabel>
-                      <Link href="#" className="ml-auto inline-block text-sm underline">
+                      {/* <Link href="#" className="ml-auto inline-block text-sm underline">
                         Forgot your password?
-                      </Link>
+                      </Link> */}
                     </div>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={combinedLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -105,14 +98,11 @@ export default function LoginPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoadingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" className="w-full" disabled={combinedLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Log in
               </Button>
-
-              {/* Removed OR Separator and Google Sign In Button */}
-
-              <div className="text-center text-sm mt-2"> {/* Added margin-top */}
+              <div className="text-center text-sm mt-2">
                 Don&apos;t have an account?{" "}
                 <Link href="/auth/signup" className="underline">
                   Sign up
