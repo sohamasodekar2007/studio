@@ -331,7 +331,6 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
             userWithUpdatesApplied.expiry_date = updatedData.expiry_date.toISOString();
         }
 
-
         users[userIndex] = userWithUpdatesApplied;
         const success = await writeUsers(users);
         if (success) {

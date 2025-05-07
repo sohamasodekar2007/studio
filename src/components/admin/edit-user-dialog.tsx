@@ -1,27 +1,27 @@
-
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form'; // Correct import
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import { type UserProfile } from '@/types';
+import type { UserProfile } from '@/types';
 import { updateUserInJson } from '@/actions/user-actions';
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox for admin role
 
 // Schema for editing user profile
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  // Added stricter phone validation (example: Indian numbers)
   phone: z.string()
            .min(10, { message: "Phone number must be 10 digits." })
            .max(10, { message: "Phone number must be 10 digits." })
            .regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
+  isAdmin: z.boolean().optional(), // Add isAdmin field
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -37,29 +37,24 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
+  const isCurrentUserAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
     defaultValues: {
       name: user.name || '',
       phone: user.phone || '',
+      isAdmin: isCurrentUserAdmin, // Initialize isAdmin state
     },
+    // mode: "onChange",
   });
 
   const onSubmit = async (data: EditUserFormValues) => {
     setIsLoading(true);
     try {
-      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt'>> = { // Exclude createdAt as well
+      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'model' | 'expiry_date' | 'password' | 'referral' | 'class' | 'email'>> = { // keep email, password and creation data
         name: data.name,
         phone: data.phone,
-        // Explicitly include other fields that should NOT be changed by this form
-        // to ensure the update action has the full context if needed,
-        // although updateUserInJson only uses the provided partial data.
-        email: user.email,
-        password: user.password, // Keep existing password
-        referral: user.referral,
-        class: user.class,
-        model: user.model,
-        expiry_date: user.expiry_date,
       };
 
       const result = await updateUserInJson(user.id, updatedData);
@@ -70,15 +65,17 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
 
       toast({
         title: 'User Updated',
-        description: `${user.email}'s details have been updated.`,
+        description: `${user.email}'s details have been successfully updated.`,
       });
-      // Construct the fully updated user profile to pass back
+
+      // Construct the updated user profile object to pass back
       const fullyUpdatedUser: UserProfile = {
-        ...user, // Start with original user data
-        ...updatedData, // Apply the changes from the form
+          ...user, // Start with original user data
+          name: data.name,    // Update name from form
+          phone: data.phone, // Update phone from form
       };
       onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
-      // onClose(); // Close is handled by onUserUpdate which calls closeDialog in parent
+      onClose();
 
     } catch (error: any) {
       console.error('Failed to update user:', error);
@@ -129,6 +126,30 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
                 </FormItem>
               )}
             />
+             {/* Admin Role Toggle */}
+             {/*<FormField
+                control={form.control}
+                name="isAdmin"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                        <FormLabel htmlFor="admin-switch" className="text-base">Make Admin</FormLabel>
+                        <FormDescription>
+                            Grant this user full administrative privileges.
+                        </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={isLoading}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+            />*/}
+
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
                 <Button type="submit" disabled={isLoading}>
