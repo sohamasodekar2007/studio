@@ -11,12 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
-
-// Re-import Firebase specific types if needed elsewhere, but remove Firebase logic here
-// import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-// import { getAuth, onAuthStateChanged, type User as FirebaseUser, type Auth } from "firebase/auth";
-// import { auth as firebaseAuth, firebaseInitializationError } from '@/lib/firebase'; // Import initialized auth and error
+import { AlertTriangle, User } from 'lucide-react'; // Added User icon
 
 // Define the shape of the user object within the context
 export type ContextUser = {
@@ -59,38 +54,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { toast } = useToast();
 
+  // --- Load User from localStorage on Mount ---
   const loadUserFromLocalStorage = useCallback(() => {
+    // Ensure this runs only on the client
+    if (typeof window === 'undefined') return false;
     const storedUserJson = localStorage.getItem('loggedInUser');
     if (storedUserJson) {
       try {
         const storedUser: ContextUser = JSON.parse(storedUserJson);
-        setUser(storedUser);
-        console.log("Loaded user from local storage:", storedUser?.email);
-        return true; // Indicate user was loaded
+        if (storedUser && storedUser.id && storedUser.email) { // Basic validation
+            setUser(storedUser);
+            console.log("Loaded user from local storage:", storedUser?.email);
+            return true; // Indicate user was loaded
+        } else {
+            console.warn("Invalid user data found in local storage. Clearing.");
+            localStorage.removeItem('loggedInUser');
+        }
       } catch (e) {
         console.error("Failed to parse user from local storage", e);
         localStorage.removeItem('loggedInUser');
       }
     }
+    console.log("No valid user found in local storage.");
     return false; // Indicate user was not loaded
   }, []);
 
-
+  // --- Run on mount ---
   useEffect(() => {
     setIsMounted(true);
     loadUserFromLocalStorage();
     setLoading(false); // Finished initial check/loading
   }, [loadUserFromLocalStorage]); // Runs only once on mount
 
-  // Function to manually refresh user data from the source (users.json via action)
+
+  // --- Function to refresh user data ---
   const refreshUser = useCallback(async () => {
+    // Fetch latest user data from backend (users.json via action) and update context + localStorage
     const currentUserId = user?.id;
-    if (!currentUserId) return; // No user to refresh
+    if (!currentUserId) return;
 
     console.log("Refreshing user data for ID:", currentUserId);
-    setLoading(true); // Indicate loading during refresh
+    setLoading(true);
     try {
-      const profile = await getUserById(currentUserId); // Fetch latest data
+      const profile = await getUserById(currentUserId); // Fetch latest data by ID
       if (profile) {
         const contextUser: ContextUser = {
             id: profile.id,
@@ -103,25 +109,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             expiry_date: profile.expiry_date,
         };
         setUser(contextUser);
-        localStorage.setItem('loggedInUser', JSON.stringify(contextUser)); // Update local storage
+        // Store the refreshed user data persistently in localStorage
+        localStorage.setItem('loggedInUser', JSON.stringify(contextUser));
         console.log("User data refreshed and updated in context/localStorage.");
       } else {
         console.warn(`User ID ${currentUserId} not found during refresh. Logging out.`);
-        // If user doesn't exist anymore (e.g., deleted), log them out
+        // Clear local state and storage if user is gone from backend
         setUser(null);
         localStorage.removeItem('loggedInUser');
         router.push('/auth/login');
       }
     } catch (error) {
       console.error("Error refreshing user data:", error);
-      // Optionally show a toast, but avoid logging out unless necessary
+      toast({variant: "destructive", title:"Refresh Error", description: "Could not sync profile."})
     } finally {
       setLoading(false);
     }
-  }, [user?.id, router]);
+  }, [user?.id, router, toast]); // Include toast
 
 
-  // Login Function (using local users.json)
+  // --- Login Function ---
   const login = useCallback(async (email: string, password?: string) => {
     setLoading(true);
     setLocalError(null);
@@ -133,23 +140,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const userProfile = await findUserByEmail(email); // Fetches user profile including password field
+      const userProfile = await findUserByEmail(email); // Fetches full profile including password field
 
-      if (userProfile && userProfile.password === password) { // Direct comparison (INSECURE)
+      if (userProfile && userProfile.password === password) {
         console.log("Local Login successful for:", userProfile.email);
 
         const contextUser: ContextUser = {
-          id: userProfile.id,
+          id: String(userProfile.id), // Ensure ID is string
           email: userProfile.email,
           displayName: userProfile.name,
-          photoURL: null,
+          photoURL: null, // Placeholder
           phone: userProfile.phone,
           className: userProfile.class,
           model: userProfile.model,
           expiry_date: userProfile.expiry_date,
         };
         setUser(contextUser);
-        localStorage.setItem('loggedInUser', JSON.stringify(contextUser)); // Store in local storage
+        // Persist logged-in user data in localStorage
+        localStorage.setItem('loggedInUser', JSON.stringify(contextUser));
 
         const isAdmin = userProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
         const redirectPath = isAdmin ? '/admin' : '/';
@@ -158,35 +166,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast({ title: "Login Successful", description: `Welcome back, ${userProfile.name || userProfile.email}!` });
 
       } else {
-        throw new Error('Invalid email or password.'); // More specific error
+        throw new Error('Login failed: Invalid email or password for local authentication.');
       }
     } catch (error: any) {
       console.error("Local login failed:", error);
-      let message = "Login failed. Please check your email and password.";
-      if (error.message === 'Invalid email or password.') {
-        message = error.message;
-      }
+      const message = error.message || "Login failed. Please check your email and password.";
       setLocalError(message);
       toast({ variant: 'destructive', title: 'Login Failed', description: message });
       setUser(null);
-      localStorage.removeItem('loggedInUser');
-      throw new Error(message); // Re-throw for component handling
+      localStorage.removeItem('loggedInUser'); // Clear potentially invalid user data
+      throw new Error(message);
     } finally {
       setLoading(false);
     }
   }, [router, toast]);
 
-  // Logout Function (Local)
+  // --- Logout Function ---
   const logout = useCallback(async () => {
     setLoading(true);
     setLocalError(null);
     try {
       setUser(null);
+      // Remove user data from localStorage on logout
       localStorage.removeItem('loggedInUser');
-      console.log("Local Logout successful.");
+      console.log("Local Logout successful. User data cleared from localStorage.");
 
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      // Add a small delay before redirecting to allow state update to potentially propagate
       setTimeout(() => {
          router.push('/auth/login');
       }, 100);
@@ -200,12 +205,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router, toast]);
 
-  // Sign Up Function (Local JSON)
+  // --- Sign Up Function ---
    const signUpLocally = useCallback(async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
+     // Validate essential inputs
     if (!userData.email || !password) {
         toast({ variant: 'destructive', title: 'Signup Failed', description: 'Email and password are required.' });
         throw new Error("Email and password required");
     }
+    if (!userData.name) {
+         toast({ variant: 'destructive', title: 'Signup Failed', description: 'Name is required.' });
+         throw new Error("Name required");
+     }
      if (!userData.class) {
          toast({ variant: 'destructive', title: 'Signup Failed', description: 'Academic status is required.' });
          throw new Error("Academic status required");
@@ -215,7 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Phone number required");
       }
 
-
     setLoading(true);
     setLocalError(null);
     try {
@@ -224,20 +233,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error("Email address is already registered.");
         }
 
+        // Prepare new user profile for saving to users.json
         const newUserProfile: UserProfile = {
-            id: uuidv4(),
+            id: uuidv4(), // Generate UUID for new user
             email: userData.email,
-            password: password, // INSECURE
-            name: userData.name || `User_${Date.now().toString().slice(-5)}`,
-            phone: userData.phone || null,
+            password: password, // Storing plain text - INSECURE, use hashing in production
+            name: userData.name,
+            phone: userData.phone,
             referral: "",
-            class: userData.class || null,
-            model: 'free',
+            class: userData.class,
+            model: 'free', // Default to free model
             expiry_date: null,
             createdAt: new Date().toISOString(),
         };
 
-        const addResult = await addUserToJson(newUserProfile);
+        const addResult = await addUserToJson(newUserProfile); // Save to users.json via action
         if (!addResult.success) {
             throw new Error(addResult.message || "Could not save user profile locally.");
         }
@@ -245,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log(`Local user profile created for: ${newUserProfile.email}`);
         toast({ title: "Account Created", description: "Welcome! Please log in." });
 
-        router.push('/auth/login');
+        router.push('/auth/login'); // Redirect to login after successful signup
 
     } catch (error: any) {
         console.error("Local signup failed:", error);
@@ -255,33 +265,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         toast({ variant: 'destructive', title: 'Signup Failed', description: message });
         setLocalError(message);
-        setUser(null);
+        setUser(null); // Ensure no partial user state
         throw new Error(message);
     } finally {
         setLoading(false);
     }
 }, [toast, router]);
 
-   // --- Redirect logic after mount ---
+   // --- Redirect logic ---
    useEffect(() => {
-     if (!loading && isMounted) {
+     // Ensure this runs only on the client after mount
+     if (!isMounted) return;
+
+     if (!loading) {
        const isLoggedIn = !!user;
        const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
        const isAuthPage = pathname.startsWith('/auth');
        const isAdminPage = pathname.startsWith('/admin');
-       const isProtectedRoute = !isAuthPage && !['/', '/help', '/terms', '/privacy', '/tests'].includes(pathname) && !pathname.startsWith('/tests/'); // Define protected routes more granularly if needed
+       // Define public routes that don't require login
+       const publicRoutes = ['/', '/help', '/terms', '/privacy', '/tests'];
+       // Consider a route public if it's in the list OR starts with /tests/ (detail page)
+       const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/tests/');
+       const isProtectedRoute = !isAuthPage && !isAdminPage && !isPublicRoute; // Protected routes are non-auth, non-admin, non-public
 
-       // Redirect non-admins from admin routes
+       // 1. Redirect non-admins from admin pages
        if (isLoggedIn && !isAdmin && isAdminPage) {
          console.log('Redirecting non-admin from /admin to /');
          router.push('/');
        }
-       // Redirect logged-out users from protected routes (excluding admin pages already covered)
+       // 2. Redirect logged-out users from protected pages
        else if (!isLoggedIn && isProtectedRoute) {
          console.log(`User logged out on protected page (${pathname}), redirecting to login.`);
-          router.push(`/auth/login?redirect=${pathname}`); // Add redirect query param
+          router.push(`/auth/login?redirect=${pathname}`);
        }
-       // Redirect logged-in users from auth pages
+       // 3. Redirect logged-in users from auth pages
        else if (isLoggedIn && isAuthPage) {
          console.log(`User logged in on auth page (${pathname}), redirecting...`);
          router.push(isAdmin ? '/admin' : '/');
@@ -291,26 +308,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   // --- Loading State ---
-  // Display loading skeleton only on initial client load OR if auth is still resolving and not on auth pages
-   if ((loading && !isMounted) || (loading && isMounted && !pathname.startsWith('/auth'))) {
-     return (
-       <div className="flex items-center justify-center min-h-screen bg-background">
-         <div className="space-y-4 w-full max-w-md p-4">
-           {/* Simplified Skeleton */}
-           <Skeleton className="h-10 w-3/4 mx-auto" />
-           <Skeleton className="h-6 w-1/2 mx-auto" />
-           <div className="p-4 border rounded-md">
-             <Skeleton className="h-8 w-full mb-2" />
-             <Skeleton className="h-8 w-full mb-2" />
-             <Skeleton className="h-8 w-full" />
-           </div>
-         </div>
-       </div>
-     );
-   }
+  // Show skeleton only during initial client-side mount/hydration if loading is true
+  // Avoid showing skeleton on server or if loading is false
+  if (loading && isMounted && !pathname.startsWith('/auth')) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="space-y-4 w-full max-w-md p-4">
+          <Skeleton className="h-10 w-3/4 mx-auto" />
+          <Skeleton className="h-6 w-1/2 mx-auto" />
+          <div className="p-4 border rounded-md">
+            <Skeleton className="h-8 w-full mb-2" />
+            <Skeleton className="h-8 w-full mb-2" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-   // Display global error if local setup fails (e.g., file access)
+  // --- Global Error State ---
    if (localError && !loading) {
+       // This indicates a persistent setup error (e.g., file system access)
+       // Render a clear error message for the developer
        return (
            <div className="min-h-screen flex items-center justify-center p-4">
                <Alert variant="destructive" className="max-w-lg">
@@ -319,8 +338,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                    <AlertDescription>
                        {localError}
                        <br /><br />
-                       Please ensure your setup is correct. Check the browser console and README for more details.
-                       <Button onClick={() => window.location.reload()} className="mt-4" size="sm">Reload Page</Button>
+                       This might be due to issues reading/writing local data files (e.g., `users.json`).
+                       Please check file permissions and ensure the application setup is correct. See README.md for setup instructions.
+                       {/* <Button onClick={() => window.location.reload()} className="mt-4" size="sm">Reload Page</Button> */}
                    </AlertDescription>
                </Alert>
            </div>
@@ -336,3 +356,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+

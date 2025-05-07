@@ -1,15 +1,15 @@
 // src/app/chapterwise-test-results/[testCode]/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react'; // Added useCallback
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info } from 'lucide-react'; // Added Info
+import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, TestQuestion, UserProfile } from '@/types'; // Added UserProfile
+import type { TestSession, TestResultSummary, GeneratedTest, TestQuestion, UserProfile } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -21,12 +21,12 @@ function getAllQuestionsFromTest(testDef: GeneratedTest | null): TestQuestion[] 
     if (testDef.testType === 'chapterwise' && testDef.questions) {
         return testDef.questions;
     } else if (testDef.testType === 'full_length') {
-        return [
-            ...(testDef.physics || []),
-            ...(testDef.chemistry || []),
-            ...(testDef.maths || []),
-            ...(testDef.biology || []),
-        ].filter(q => q);
+        // Ensure we handle potentially undefined subject arrays
+        const physics = testDef.physics || [];
+        const chemistry = testDef.chemistry || [];
+        const maths = testDef.maths || [];
+        const biology = testDef.biology || [];
+        return [...physics, ...chemistry, ...maths, ...biology].filter(q => q); // filter out undefined/null
     }
     return [];
 }
@@ -35,10 +35,15 @@ function getAllQuestionsFromTest(testDef: GeneratedTest | null): TestQuestion[] 
 function calculateResults(session: TestSession, testDef: GeneratedTest | null): TestResultSummary | null {
     if (!testDef) return null;
     const allQuestions = getAllQuestionsFromTest(testDef);
-    if (allQuestions.length === 0 || allQuestions.length !== session.answers.length) {
-         console.error("Mismatch between questions in definition and session answers.");
-         return null; // Return null or handle error appropriately
+    if (allQuestions.length === 0 || !session.answers) {
+         console.error("Test definition has no questions or session answers are missing.");
+         return null; // Cannot calculate results
     }
+     if (allQuestions.length !== session.answers.length) {
+         console.warn("Mismatch between questions in definition and session answers. Calculation might be inaccurate.");
+         // Decide how to handle: return null, or proceed with caution?
+         // For now, proceed but log the warning.
+     }
 
     let correctCount = 0;
     let incorrectCount = 0;
@@ -50,23 +55,22 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
         const questionDef = allQuestions[index];
         if (!questionDef) {
              console.error(`Definition missing for question index ${index}`);
-             return { // Provide a default structure on error
+             return {
                 questionIndex: index,
+                questionText: 'Error: Question definition missing',
+                questionImageUrl: null,
                 userAnswer: userAns.selectedOption,
                 correctAnswer: 'Error',
                 isCorrect: false,
                 status: userAns.status,
-                questionText: 'Error: Question definition missing',
-                questionImageUrl: null,
                 explanationText: null,
                 explanationImageUrl: null,
              };
         }
 
-
-        totalMarksPossible += questionDef.marks;
+        const currentMarks = questionDef.marks || 1; // Default to 1 mark if missing
+        totalMarksPossible += currentMarks;
         let isCorrect = false;
-        // Ensure correct answer format matches selected option format ("A", "B", etc.)
         const correctAnswerKey = questionDef.answer?.replace('Option ', '').trim();
 
         if (userAns.selectedOption) {
@@ -74,29 +78,28 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
             if (userAns.selectedOption === correctAnswerKey) {
                 isCorrect = true;
                 correctCount++;
-                score += questionDef.marks;
+                score += currentMarks;
             } else {
                 incorrectCount++;
+                // Handle negative marking if applicable (assuming no negative marking for now)
             }
         }
         return {
             questionIndex: index,
-            // Pass content directly for review page
-            questionText: questionDef.question_text || questionDef.question, // Handle older format
-            questionImageUrl: questionDef.question_image_url || (typeof questionDef.question === 'string' && questionDef.question.endsWith('.png') ? questionDef.question : null), // Handle older format
+            questionText: questionDef.question_text || questionDef.question, // Use either field
+            questionImageUrl: questionDef.question_image_url, // Prefer specific field
             userAnswer: userAns.selectedOption,
-            correctAnswer: correctAnswerKey || 'N/A', // Handle missing answer key
+            correctAnswer: correctAnswerKey || 'N/A',
             isCorrect,
             status: userAns.status,
-            explanationText: questionDef.explanation_text || (typeof questionDef.explanation === 'string' ? questionDef.explanation : null), // Handle older format
-            explanationImageUrl: questionDef.explanation_image_url || (typeof questionDef.explanation === 'string' && questionDef.explanation.endsWith('.png') ? questionDef.explanation : null), // Handle older format
+            explanationText: questionDef.explanation_text, // Prefer specific field
+            explanationImageUrl: questionDef.explanation_image_url, // Prefer specific field
         };
     });
 
-    const unansweredCount = allQuestions.length - attemptedCount;
+    const unansweredCount = Math.max(0, allQuestions.length - attemptedCount); // Ensure non-negative
     const percentage = totalMarksPossible > 0 ? (score / totalMarksPossible) * 100 : 0;
-    // Use start/end times from session for accurate calculation
-    const timeTakenSeconds = session.endTime && session.startTime ? (session.endTime - session.startTime) / 1000 : 0;
+    const timeTakenSeconds = session.endTime && session.startTime ? Math.max(0, (session.endTime - session.startTime) / 1000) : 0; // Ensure non-negative
     const timeTakenMinutes = Math.round(timeTakenSeconds / 60);
 
 
@@ -104,7 +107,7 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
         testCode: session.testId,
         userId: session.userId,
         testName: testDef.name,
-        attemptId: `${session.testId}-${session.userId}-${session.startTime}`, // Use consistent ID generation
+        attemptId: `${session.testId}-${session.userId}-${session.startTime}`,
         submittedAt: session.endTime ? new Date(session.endTime).toISOString() : new Date().toISOString(),
         totalQuestions: allQuestions.length,
         attempted: attemptedCount,
@@ -167,46 +170,51 @@ export default function TestResultsPage() {
         setIsLoading(false);
         return;
       }
+       // Ensure this runs only on the client
+       if (typeof window === 'undefined') {
+           setError("Cannot load results on the server.");
+           setIsLoading(false);
+           return;
+       }
 
       setIsLoading(true);
       setError(null);
       try {
-        // 1. Fetch the test definition
-        const testDefData = await getGeneratedTestByCode(testCode);
-        if (!testDefData) {
-          throw new Error("Original test definition not found.");
+        // 1. Fetch the test definition (This should ideally come from a source available on the client or passed props, but using action for now)
+        // Note: Actions might run on the server even in client components if not explicitly prevented.
+        // For a pure local storage approach, the test definition might need to be stored alongside the result,
+        // or fetched via a client-side mechanism if not too large.
+        let testDefData: GeneratedTest | null = null;
+        try {
+             testDefData = await getGeneratedTestByCode(testCode);
+              if (!testDefData) {
+                  throw new Error("Original test definition could not be fetched.");
+              }
+             setTestDefinition(testDefData);
+        } catch (fetchError: any) {
+             console.error("Failed to fetch test definition:", fetchError);
+             // Try to load definition from localStorage if stored there? (Less common)
+             // For now, we'll proceed without it, results will be basic.
+             // setError("Could not load test details needed for full results analysis.");
         }
-        setTestDefinition(testDefData); // Store the fetched test definition
+
 
         // 2. Retrieve the specific test session from local storage using the attemptId
         const storageKey = `testResult-${attemptId}`;
         const storedSessionJson = localStorage.getItem(storageKey);
         if (!storedSessionJson) {
-          // Fallback: try finding a matching session if attemptId is missing parts (less reliable)
-          let foundSessionJson = null;
-          for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key && key.startsWith(`testResult-${testCode}-${userId}`)) {
-                  // Found a potential match, use the latest one based on timestamp?
-                  // For simplicity, just use the first one found for now.
-                  console.warn(`Attempt ID key mismatch, trying fallback key: ${key}`);
-                  foundSessionJson = localStorage.getItem(key);
-                  break;
-              }
-          }
-           if (!foundSessionJson) {
-              throw new Error(`Test attempt data not found for attempt ID: ${attemptId}. Results might be missing or processed.`);
-           }
-           storedSessionJson = foundSessionJson;
+           console.error(`Attempt data not found in localStorage for key: ${storageKey}`);
+          throw new Error(`Test attempt data not found. Results might be missing or cleared.`);
         }
 
         const sessionData: TestSession = JSON.parse(storedSessionJson);
 
-        // 3. Calculate results
+        // 3. Calculate results (pass potentially null testDefData)
         const calculated = calculateResults(sessionData, testDefData);
-        if (!calculated) {
-            throw new Error("Could not process test results. Check console for details.");
+        if (!calculated && testDefData) { // Only error if definition was fetched but calculation failed
+            throw new Error("Could not process test results. Mismatch in data structure.");
         }
+        // If testDefData is null, calculated might still have basic info
         setResults(calculated);
 
       } catch (err: any) {
@@ -217,7 +225,7 @@ export default function TestResultsPage() {
       }
     }
 
-     if (user) { // Fetch only if user is confirmed
+     if (user) {
        fetchResults();
      }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,36 +261,43 @@ export default function TestResultsPage() {
     );
   }
 
-  if (!results || !testDefinition) { // Also check for testDefinition
+  // Check if results are partially loaded (due to missing definition) or fully loaded
+  if (!results) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Results Not Available</h1>
-        <p className="text-muted-foreground mb-6">We could not find the results or test definition for this attempt.</p>
-        <Button asChild>
+        <p className="text-muted-foreground mb-6">We could not find or process the results for this attempt.</p>
+         <Button asChild>
           <Link href="/tests">Go to Test Series</Link>
         </Button>
       </div>
     );
   }
 
-  // Calculate total marks based on the actual questions in the test definition
-  const allQuestionsInTest = getAllQuestionsFromTest(testDefinition);
-  const totalPossibleMarks = allQuestionsInTest.reduce((sum, q) => sum + q.marks, 0);
 
+  // Use testDefinition data if available, otherwise use results data
+  const testName = results.testName || testDefinition?.name || 'Unknown Test';
+  const duration = testDefinition?.duration || 0;
+  const totalQs = results.totalQuestions || testDefinition?.total_questions || 0;
 
-  const aiAnalysis = `Based on your performance in ${results.testName}:
-- You demonstrated strength in questions related to topics where you answered correctly (${results.correct} questions).
-- Areas for improvement include topics related to the ${results.incorrect} questions you answered incorrectly and the ${results.unanswered} you skipped.
+  // Calculate total marks based on the definition if possible
+   const allQuestionsInTest = testDefinition ? getAllQuestionsFromTest(testDefinition) : [];
+   const totalPossibleMarks = allQuestionsInTest.reduce((sum, q) => sum + (q.marks || 1), 0);
+
+   // AI Analysis (remains the same logic)
+  const aiAnalysis = `Based on your performance in ${testName}:
+- You demonstrated strength in questions related to topics where you answered correctly (${results.correct ?? 0} questions).
+- Areas for improvement include topics related to the ${results.incorrect ?? 0} questions you answered incorrectly and the ${results.unanswered ?? 0} you skipped.
 - Focus on revising fundamentals for weaker topics and practicing more problems. Pay attention to the explanations provided in the review.
-- Your time management (${results.timeTakenMinutes} mins used) seems ${results.timeTakenMinutes < (testDefinition.duration * 0.8) ? 'efficient' : results.timeTakenMinutes > testDefinition.duration ? 'like it could be improved' : 'reasonable'}.
+- Your time management (${results.timeTakenMinutes ?? 0} mins used) seems ${results.timeTakenMinutes < (duration * 0.8) ? 'efficient' : results.timeTakenMinutes > duration ? 'like it could be improved' : 'reasonable'}.
 Keep practicing! Consistency is key.`;
 
 
   return (
      <>
-     {/* Ensure MathJax script is included */}
       <Script
+         id="mathjax-script-results" // Unique ID
          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
          strategy="lazyOnload"
          onLoad={() => {
@@ -293,7 +308,7 @@ Keep practicing! Consistency is key.`;
     <div className="container mx-auto py-8 px-4 max-w-4xl space-y-8">
       <Card className="shadow-lg bg-card text-card-foreground">
         <CardHeader className="bg-primary/10 dark:bg-primary/20 p-6">
-          <CardTitle className="text-3xl font-bold text-primary text-center">{results.testName} - Results</CardTitle>
+          <CardTitle className="text-3xl font-bold text-primary text-center">{testName} - Results</CardTitle>
            <CardDescription className="text-center text-muted-foreground">
                 Attempt ID: <span className="font-mono text-xs">{results.attemptId}</span> | Submitted: {new Date(results.submittedAt).toLocaleString()}
            </CardDescription>
@@ -301,16 +316,16 @@ Keep practicing! Consistency is key.`;
         <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <Card className="p-4 bg-muted dark:bg-muted/50">
-              <CardTitle className="text-4xl font-bold text-green-600 dark:text-green-400">{results.score}</CardTitle>
-              <CardDescription>Score / {totalPossibleMarks}</CardDescription>
+              <CardTitle className="text-4xl font-bold text-green-600 dark:text-green-400">{results.score ?? 'N/A'}</CardTitle>
+              <CardDescription>Score / {totalPossibleMarks || totalQs}</CardDescription>
             </Card>
             <Card className="p-4 bg-muted dark:bg-muted/50">
-              <CardTitle className="text-4xl font-bold text-blue-600 dark:text-blue-400">{results.percentage.toFixed(2)}%</CardTitle>
+              <CardTitle className="text-4xl font-bold text-blue-600 dark:text-blue-400">{results.percentage?.toFixed(2) ?? 'N/A'}%</CardTitle>
               <CardDescription>Percentage</CardDescription>
             </Card>
             <Card className="p-4 bg-muted dark:bg-muted/50">
-              <CardTitle className="text-4xl font-bold text-purple-600 dark:text-purple-400">{results.timeTakenMinutes} mins</CardTitle>
-               <CardDescription>Time Taken / {testDefinition.duration} mins</CardDescription>
+              <CardTitle className="text-4xl font-bold text-purple-600 dark:text-purple-400">{results.timeTakenMinutes ?? 'N/A'} mins</CardTitle>
+               <CardDescription>Time Taken / {duration || 'N/A'} mins</CardDescription>
             </Card>
           </div>
 
@@ -319,53 +334,59 @@ Keep practicing! Consistency is key.`;
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Total Questions:</span>
-                <span className="font-medium text-card-foreground">{results.totalQuestions}</span>
+                <span className="font-medium text-card-foreground">{totalQs || 'N/A'}</span>
               </div>
-              <Progress value={(results.attempted / results.totalQuestions) * 100} className="h-2 bg-gray-200 dark:bg-gray-700 [&>div]:bg-gray-500 dark:[&>div]:bg-gray-400" aria-label={`${((results.attempted / results.totalQuestions) * 100).toFixed(0)}% Attempted`}/>
+               {totalQs > 0 && (
+                 <>
+                    <Progress value={(results.attempted / totalQs) * 100} className="h-2 bg-gray-200 dark:bg-gray-700 [&>div]:bg-gray-500 dark:[&>div]:bg-gray-400" aria-label={`${((results.attempted / totalQs) * 100).toFixed(0)}% Attempted`}/>
 
-              <div className="flex justify-between items-center text-green-600 dark:text-green-400">
-                <span><CheckCircle className="inline h-4 w-4 mr-1"/>Correct Answers:</span>
-                <span className="font-medium">{results.correct}</span>
-              </div>
-              <Progress value={(results.correct / results.totalQuestions) * 100} className="h-2 bg-green-100 dark:bg-green-800/30 [&>div]:bg-green-500 dark:[&>div]:bg-green-400" aria-label={`${((results.correct / results.totalQuestions) * 100).toFixed(0)}% Correct`}/>
+                    <div className="flex justify-between items-center text-green-600 dark:text-green-400">
+                        <span><CheckCircle className="inline h-4 w-4 mr-1"/>Correct Answers:</span>
+                        <span className="font-medium">{results.correct ?? 'N/A'}</span>
+                    </div>
+                    <Progress value={(results.correct / totalQs) * 100} className="h-2 bg-green-100 dark:bg-green-800/30 [&>div]:bg-green-500 dark:[&>div]:bg-green-400" aria-label={`${((results.correct / totalQs) * 100).toFixed(0)}% Correct`}/>
 
-              <div className="flex justify-between items-center text-red-600 dark:text-red-400">
-                <span><XCircle className="inline h-4 w-4 mr-1"/>Incorrect Answers:</span>
-                <span className="font-medium">{results.incorrect}</span>
-              </div>
-              <Progress value={(results.incorrect / results.totalQuestions) * 100} className="h-2 bg-red-100 dark:bg-red-800/30 [&>div]:bg-red-500 dark:[&>div]:bg-red-400" aria-label={`${((results.incorrect / results.totalQuestions) * 100).toFixed(0)}% Incorrect`}/>
+                    <div className="flex justify-between items-center text-red-600 dark:text-red-400">
+                        <span><XCircle className="inline h-4 w-4 mr-1"/>Incorrect Answers:</span>
+                        <span className="font-medium">{results.incorrect ?? 'N/A'}</span>
+                    </div>
+                    <Progress value={(results.incorrect / totalQs) * 100} className="h-2 bg-red-100 dark:bg-red-800/30 [&>div]:bg-red-500 dark:[&>div]:bg-red-400" aria-label={`${((results.incorrect / totalQs) * 100).toFixed(0)}% Incorrect`}/>
 
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
-                <span><HelpCircle className="inline h-4 w-4 mr-1"/>Unanswered:</span>
-                <span className="font-medium">{results.unanswered}</span>
-              </div>
-               <Progress value={(results.unanswered / results.totalQuestions) * 100} className="h-2 bg-gray-100 dark:bg-gray-800/30 [&>div]:bg-gray-400 dark:[&>div]:bg-gray-500" aria-label={`${((results.unanswered / results.totalQuestions) * 100).toFixed(0)}% Unanswered`}/>
+                    <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
+                        <span><HelpCircle className="inline h-4 w-4 mr-1"/>Unanswered:</span>
+                        <span className="font-medium">{results.unanswered ?? 'N/A'}</span>
+                    </div>
+                    <Progress value={(results.unanswered / totalQs) * 100} className="h-2 bg-gray-100 dark:bg-gray-800/30 [&>div]:bg-gray-400 dark:[&>div]:bg-gray-500" aria-label={`${((results.unanswered / totalQs) * 100).toFixed(0)}% Unanswered`}/>
+                 </>
+                )}
             </div>
           </div>
 
            <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700/50 dark:text-blue-300">
                <Info className="h-4 w-4 !text-blue-600 dark:!text-blue-400" />
-               <AlertTitle>Ranking & History Note</AlertTitle>
+               <AlertTitle>Local Storage Note</AlertTitle>
                <AlertDescription>
-                 Overall ranking and history across multiple attempts require a backend database. This page shows results for this specific attempt stored locally.
+                 Results and history are stored in your browser's local storage. Clearing browser data will remove this history. Rankings across users require a server backend.
                </AlertDescription>
            </Alert>
 
-           <Card className="bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30">
-            <CardHeader>
-              <CardTitle className="text-xl flex items-center gap-2 text-primary dark:text-primary-light">
-                <Sparkles className="h-5 w-5" /> AI Performance Insights
-              </CardTitle>
-            </CardHeader>
-             {/* Container for MathJax rendering */}
-             <CardContent id="ai-analysis-content" className="prose prose-sm dark:prose-invert max-w-none text-primary/80 dark:text-primary-light/80">
-                {/* Render AI analysis text, replace MathJax delimiters */}
-                <div dangerouslySetInnerHTML={{ __html: aiAnalysis.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-            </CardContent>
-          </Card>
+            {testDefinition && ( // Only show AI insights if definition was loaded
+             <Card className="bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30">
+                <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2 text-primary dark:text-primary-light">
+                    <Sparkles className="h-5 w-5" /> AI Performance Insights (Example)
+                </CardTitle>
+                </CardHeader>
+                <CardContent id="ai-analysis-content" className="prose prose-sm dark:prose-invert max-w-none text-primary/80 dark:text-primary-light/80">
+                    {/* Render AI analysis text */}
+                    <div dangerouslySetInnerHTML={{ __html: aiAnalysis.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
+                </CardContent>
+            </Card>
+            )}
 
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 p-6 border-t border-border">
+            {/* Link to review page remains the same */}
             <Button variant="outline" asChild>
                 <Link href={`/chapterwise-test-review/${testCode}?userId=${userId}&attemptId=${attemptId}`}>
                     <BarChart2 className="mr-2 h-4 w-4" /> Review Answers
@@ -374,6 +395,7 @@ Keep practicing! Consistency is key.`;
             <Button asChild>
                 <Link href="/tests"><RefreshCw className="mr-2 h-4 w-4" /> Take Another Test</Link>
             </Button>
+             {/* Share button remains disabled */}
              <Button variant="secondary" disabled>
                 <Share2 className="mr-2 h-4 w-4" /> Share Results (Coming Soon)
             </Button>
@@ -383,3 +405,4 @@ Keep practicing! Consistency is key.`;
     </>
   );
 }
+
