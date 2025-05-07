@@ -8,20 +8,28 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus } from '@/types'; // Added QuestionStatus
-import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Import enum directly for usage
+import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus } from '@/types';
+import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-const QUESTION_STATUS_DISPLAY_CLASSES: Record<QuestionStatus, string> = {
-    [QuestionStatusEnum.Answered]: "border-green-500 bg-green-50",
-    [QuestionStatusEnum.Unanswered]: "border-red-500 bg-red-50",
-    [QuestionStatusEnum.MarkedForReview]: "border-purple-500 bg-purple-50",
-    [QuestionStatusEnum.AnsweredAndMarked]: "border-blue-500 bg-blue-50",
-    [QuestionStatusEnum.NotVisited]: "border-gray-300 bg-gray-50",
+const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
+    [QuestionStatusEnum.Answered]: "default", // default usually maps to primary (greenish in this theme)
+    [QuestionStatusEnum.Unanswered]: "destructive", // red
+    [QuestionStatusEnum.MarkedForReview]: "secondary", //
+    [QuestionStatusEnum.AnsweredAndMarked]: "default", // Should be distinct, maybe a custom blue
+    [QuestionStatusEnum.NotVisited]: "outline", // gray/border
+};
+
+// More specific styling for better contrast and theme adherence
+const OPTION_STYLES = {
+  base: "border-border hover:border-primary",
+  selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
+  selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
+  correctUnselected: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 };
 
 
@@ -41,13 +49,11 @@ export default function TestReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
 
-  // MathJax typesetting
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax) {
       (window as any).MathJax.typesetPromise?.();
     }
   }, [currentQuestionReviewIndex, testDefinition, testSession]);
-
 
   useEffect(() => {
     if (authLoading) return;
@@ -72,8 +78,8 @@ export default function TestReviewPage() {
       setError(null);
       try {
         const testDefData = await getGeneratedTestByCode(testCode);
-        if (!testDefData || testDefData.testType !== 'chapterwise' || !testDefData.questions) {
-          throw new Error("Original test definition not found or invalid.");
+        if (!testDefData || !testDefData.questions) { // Check for questions array
+          throw new Error("Original test definition not found or invalid (no questions).");
         }
         setTestDefinition(testDefData);
 
@@ -95,18 +101,14 @@ export default function TestReviewPage() {
   }, [testCode, userId, attemptId, authLoading, user, router]);
 
   const currentReviewQuestion = testDefinition?.questions?.[currentQuestionReviewIndex];
-  const currentUserAnswerDetailed = testSession?.answers.find(ans => {
-    // Heuristic: Try to match by question text/image if ID is not available from TestQuestion
-    const qDef = testDefinition?.questions?.[ans.questionId ? parseInt(ans.questionId.replace('q-','')) : -1 ];
-    if (qDef && ans.questionId === (currentReviewQuestion?.id || `q-${currentQuestionReviewIndex}`)) return true;
-    // Fallback match by index if questionId is not available or doesn't match
-    return testDefinition?.questions?.[currentQuestionReviewIndex] === qDef;
-  });
-
+  
+  // Find the answer detail from the session based on the current question index
+  // Assuming questions in testDefinition and answers in testSession are ordered identically
+  const currentUserAnswerDetailed = testSession?.answers?.[currentQuestionReviewIndex];
 
   if (isLoading || authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl">
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
         <Skeleton className="h-10 w-3/4 mb-4" />
         <Skeleton className="h-8 w-1/2 mb-8" />
         <Card>
@@ -123,7 +125,7 @@ export default function TestReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+      <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
@@ -136,7 +138,7 @@ export default function TestReviewPage() {
 
   if (!testDefinition || !testSession || !currentReviewQuestion) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+      <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Review Data Not Available</h1>
         <p className="text-muted-foreground mb-6">Could not load the necessary data for this test review.</p>
@@ -147,10 +149,17 @@ export default function TestReviewPage() {
     );
   }
   const totalQuestions = testDefinition.questions?.length || 0;
-  const optionKeys = ["A", "B", "C", "D"];
+  const optionKeys = ["A", "B", "C", "D"]; // Standard option keys
   const correctOptionKey = currentReviewQuestion.answer.replace('Option ', '').trim();
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
+  const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
+
+  const isExplanationImage = (explanation: string | null | undefined): boolean => {
+    if (!explanation || typeof explanation !== 'string') return false;
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+    return imageExtensions.some(ext => explanation.toLowerCase().endsWith(ext));
+  };
 
 
   return (
@@ -161,77 +170,86 @@ export default function TestReviewPage() {
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Results
             </Link>
         </Button>
-         <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">Review: {testDefinition.name}</h1>
+         <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">{testDefinition.name}</h1>
       </div>
 
-
-      <Card className={cn("shadow-md", currentUserAnswerDetailed && QUESTION_STATUS_DISPLAY_CLASSES[currentUserAnswerDetailed.status])}>
+      <Card className="shadow-md bg-card text-card-foreground">
         <CardHeader>
-          <CardTitle className="flex justify-between items-center">
-            <span>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</span>
+          <div className="flex justify-between items-center">
+            <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
             <Badge variant="secondary">Marks: {currentReviewQuestion.marks}</Badge>
-          </CardTitle>
+          </div>
            {currentUserAnswerDetailed?.status && (
                 <Badge
-                    variant={isUserCorrect ? 'default' : 'destructive'}
-                    className={cn("text-xs w-fit", isUserCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}
+                    variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
+                    className={cn("text-xs w-fit mt-2", {
+                        "bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300": questionStatus === QuestionStatusEnum.Answered && isUserCorrect,
+                        "bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300": (questionStatus === QuestionStatusEnum.Answered && !isUserCorrect) || questionStatus === QuestionStatusEnum.Unanswered,
+                        "bg-purple-100 text-purple-700 dark:bg-purple-700/20 dark:text-purple-300": questionStatus === QuestionStatusEnum.MarkedForReview,
+                        "bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300": questionStatus === QuestionStatusEnum.AnsweredAndMarked,
+                    })}
                  >
-                   Status: {currentUserAnswerDetailed.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} {/* Nicer formatting */}
+                   Status: {questionStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </Badge>
             )}
         </CardHeader>
-        <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base space-y-4">
+        <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base space-y-4 text-card-foreground">
           {currentReviewQuestion.type === 'image' && currentReviewQuestion.image_url ? (
-            <Image src={currentReviewQuestion.image_url} alt={`Question ${currentQuestionReviewIndex + 1}`} width={600} height={400} className="rounded-md border max-w-full h-auto mx-auto" data-ai-hint="question diagram physics"/>
+            <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96">
+              <Image src={currentReviewQuestion.image_url} alt={`Question ${currentQuestionReviewIndex + 1}`} layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="question diagram physics"/>
+            </div>
           ) : currentReviewQuestion.question ? (
             <div dangerouslySetInnerHTML={{ __html: currentReviewQuestion.question.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
           ) : (
-            <p>Question content not available.</p>
+            <p className="text-muted-foreground">Question content not available.</p>
           )}
 
-          <div className="space-y-2 pt-4 border-t mt-4">
-            <p className="font-semibold">Options:</p>
+          <div className="space-y-2 pt-4 border-t mt-4 border-border">
+            <p className="font-semibold text-card-foreground">Options:</p>
             {currentReviewQuestion.options.map((optionText, idx) => {
               const optionKey = optionKeys[idx];
               const isSelected = userSelectedOptionKey === optionKey;
-              const isCorrect = correctOptionKey === optionKey;
-              let optionStyle = "border-gray-300";
-              if (isSelected && isCorrect) optionStyle = "border-green-500 bg-green-50 text-green-700 ring-2 ring-green-500";
-              else if (isSelected && !isCorrect) optionStyle = "border-red-500 bg-red-50 text-red-700 ring-2 ring-red-500";
-              else if (isCorrect) optionStyle = "border-green-500 bg-green-50 text-green-700";
+              const isCorrectOption = correctOptionKey === optionKey;
+              let optionStyleClass = OPTION_STYLES.base;
+              if (isSelected && isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
+              else if (isSelected && !isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
+              else if (isCorrectOption) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
 
               return (
-                <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyle)}>
+                <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium">{optionKey}.</span>
                   {currentReviewQuestion.type === 'text' && optionText ? (
                      <div className="prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
                   ) : (
                     <span>{optionText}</span>
                   )}
-                  {isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 ml-auto flex-shrink-0" />}
-                  {isSelected && !isCorrect && <XCircle className="h-5 w-5 text-red-600 ml-auto flex-shrink-0" />}
-                  {!isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 ml-auto flex-shrink-0 opacity-70" />}
+                  {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                  {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
+                  {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
                 </div>
               );
             })}
           </div>
 
-          {/* Explanation Section */}
-          {(currentReviewQuestion.explanation || (currentUserAnswerDetailed && !isUserCorrect)) && (
-            <div className="mt-6 pt-4 border-t">
-              <h4 className="font-semibold text-lg mb-2 flex items-center">
+          {(currentReviewQuestion.explanation) && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
-              {currentReviewQuestion.explanation ? (
-                  <div className="prose-sm dark:prose-invert max-w-none bg-muted/30 p-3 rounded-md"
+              {isExplanationImage(currentReviewQuestion.explanation) ? (
+                 <div className="relative w-full max-w-md h-56 mx-auto md:h-72 lg:h-80 my-2">
+                    <Image src={currentReviewQuestion.explanation!} alt="Explanation Image" layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="explanation diagram solution"/>
+                </div>
+              ) : currentReviewQuestion.explanation ? (
+                  <div className="prose-sm dark:prose-invert max-w-none bg-muted/50 dark:bg-muted/20 p-3 rounded-md"
                        dangerouslySetInnerHTML={{ __html: currentReviewQuestion.explanation.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
               ) : (
-                 <p className="text-muted-foreground text-sm">No detailed explanation provided for this question.</p>
+                 <p className="text-sm text-muted-foreground">No detailed explanation provided for this question.</p>
               )}
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between mt-4">
+        <CardFooter className="flex justify-between mt-4 p-6 border-t border-border">
           <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
@@ -243,5 +261,3 @@ export default function TestReviewPage() {
     </div>
   );
 }
-
-

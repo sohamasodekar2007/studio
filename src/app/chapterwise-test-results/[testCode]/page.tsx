@@ -7,15 +7,13 @@ import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles } from 'lucide-react'; // Added Sparkles
+import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
 import type { TestSession, TestResultSummary, GeneratedTest } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-// Placeholder for fetching actual test data to get total marks, etc.
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// This would eventually come from a server action that processes the TestSession
-// and compares against correct answers from the original TestDefinition JSON
 function calculateResults(session: TestSession, testDef: GeneratedTest | null): TestResultSummary | null {
     if (!testDef || !testDef.questions) return null;
 
@@ -31,7 +29,7 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
 
         totalMarksPossible += questionDef.marks;
         let isCorrect = false;
-        const correctAnswerKey = questionDef.answer.replace('Option ', '').trim(); // "Option A" -> "A"
+        const correctAnswerKey = questionDef.answer.replace('Option ', '').trim();
 
         if (userAns.selectedOption) {
             attemptedCount++;
@@ -41,12 +39,11 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
                 score += questionDef.marks;
             } else {
                 incorrectCount++;
-                // Add negative marking logic here if applicable
             }
         }
         return {
             questionIndex: index,
-            questionTextOrImage: questionDef.question, // Or image_url
+            questionTextOrImage: questionDef.question,
             userAnswer: userAns.selectedOption,
             correctAnswer: correctAnswerKey,
             isCorrect,
@@ -65,7 +62,7 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
         testCode: session.testId,
         userId: session.userId,
         testName: testDef.name,
-        attemptId: `${session.testId}-${session.userId}-${session.startTime}`, // Reconstruct or pass from URL
+        attemptId: `${session.testId}-${session.userId}-${session.startTime}`,
         submittedAt: session.endTime ? new Date(session.endTime).toISOString() : new Date().toISOString(),
         totalQuestions: testDef.questions.length,
         attempted: attemptedCount,
@@ -88,7 +85,7 @@ export default function TestResultsPage() {
 
   const testCode = params.testCode as string;
   const userId = searchParams.get('userId');
-  const attemptId = searchParams.get('attemptId'); // Used to fetch specific attempt
+  const attemptId = searchParams.get('attemptId');
 
   const [results, setResults] = useState<TestResultSummary | null>(null);
   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
@@ -117,21 +114,18 @@ export default function TestResultsPage() {
       setIsLoading(true);
       setError(null);
       try {
-        // 1. Fetch the test definition
         const testDefData = await getGeneratedTestByCode(testCode);
         if (!testDefData) {
           throw new Error("Original test definition not found.");
         }
         setTestDefinition(testDefData);
 
-        // 2. Fetch the specific test attempt from local storage
         const storedSessionJson = localStorage.getItem(`testResult-${attemptId}`);
         if (!storedSessionJson) {
           throw new Error("Test attempt data not found. Results might be processed or missing.");
         }
         const sessionData: TestSession = JSON.parse(storedSessionJson);
 
-        // 3. Calculate results (client-side for this demo)
         const calculated = calculateResults(sessionData, testDefData);
         if (!calculated) {
             throw new Error("Could not process test results.");
@@ -192,19 +186,18 @@ export default function TestResultsPage() {
     );
   }
 
-  // AI Performance Analysis Placeholder
   const aiAnalysis = `Based on your performance in ${results.testName}:
-- You demonstrated strength in questions related to [Strong Topic 1] and [Strong Topic 2].
-- Areas for improvement include [Weak Topic 1] and concepts like [Specific Concept].
-- Focus on revising [Weak Topic 1] fundamentals and practicing more problems from [Specific Concept].
-- Your time management was [Good/Okay/Needs Improvement]. Try to allocate time more evenly across questions.
+- You demonstrated strength in questions related to topics where you answered correctly.
+- Areas for improvement include topics related to questions you answered incorrectly or skipped.
+- Focus on revising fundamentals for weaker topics and practicing more problems.
+- Your time management was [Good/Okay/Needs Improvement - Requires detailed timing data per question not currently stored].
 Keep practicing! Consistency is key.`;
 
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl space-y-8">
-      <Card className="shadow-lg">
-        <CardHeader className="bg-primary/10 p-6">
+      <Card className="shadow-lg bg-card text-card-foreground">
+        <CardHeader className="bg-primary/10 dark:bg-primary/20 p-6">
           <CardTitle className="text-3xl font-bold text-primary text-center">{results.testName} - Results</CardTitle>
           <CardDescription className="text-center text-muted-foreground">
             Attempt ID: {results.attemptId} | Submitted: {new Date(results.submittedAt).toLocaleString()}
@@ -212,63 +205,70 @@ Keep practicing! Consistency is key.`;
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <Card className="p-4 bg-muted/40">
-              <CardTitle className="text-4xl font-bold text-green-600">{results.score}</CardTitle>
+            <Card className="p-4 bg-muted dark:bg-muted/50">
+              <CardTitle className="text-4xl font-bold text-green-600 dark:text-green-400">{results.score}</CardTitle>
               <CardDescription>Score / {results.totalQuestions * (testDefinition?.questions?.[0]?.marks || 1)}</CardDescription>
             </Card>
-            <Card className="p-4 bg-muted/40">
-              <CardTitle className="text-4xl font-bold text-blue-600">{results.percentage.toFixed(2)}%</CardTitle>
+            <Card className="p-4 bg-muted dark:bg-muted/50">
+              <CardTitle className="text-4xl font-bold text-blue-600 dark:text-blue-400">{results.percentage.toFixed(2)}%</CardTitle>
               <CardDescription>Percentage</CardDescription>
             </Card>
-            <Card className="p-4 bg-muted/40">
-              <CardTitle className="text-4xl font-bold text-purple-600">{results.timeTakenMinutes} mins</CardTitle>
+            <Card className="p-4 bg-muted dark:bg-muted/50">
+              <CardTitle className="text-4xl font-bold text-purple-600 dark:text-purple-400">{results.timeTakenMinutes} mins</CardTitle>
               <CardDescription>Time Taken</CardDescription>
             </Card>
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold mb-2">Performance Summary</h3>
+            <h3 className="text-xl font-semibold mb-2 text-card-foreground">Performance Summary</h3>
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span>Total Questions:</span>
-                <span className="font-medium">{results.totalQuestions}</span>
+                <span className="text-muted-foreground">Total Questions:</span>
+                <span className="font-medium text-card-foreground">{results.totalQuestions}</span>
               </div>
-              <Progress value={(results.attempted / results.totalQuestions) * 100} className="h-2 bg-gray-200 [&>div]:bg-gray-500" />
+              <Progress value={(results.attempted / results.totalQuestions) * 100} className="h-2 bg-gray-200 dark:bg-gray-700 [&>div]:bg-gray-500 dark:[&>div]:bg-gray-400" />
 
-              <div className="flex justify-between items-center text-green-600">
+              <div className="flex justify-between items-center text-green-600 dark:text-green-400">
                 <span><CheckCircle className="inline h-4 w-4 mr-1"/>Correct Answers:</span>
                 <span className="font-medium">{results.correct}</span>
               </div>
-              <Progress value={(results.correct / results.totalQuestions) * 100} className="h-2 bg-green-100 [&>div]:bg-green-500" />
+              <Progress value={(results.correct / results.totalQuestions) * 100} className="h-2 bg-green-100 dark:bg-green-800/30 [&>div]:bg-green-500 dark:[&>div]:bg-green-400" />
 
-              <div className="flex justify-between items-center text-red-600">
+              <div className="flex justify-between items-center text-red-600 dark:text-red-400">
                 <span><XCircle className="inline h-4 w-4 mr-1"/>Incorrect Answers:</span>
                 <span className="font-medium">{results.incorrect}</span>
               </div>
-              <Progress value={(results.incorrect / results.totalQuestions) * 100} className="h-2 bg-red-100 [&>div]:bg-red-500"/>
+              <Progress value={(results.incorrect / results.totalQuestions) * 100} className="h-2 bg-red-100 dark:bg-red-800/30 [&>div]:bg-red-500 dark:[&>div]:bg-red-400"/>
 
-              <div className="flex justify-between items-center text-gray-600">
+              <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
                 <span><HelpCircle className="inline h-4 w-4 mr-1"/>Unanswered:</span>
                 <span className="font-medium">{results.unanswered}</span>
               </div>
-               <Progress value={(results.unanswered / results.totalQuestions) * 100} className="h-2 bg-gray-100 [&>div]:bg-gray-400"/>
+               <Progress value={(results.unanswered / results.totalQuestions) * 100} className="h-2 bg-gray-100 dark:bg-gray-800/30 [&>div]:bg-gray-400 dark:[&>div]:bg-gray-500"/>
             </div>
           </div>
+          
+          <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700/50 dark:text-blue-300">
+            <Star className="h-4 w-4 !text-blue-600 dark:!text-blue-400" />
+            <AlertTitle>Rank & Detailed History</AlertTitle>
+            <AlertDescription>
+              Overall ranking and detailed history for multiple attempts on this test are features planned for a future update with a database backend.
+            </AlertDescription>
+          </Alert>
 
-          {/* AI Generated Performance Analysis */}
-          <Card className="bg-primary/5 border-primary/20">
+          <Card className="bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30">
             <CardHeader>
-              <CardTitle className="text-xl flex items-center gap-2 text-primary">
+              <CardTitle className="text-xl flex items-center gap-2 text-primary dark:text-primary-light">
                 <Sparkles className="h-5 w-5" /> AI Performance Insights
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm whitespace-pre-line text-primary/80">{aiAnalysis}</p>
+              <p className="text-sm whitespace-pre-line text-primary/80 dark:text-primary-light/80">{aiAnalysis}</p>
             </CardContent>
           </Card>
 
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 p-6 border-t">
+        <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 p-6 border-t border-border">
             <Button variant="outline" asChild>
                 <Link href={`/chapterwise-test-review/${testCode}?userId=${userId}&attemptId=${attemptId}`}>
                     <BarChart2 className="mr-2 h-4 w-4" /> Review Answers
@@ -285,4 +285,3 @@ Keep practicing! Consistency is key.`;
     </div>
   );
 }
-
