@@ -3,53 +3,45 @@
 
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { UserProfile, UserModel, AcademicStatus as UserAcademicStatus } from '@/types';
+import type { UserProfile, UserModel, AcademicStatus as UserAcademicStatus, ContextUser } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import { saveUserToJson, readUsers, getUserById } from '@/actions/user-actions';
 import { findUserByEmail } from '@/actions/auth-actions'; // Corrected import
-import { sendWelcomeEmail, generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
+// OTP actions are not needed directly in context anymore
+// import { sendWelcomeEmail, generateOtp, verifyOtp } from '@/actions/otp-actions';
+import { sendWelcomeEmail } from '@/actions/otp-actions'; // Only keep welcome email simulation
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid'; // Ensure UUID is imported
 
-// ContextUser type adapted for local auth
-export type ContextUser = {
-  id: string; // User ID from users.json
-  email: string | null;
-  displayName: string | null;
-  // photoURL?: string | null; // No photoURL in local auth
-  // Fields from UserProfile that are useful in context
-  phone: string | null;
-  className: UserAcademicStatus | null; // Renamed from academicStatus to className
-  model: UserModel;
-  expiry_date: string | null; // ISO string from UserProfile
-} | null;
+
+// ContextUser type remains the same
 
 
 interface AuthContextProps {
   user: ContextUser;
   loading: boolean;
-  initializationError: string | null; // Keep for potential local storage issues
+  initializationError: string | null;
   login: (email: string, password?: string) => Promise<void>;
   logout: () => Promise<void>;
   signUp: (
     email: string,
     password?: string,
     displayName?: string,
-    phoneNumber?: string | null, // Make phone optional
-    academicStatus?: UserAcademicStatus | null // Make academicStatus optional
-  ) => Promise<void>; // Renamed from signUpWithEmailAndPassword
-  refreshUser: () => Promise<void>; // To re-fetch UserProfile data
-  // Add OTP functions to context if needed by components, or keep them separate actions
-  sendOtpAction: (email: string) => Promise<{ success: boolean; message: string }>;
-  verifyOtpAction: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
+    phoneNumber?: string | null,
+    academicStatus?: UserAcademicStatus | null
+  ) => Promise<void>;
+  refreshUser: () => Promise<void>;
+  // Remove OTP actions from context props
+  // sendOtpAction: (email: string) => Promise<{ success: boolean; message: string }>;
+  // verifyOtpAction: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
 }
 
 // Default error message for local storage mode
-const localStorageError = null; // Assume local storage works unless an error occurs during operations
+const localStorageError = null;
 
 const AuthContext = createContext<AuthContextProps>({
   user: null,
@@ -59,9 +51,9 @@ const AuthContext = createContext<AuthContextProps>({
   logout: async () => { console.warn('Auth not initialized or logout function not implemented'); },
   signUp: async () => { console.warn('Auth not initialized or signUp function not implemented'); },
   refreshUser: async () => { console.warn('Auth not initialized or refreshUser function not implemented'); },
-   // Provide default implementations for OTP actions
-  sendOtpAction: async () => { console.warn('Auth not initialized'); return { success: false, message: 'Auth not ready' }; },
-  verifyOtpAction: async () => { console.warn('Auth not initialized'); return { success: false, message: 'Auth not ready' }; },
+   // Remove default OTP implementations
+  // sendOtpAction: async () => { console.warn('Auth not initialized'); return { success: false, message: 'Auth not ready' }; },
+  // verifyOtpAction: async () => { console.warn('Auth not initialized'); return { success: false, message: 'Auth not ready' }; },
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -110,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
     console.log("AuthProvider: Initial load complete. Loading state:", false);
-  }, [isMounted]); // Depend on isMounted
+  }, [isMounted]);
 
 
   const mapUserProfileToContextUser = (userProfile: UserProfile | null): ContextUser => {
@@ -134,12 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser: ContextUser = JSON.parse(currentUserJson);
         if (currentUser?.id) {
              try {
-                const updatedProfile = await getUserById(currentUser.id); // Fetch latest profile
+                const updatedProfile = await getUserById(currentUser.id); // Fetch latest profile using user ID
                 const contextUser = mapUserProfileToContextUser(updatedProfile);
                 setUser(contextUser);
                 if (contextUser) {
                     // Need the full profile to store (including password hash/plain for local)
-                    const fullUpdatedProfile = await findUserByEmail(contextUser.email || ''); // Fetch full profile again
+                     const fullUpdatedProfile = await findUserByEmail(contextUser.email || ''); // Fetch full profile again
                      if (fullUpdatedProfile) {
                          const { password, ...userToStore } = fullUpdatedProfile; // Exclude password before storing
                          localStorage.setItem('loggedInUser', JSON.stringify(userToStore));
@@ -149,9 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                          }
                      } else {
                          localStorage.removeItem('loggedInUser'); // Remove if full profile not found
+                         localStorage.removeItem('simulatedPassword');
                      }
                 } else {
                      localStorage.removeItem('loggedInUser'); // User might have been deleted
+                     localStorage.removeItem('simulatedPassword');
                 }
              } catch (e) {
                  console.error("Refresh User: Error fetching updated profile", e);
@@ -160,10 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                  toast({variant: 'destructive', title: 'Sync Error', description: 'Could not refresh user data.'});
              }
         } else {
-             setUser(null); localStorage.removeItem('loggedInUser');
+             setUser(null);
+             localStorage.removeItem('loggedInUser');
+             localStorage.removeItem('simulatedPassword');
         }
     } else {
          setUser(null);
+         localStorage.removeItem('simulatedPassword');
     }
     setLoading(false);
   }, [toast, isMounted]);
@@ -261,8 +258,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       // Save to users.json using the server action
-       const saveResult = await saveUserToJson(newUserProfile); // Call action to add
-       if (!saveResult.success) {
+       const saveResult = await addUserToJson(newUserProfile); // Call action to add
+       if (!saveResult.success || !saveResult.user) { // Check if user object is returned
          console.error("CRITICAL: Failed to save new user profile to local JSON:", saveResult.message);
          throw new Error(saveResult.message || 'Could not create user profile.');
        }
@@ -272,14 +269,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await sendWelcomeEmail(newUserProfile.email);
       }
 
-      // Automatically log in the user after successful signup
-       const contextUser = mapUserProfileToContextUser(newUserProfile);
+      // Automatically log in the user after successful signup using the returned user data
+       const contextUser = mapUserProfileToContextUser(saveResult.user);
        setUser(contextUser);
         if (contextUser) {
-            const { password, ...userToStore } = newUserProfile;
+            const { password: savedPassword, ...userToStore } = saveResult.user; // Destructure from returned user
             localStorage.setItem('loggedInUser', JSON.stringify(userToStore));
-             if (newUserProfile.password) {
-               localStorage.setItem('simulatedPassword', newUserProfile.password);
+             if (savedPassword) {
+               localStorage.setItem('simulatedPassword', savedPassword);
              }
         }
 
@@ -295,24 +292,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [router, toast, isMounted]);
 
-   // OTP Action Wrappers
-  const sendOtpAction = useCallback(async (email: string) => {
-    try {
-      return await generateOtp(email);
-    } catch (error: any) {
-      console.error("Error in sendOtpAction:", error);
-      return { success: false, message: error.message || "Failed to send OTP." };
-    }
-  }, []);
-
-  const verifyOtpAction = useCallback(async (email: string, otp: string) => {
-    try {
-      return await verifyOtp(email, otp);
-    } catch (error: any) {
-      console.error("Error in verifyOtpAction:", error);
-      return { success: false, message: error.message || "Failed to verify OTP." };
-    }
-  }, []);
+   // Remove OTP Action Wrappers
+  // const sendOtpAction = useCallback(async (email: string) => { ... }, []);
+  // const verifyOtpAction = useCallback(async (email: string, otp: string) => { ... }, []);
 
 
   // Route protection & user loading logic (adapted for local storage)
@@ -350,7 +332,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        console.log("AuthProvider: User not logged in.");
       if (!isAuthPage && !isPublicRoute) {
          console.log("AuthProvider: Redirecting unauthenticated user to login.");
-         router.push(`/auth/login?redirect=${pathname}`);
+         // Ensure pathname exists before adding to redirect query
+         const redirectQuery = pathname ? `?redirect=${pathname}` : '';
+         router.push(`/auth/login${redirectQuery}`);
       }
     }
     // Removed toast dependency as it might cause loops if toasts trigger re-renders which trigger useEffect
@@ -358,7 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // --- UI Loading State ---
    // Show skeleton only during the initial loading phase AND if not on an auth page
-   // This prevents flashing the skeleton on auth pages before redirecting
+   // AND if the component is mounted (to prevent SSR flash)
    if (loading && !user && isMounted && !pathname.startsWith('/auth')) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
@@ -395,7 +379,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, loading, initializationError, login, logout, signUp, refreshUser, sendOtpAction, verifyOtpAction }}>
+    // Remove OTP actions from the provided context value
+    <AuthContext.Provider value={{ user, loading, initializationError, login, logout, signUp, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -15,9 +15,10 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus } from '@/types';
 import { useAuth } from '@/context/auth-context';
-import { generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
+// OTP actions are no longer needed here
+// import { generateOtp, verifyOtp } from '@/actions/otp-actions';
 
-// Updated schema with phone number and academic status
+// Updated schema without OTP
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -25,7 +26,6 @@ const signupSchema = z.object({
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
-  otp: z.string().length(6, { message: "OTP must be 6 digits." }), // Add OTP field validation
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -37,13 +37,13 @@ export default function SignupPage() {
   const { toast } = useToast();
   const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  // Add state variables for OTP flow
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [resendDisabled, setResendDisabled] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
+  // Remove OTP state variables
+  // const [isSendingOtp, setIsSendingOtp] = useState(false);
+  // const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  // const [otpSent, setOtpSent] = useState(false);
+  // const [otpVerified, setOtpVerified] = useState(false);
+  // const [resendDisabled, setResendDisabled] = useState(false);
+  // const [resendTimer, setResendTimer] = useState(0);
 
 
   const form = useForm<SignupFormValues>({
@@ -55,84 +55,18 @@ export default function SignupPage() {
       academicStatus: undefined,
       password: "",
       confirmPassword: "",
-      otp: "", // Initialize OTP field
+      // otp: "", // Remove OTP default value
     },
   });
 
-  const emailValue = form.watch("email"); // Watch email field for OTP sending
+  const emailValue = form.watch("email"); // Still useful if needed elsewhere
 
-  // Timer effect for OTP resend cooldown
-  useEffect(() => {
-    let timerId: NodeJS.Timeout;
-    if (resendTimer > 0) {
-      setResendDisabled(true);
-      timerId = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-    } else {
-      setResendDisabled(false);
-    }
-    return () => clearTimeout(timerId);
-  }, [resendTimer]);
+  // Remove timer effect for OTP
+  // useEffect(() => { ... }, [resendTimer]);
 
-
-  // Function to handle sending OTP
-  const handleSendOtp = useCallback(async () => {
-    const email = form.getValues("email");
-    if (!email) {
-      form.setError("email", { type: "manual", message: "Email is required to send OTP." });
-      return;
-    }
-    // Basic email format validation before sending request
-    if (!z.string().email().safeParse(email).success) {
-        form.setError("email", { type: "manual", message: "Please enter a valid email address." });
-        return;
-    }
-
-    setIsSendingOtp(true);
-    try {
-      const result = await generateOtp(email); // Call server action
-      if (result.success) {
-        toast({ title: "OTP Sent", description: result.message }); // Use message from action
-        setOtpSent(true);
-        setResendTimer(60); // Start 60-second cooldown
-      } else {
-        toast({ variant: "destructive", title: "OTP Error", description: result.message });
-      }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "OTP Error", description: error.message || "Failed to send OTP." });
-    } finally {
-      setIsSendingOtp(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, toast]); // Include form and toast in dependencies
-
-  // Function to handle verifying OTP
-   const handleVerifyOtp = useCallback(async () => {
-    const email = form.getValues("email");
-    const otpValue = form.getValues("otp");
-    if (!otpValue || otpValue.length !== 6) {
-        form.setError("otp", {type: "manual", message: "Please enter a valid 6-digit OTP."});
-        return;
-    }
-    setIsVerifyingOtp(true);
-    try {
-      const result = await verifyOtp(email, otpValue); // Call server action
-      if (result.success) {
-        toast({ title: "OTP Verified", description: result.message });
-        setOtpVerified(true); // Set OTP as verified
-        form.clearErrors("otp"); // Clear any previous OTP errors
-      } else {
-        toast({ variant: "destructive", title: "OTP Verification Failed", description: result.message });
-        form.setError("otp", {type: "manual", message: result.message})
-        setOtpVerified(false);
-      }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "OTP Verification Error", description: error.message || "Failed to verify OTP." });
-       setOtpVerified(false);
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [form, toast]);
+  // Remove OTP handling functions
+  // const handleSendOtp = useCallback(async () => { ... }, [form, toast]);
+  // const handleVerifyOtp = useCallback(async () => { ... }, [form, toast]);
 
 
   // Function to handle final form submission
@@ -141,12 +75,8 @@ export default function SignupPage() {
       toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
       return;
     }
-    // Ensure OTP is verified before proceeding
-    if (!otpVerified) {
-      toast({ variant: 'destructive', title: 'OTP Not Verified', description: 'Please verify your OTP before signing up.' });
-      form.setError("otp", {type: "manual", message: "Please verify your email first."});
-      return;
-    }
+    // Remove OTP verification check
+    // if (!otpVerified) { ... }
 
     setIsLoading(true);
     try {
@@ -167,7 +97,8 @@ export default function SignupPage() {
     }
   };
 
-  const combinedLoading = isLoading || authLoading || isSendingOtp || isVerifyingOtp;
+  // Update combinedLoading without OTP states
+  const combinedLoading = isLoading || authLoading; // || isSendingOtp || isVerifyingOtp;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -196,7 +127,7 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-              {/* Email and OTP */}
+              {/* Email Field (without OTP button) */}
                <FormField
                 control={form.control}
                 name="email"
@@ -209,78 +140,20 @@ export default function SignupPage() {
                           type="email"
                           placeholder="m@example.com"
                           {...field}
-                          disabled={combinedLoading || otpSent} // Disable email after OTP is sent
+                          disabled={combinedLoading} // Email can be edited until submission
                         />
                       </FormControl>
-                       {/* Conditionally render Send/Resend OTP button */}
-                        {!otpVerified && (
-                             <Button
-                                type="button"
-                                onClick={handleSendOtp}
-                                disabled={isSendingOtp || resendDisabled} // Only disable if sending or in cooldown
-                                variant="outline"
-                                size="sm"
-                              >
-                                {isSendingOtp ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : resendDisabled ? (
-                                  `Resend in ${resendTimer}s`
-                                ) : otpSent ? (
-                                    'Resend OTP' // Change text after sent
-                                ) : (
-                                  <>
-                                    <MailIcon className="h-4 w-4 mr-1"/>
-                                    Send OTP
-                                  </>
-                                )}
-                              </Button>
-                         )}
+                      {/* Remove OTP Button */}
                     </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {/* OTP Input and Verify Button (Show only if OTP sent and not yet verified) */}
-              {otpSent && !otpVerified && (
-                <FormField
-                  control={form.control}
-                  name="otp"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Enter OTP</FormLabel>
-                      <div className="flex items-center gap-2">
-                        <FormControl>
-                          <Input
-                            type="text"
-                            maxLength={6}
-                            placeholder="6-digit OTP"
-                            {...field}
-                            disabled={isVerifyingOtp || otpVerified} // Disable input if verifying or already verified
-                          />
-                        </FormControl>
-                        <Button
-                          type="button"
-                          onClick={handleVerifyOtp}
-                          disabled={isVerifyingOtp || field.value?.length !== 6 || otpVerified}
-                          variant="outline"
-                          size="sm"
-                        >
-                          {isVerifyingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
-                          Verify OTP
-                        </Button>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              {/* Show verification success message */}
-              {otpVerified && (
-                 <div className="flex items-center text-sm text-green-600">
-                    <ShieldCheck className="h-4 w-4 mr-2" /> Email Verified Successfully!
-                 </div>
-              )}
+              {/* Remove OTP Input and Verify Button */}
+              {/* {otpSent && !otpVerified && ( ... )} */}
+              {/* Remove verification success message */}
+              {/* {otpVerified && ( ... )} */}
 
 
               {/* Phone Number */}
@@ -355,8 +228,8 @@ export default function SignupPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              {/* Disable signup button until OTP is verified */}
-              <Button type="submit" className="w-full" disabled={combinedLoading || !otpVerified}>
+              {/* Enable signup button by default (only disable during loading) */}
+              <Button type="submit" className="w-full" disabled={combinedLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign Up
               </Button>
