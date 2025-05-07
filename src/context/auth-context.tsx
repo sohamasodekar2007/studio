@@ -7,14 +7,13 @@ import type { UserProfile, UserModel, AcademicStatus as UserAcademicStatus, Cont
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
-import { findUserByEmail, saveUserToJson, readUsers, getUserById, addUserToJson, updateUserInJson, deleteUserFromJson, updateUserPasswordInJson, readUsersWithPasswordsInternal } from '@/actions/user-actions'; // Ensure all are imported
-// Removed direct findUserByEmail import from auth-actions
-// import { findUserByEmail as findUserByEmailFromAuth } from '@/actions/auth-actions';
+import { findUserByEmailInternal, saveUserToJson, readUsers, getUserById, addUserToJson, updateUserInJson, deleteUserFromJson, updateUserPasswordInJson, readUsersWithPasswordsInternal } from '@/actions/user-actions'; // Ensure all are imported
 import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid'; // Ensure UUID is imported
+import bcrypt from 'bcryptjs'; // Import bcryptjs
 
 interface AuthContextProps {
   user: ContextUser;
@@ -75,7 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             console.log("AuthProvider: Found user in local storage.");
-            const storedUser: ContextUser = JSON.parse(storedUserJson);
+            // Parse user data *without* password from local storage
+             const storedUser: Omit<UserProfile, 'password'> = JSON.parse(storedUserJson);
+
 
             if (!storedUser || !storedUser.id || !storedUser.email) {
                  console.warn("AuthProvider: Invalid user data in local storage, clearing.");
@@ -134,11 +135,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
           id: userProfile.id,
           email: userProfile.email,
-          displayName: userProfile.name,
+          name: userProfile.name,
           phone: userProfile.phone,
-          className: userProfile.class,
+          avatarUrl: userProfile.avatarUrl, // Map avatarUrl
+          class: userProfile.class,
           model: userProfile.model,
           expiry_date: userProfile.expiry_date,
+          createdAt: userProfile.createdAt, // Keep createdAt if needed
       };
   }
 
@@ -148,11 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log(`AuthProvider: Refreshing user data for ${user.email}`);
     setLoading(true);
     try {
-      const updatedProfile = await getUserById(user.id); // Fetch latest data
+      const updatedProfile = await getUserById(user.id); // Fetch latest data (without password)
        if (updatedProfile) {
          const contextUser = mapUserProfileToContextUser(updatedProfile);
          setUser(contextUser);
-         localStorage.setItem('loggedInUser', JSON.stringify(updatedProfile)); // Update local storage
+         // Update local storage with the refreshed profile (without password)
+         localStorage.setItem('loggedInUser', JSON.stringify(updatedProfile));
          console.log("AuthProvider: User data refreshed successfully.");
        } else {
          // User might have been deleted in the backend
@@ -178,37 +182,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-        // Fetch the full user profile including password using internal action
-        const allUsers = await readUsersWithPasswordsInternal();
-        const foundUser = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        // Fetch the full user profile including password hash using internal action
+        const foundUser = await findUserByEmailInternal(email); // Use internal fetch
 
-        if (foundUser && foundUser.password === password) { // Compare plain text passwords (INSECURE)
-            console.log(`AuthProvider: Login successful for ${email}`);
-            const contextUser = mapUserProfileToContextUser(foundUser);
-            setUser(contextUser);
-            // Store user data (excluding password) in local storage
-            if (contextUser) {
-                const { password: userPassword, ...userToStore } = foundUser; // Destructure to remove password
-                localStorage.setItem('loggedInUser', JSON.stringify(userToStore));
-                // Store password separately for simulation (INSECURE - remove in real app)
-                if (userPassword) {
-                    localStorage.setItem('simulatedPassword', userPassword);
-                } else {
-                    localStorage.removeItem('simulatedPassword'); // Remove if no password
+        if (foundUser && foundUser.password) {
+            // Compare the provided password with the stored hash
+             const passwordMatch = await bcrypt.compare(password, foundUser.password);
+
+             if (passwordMatch) {
+                console.log(`AuthProvider: Login successful for ${email}`);
+                const { password: userPassword, ...userWithoutPassword } = foundUser; // Destructure to remove password hash
+                const contextUser = mapUserProfileToContextUser(userWithoutPassword);
+                setUser(contextUser);
+                // Store user data (excluding password) in local storage
+                if (contextUser) {
+                    localStorage.setItem('loggedInUser', JSON.stringify(userWithoutPassword));
+                     // NO LONGER Store password in local storage
+                     localStorage.removeItem('simulatedPassword');
                 }
-            }
 
-            // Redirect logic
-            const isAdmin = contextUser?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-            const redirectPath = isAdmin ? '/admin' : '/';
-             console.log(`AuthProvider: Redirecting to ${redirectPath}`);
-            router.push(redirectPath);
-            toast({ title: "Login Successful", description: `Welcome back, ${contextUser?.displayName || contextUser?.email}!` });
-
+                // Redirect logic
+                const isAdmin = contextUser?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+                const redirectPath = isAdmin ? '/admin' : '/';
+                 console.log(`AuthProvider: Redirecting to ${redirectPath}`);
+                router.push(redirectPath);
+                toast({ title: "Login Successful", description: `Welcome back, ${contextUser?.name || contextUser?.email}!` });
+             } else {
+                // Password mismatch
+                 console.warn(`AuthProvider: Login failed for ${email}. Invalid password.`);
+                 throw new Error('Login failed: Invalid email or password.');
+             }
         } else {
-             console.warn(`AuthProvider: Login failed for ${email}. Invalid email or password.`);
-            // Throw a more specific error if user not found or password mismatch
-            throw new Error('Login failed: Invalid email or password for local authentication.');
+            // User not found or has no password hash stored
+             console.warn(`AuthProvider: Login failed for ${email}. User not found or password not set.`);
+            throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
       console.error("Simulated login failed:", error);
@@ -225,13 +232,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true); // Indicate loading during logout process
     setUser(null);
     localStorage.removeItem('loggedInUser');
-    localStorage.removeItem('simulatedPassword'); // Clear simulated password
+    localStorage.removeItem('simulatedPassword'); // Clear simulated password (just in case)
     toast({ title: "Logged Out", description: message || "You have been successfully logged out." });
     router.push('/auth/login');
     setLoading(false);
   }, [router, toast, isMounted]);
 
-  // Adjusted signUp function for local storage
+  // Adjusted signUp function for local storage with hashed passwords
   const signUp = useCallback(async (
     email: string,
     password?: string,
@@ -248,31 +255,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
         // Check if user already exists locally using the internal function
-        const allUsers = await readUsersWithPasswordsInternal();
-        const existingUser = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        const existingUser = await findUserByEmailInternal(email); // Use internal fetch
 
         if (existingUser) {
              console.warn(`AuthProvider: Signup attempt failed - email ${email} already exists.`);
             throw new Error('Signup failed: Email already exists.');
         }
 
+      // Hash the password
+      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
       // Create UserProfile for local JSON storage
-      const newUserProfile: UserProfile = {
-        id: uuidv4(), // Use UUID for local ID
+      const newUserProfile: Omit<UserProfile, 'id' | 'createdAt'> & { password: string } = { // Type for data passed to addUserToJson
         email: email,
-        password: password, // Store plain text password (INSECURE)
+        password: password, // Pass plain text to addUserToJson, it will hash
         name: displayName || null,
         phone: phoneNumber || null,
         class: academicStatus || null,
         model: 'free', // Default to 'free'
         expiry_date: null,
-        createdAt: new Date().toISOString(),
+        avatarUrl: null, // Default avatar
         referral: '' // Ensure referral is initialized
       };
 
        console.log(`AuthProvider: Attempting to add new user: ${email}`);
-      // Save to users.json using the server action
-       const saveResult = await addUserToJson(newUserProfile); // Call action to add
+      // Save to users.json using the server action (which now handles hashing)
+       const saveResult = await addUserToJson(newUserProfile);
        if (!saveResult.success || !saveResult.user) { // Check if user object is returned
          console.error("CRITICAL: Failed to save new user profile to local JSON:", saveResult.message);
          throw new Error(saveResult.message || 'Could not create user profile.');
@@ -280,19 +288,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log(`AuthProvider: User ${email} added successfully.`);
 
       // Send welcome email simulation
-      if (newUserProfile.email) {
-          await sendWelcomeEmail(newUserProfile.email);
+      if (saveResult.user.email) {
+          await sendWelcomeEmail(saveResult.user.email);
       }
 
       // Automatically log in the user after successful signup using the returned user data
-       const contextUser = mapUserProfileToContextUser(saveResult.user);
+       const contextUser = mapUserProfileToContextUser(saveResult.user); // Map the returned user (without password)
        setUser(contextUser);
         if (contextUser) {
-            const { password: savedPassword, ...userToStore } = saveResult.user; // Destructure from returned user
-            localStorage.setItem('loggedInUser', JSON.stringify(userToStore));
-             if (savedPassword) {
-               localStorage.setItem('simulatedPassword', savedPassword);
-             }
+            localStorage.setItem('loggedInUser', JSON.stringify(saveResult.user)); // Store user without password
+            localStorage.removeItem('simulatedPassword'); // Ensure no plain password stored
         }
         console.log(`AuthProvider: User ${email} automatically logged in after signup.`);
 
@@ -315,13 +320,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const isAuthPage = pathname.startsWith('/auth');
     const isAdminRoute = pathname.startsWith('/admin');
-    const publicRoutes = ['/', '/help', '/terms', '/privacy', '/tests', '/study-tips', '/doubt-solving', '/progress'];
-    const isPublicRoute = publicRoutes.includes(pathname) ||
-                          pathname.startsWith('/tests/') || // Test details page
-                          pathname.startsWith('/take-test/') || // Test start confirmation
-                          pathname.startsWith('/chapterwise-test/') || // Test interface
-                          pathname.startsWith('/chapterwise-test-results/') || // Results page
-                          pathname.startsWith('/chapterwise-test-review/'); // Review page
+    // Define public routes explicitly
+     const publicRoutes = [
+        '/',
+        '/help',
+        '/terms',
+        '/privacy',
+        '/tests', // Allow browsing tests
+        '/dpp', // Allow browsing DPP list
+        // Add specific test/dpp detail pages if needed, e.g., using regex or startsWith
+        // '/tests/[testId]', // Example, adjust based on actual routing
+        // '/dpp/[...slug]' // Example
+     ];
+    // Check if the current path matches any public route or specific pattern
+     const isPublicRoute = publicRoutes.some(route => {
+         if (route.includes('[')) { // Basic check for dynamic route patterns
+             return pathname.startsWith(route.split('[')[0]);
+         }
+         return pathname === route;
+     });
 
     console.log("AuthProvider Route Protection:", { pathname, isAuthPage, isAdminRoute, isPublicRoute, userExists: !!user });
 

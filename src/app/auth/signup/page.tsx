@@ -1,7 +1,7 @@
 // src/app/auth/signup/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,15 +10,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone, ShieldCheck, MailIcon } from "lucide-react";
+import { GraduationCap, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { academicStatuses, type AcademicStatus } from '@/types';
-import { useAuth } from '@/context/auth-context';
-// OTP actions are no longer needed here
-// import { generateOtp, verifyOtp } from '@/actions/otp-actions';
+import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
-// Updated schema without OTP
+// Updated schema with phone number and class selection
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -37,13 +35,6 @@ export default function SignupPage() {
   const { toast } = useToast();
   const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  // Remove OTP state variables
-  // const [isSendingOtp, setIsSendingOtp] = useState(false);
-  // const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  // const [otpSent, setOtpSent] = useState(false);
-  // const [otpVerified, setOtpVerified] = useState(false);
-  // const [resendDisabled, setResendDisabled] = useState(false);
-  // const [resendTimer, setResendTimer] = useState(0);
 
 
   const form = useForm<SignupFormValues>({
@@ -55,19 +46,8 @@ export default function SignupPage() {
       academicStatus: undefined,
       password: "",
       confirmPassword: "",
-      // otp: "", // Remove OTP default value
     },
   });
-
-  const emailValue = form.watch("email"); // Still useful if needed elsewhere
-
-  // Remove timer effect for OTP
-  // useEffect(() => { ... }, [resendTimer]);
-
-  // Remove OTP handling functions
-  // const handleSendOtp = useCallback(async () => { ... }, [form, toast]);
-  // const handleVerifyOtp = useCallback(async () => { ... }, [form, toast]);
-
 
   // Function to handle final form submission
   const onSubmit = async (data: SignupFormValues) => {
@@ -75,15 +55,13 @@ export default function SignupPage() {
       toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
       return;
     }
-    // Remove OTP verification check
-    // if (!otpVerified) { ... }
 
     setIsLoading(true);
     try {
-      // Call the local signUp function from AuthContext
+      // Pass plain text password to signUp function
       await signUp(
         data.email,
-        data.password, // Pass password
+        data.password, // Pass plain text password
         data.name,
         data.phoneNumber,
         data.academicStatus
@@ -97,8 +75,8 @@ export default function SignupPage() {
     }
   };
 
-  // Update combinedLoading without OTP states
-  const combinedLoading = isLoading || authLoading; // || isSendingOtp || isVerifyingOtp;
+  // Update combinedLoading
+  const combinedLoading = isLoading || authLoading;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -127,34 +105,25 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-              {/* Email Field (without OTP button) */}
+              {/* Email Field */}
                <FormField
                 control={form.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email Address</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <FormControl>
+                    <FormControl>
                         <Input
                           type="email"
                           placeholder="m@example.com"
                           {...field}
-                          disabled={combinedLoading} // Email can be edited until submission
+                          disabled={combinedLoading}
                         />
                       </FormControl>
-                      {/* Remove OTP Button */}
-                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
-              {/* Remove OTP Input and Verify Button */}
-              {/* {otpSent && !otpVerified && ( ... )} */}
-              {/* Remove verification success message */}
-              {/* {otpVerified && ( ... )} */}
-
 
               {/* Phone Number */}
               <FormField

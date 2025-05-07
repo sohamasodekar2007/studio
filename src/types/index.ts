@@ -23,9 +23,10 @@ export type ClassLevel = typeof classLevels[number];
 export interface UserProfile {
   id: string; // User ID is now always a string (UUID)
   email: string | null;
-  password?: string; // Store hashed password in production
+  password?: string; // Store hashed password
   name: string | null;
   phone: string | null;
+  avatarUrl?: string | null; // Optional field for profile picture URL/path
   referral?: string; // Optional referral code
   class: AcademicStatus | null; // Academic status
   model: UserModel; // User's subscription model
@@ -33,8 +34,9 @@ export interface UserProfile {
   createdAt?: string; // Optional ISO timestamp
 }
 
-// Type for Context User (less sensitive data)
+// Type for Context User (less sensitive data, includes avatar)
 export type ContextUser = Omit<UserProfile, 'password'> | null;
+
 
 // ---- Question Bank Types (Remain largely the same) ----
 
@@ -78,7 +80,7 @@ export interface QuestionBankItem {
 // ---- Generated Test Definition Types ----
 
 // Define Audience Types (reusing Academic Status)
-export const audienceTypes = academicStatuses; // Use the same const for audience
+// export const audienceTypes = academicStatuses; // Use the same const for audience // Replaced by academicStatuses
 export type AudienceType = AcademicStatus; // Type remains the same
 
 // Define Test Streams
@@ -197,8 +199,8 @@ export interface TestResultSummary {
     correct: number;
     incorrect: number;
     unanswered: number;
-    score: number;
-    percentage: number;
+    score?: number; // Make score optional as it might not be available if def missing
+    percentage?: number; // Make percentage optional
     timeTakenMinutes: number; // Total time taken for the test
     detailedAnswers: Array<{
         questionIndex: number;
@@ -213,5 +215,5 @@ export interface TestResultSummary {
         explanationText?: string | null;
         explanationImageUrl?: string | null;
     }>;
+    totalMarks?: number; // Add total marks possible
 }
-

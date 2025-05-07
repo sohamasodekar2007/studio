@@ -39,11 +39,15 @@ export function AppHeader() {
   };
 
   // Get first letter of display name or email for fallback
-  const getInitials = (name: string | null | undefined, email: string | null | undefined) => {
+  const getInitials = (name?: string | null, email?: string | null) => {
     if (name) return name.charAt(0).toUpperCase();
     if (email) return email.charAt(0).toUpperCase();
-    return <User />; // Default icon if no name/email
+    return <User className="h-4 w-4"/>; // Return User icon component
   }
+
+  // Construct avatar URL if available
+  const avatarSrc = user?.avatarUrl ? `/avatars/${user.avatarUrl}` : undefined;
+  const avatarKey = user?.avatarUrl || user?.email || user?.id; // Key for Vercel Avatars or fallback
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
@@ -57,15 +61,14 @@ export function AppHeader() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
-              <Avatar>
-                 {/* Use generic avatar or generate one based on email/ID */}
-                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
-                <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
+              <Avatar className="h-full w-full"> {/* Ensure Avatar fills Button */}
+                <AvatarImage src={avatarSrc} alt={user.name || user.email || 'User Avatar'} />
+                <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{user.displayName || user.email}</DropdownMenuLabel>
+            <DropdownMenuLabel>{user.name || user.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/settings">

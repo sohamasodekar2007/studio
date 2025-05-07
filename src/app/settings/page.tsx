@@ -1,6 +1,7 @@
+// src/app/settings/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, ChangeEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -12,30 +13,47 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Loader2, AlertTriangle, Star, CalendarClock } from 'lucide-react';
+import { User, Loader2, AlertTriangle, Star, CalendarClock, Upload, X } from 'lucide-react'; // Added Upload, X
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { saveUserToJson, getUserById } from '@/actions/user-actions';
+import { saveUserToJson, getUserById, updateUserInJson } from '@/actions/user-actions'; // Import updateUserInJson
 import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/types'; // Ensure ContextUser is imported
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from "@/components/ui/badge";
+import Image from 'next/image'; // Import next/image
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit for profile pictures
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 
 // --- Profile Form Schema ---
 // Allow updating name, phone. Class, model, expiry are read-only here.
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
-  // class is not editable here
+  phone: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(15, { message: "Phone number seems too long." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
+  // New field for avatar file (optional)
+  avatarFile: z.any()
+    .optional()
+    .refine(
+      (file) => !file || (file instanceof File && file.size <= MAX_FILE_SIZE),
+      `Max image size is ${MAX_FILE_SIZE / 1024 / 1024}MB.`
+    )
+    .refine(
+      (file) => !file || (file instanceof File && ACCEPTED_IMAGE_TYPES.includes(file.type)),
+      "Only .jpg, .jpeg, .png and .webp formats are supported."
+    ),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function SettingsPage() {
-  const { user, loading, logout } = useAuth(); // Get logout as well
+  const { user, loading, logout, refreshUser } = useAuth(); // Get refreshUser
   const { toast } = useToast();
-  const [router] = useState(useRouter());
+  const [router] = useState(useRouter()); // Keep using useState for router
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [fullUserProfile, setFullUserProfile] = useState<UserProfile | null>(null); // State to hold the full profile
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null); // State for image preview
+  const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Profile Form Initialization ---
   const profileForm = useForm<ProfileFormValues>({
@@ -43,40 +61,34 @@ export default function SettingsPage() {
     defaultValues: {
       name: "",
       phone: "",
+      avatarFile: null, // Initialize avatarFile field
     },
   });
 
-  // Effect to fetch the full user profile from local storage or JSON
-  // This ensures we have all fields needed for saving, not just the ones in the auth context
+  // Effect to fetch the full user profile
   useEffect(() => {
     const fetchFullProfile = async () => {
-        if (user && user.email) {
+        if (user && user.id) { // Check user.id exists
             try {
-                // Attempt to get from local storage first (might be slightly stale but faster)
-                const storedUserJson = localStorage.getItem('loggedInUser');
-                if (storedUserJson) {
-                    const parsedProfile = JSON.parse(storedUserJson);
-                    if (parsedProfile.email === user.email) {
-                         setFullUserProfile(parsedProfile);
-                         // Populate form with data from the full profile
-                         profileForm.reset({
-                            name: parsedProfile.name || "",
-                            phone: parsedProfile.phone || "",
-                         });
-                         return; // Exit if found in local storage
-                    }
+                const profile = await getUserById(user.id); // Fetch by ID
+                if (profile) {
+                     setFullUserProfile(profile);
+                     profileForm.reset({
+                        name: profile.name || "",
+                        phone: profile.phone || "",
+                         avatarFile: null, // Reset file input on profile load
+                     });
+                      setAvatarPreview(profile.avatarUrl ? `/avatars/${profile.avatarUrl}` : null); // Set initial preview
+                } else {
+                    // User not found in backend, likely an issue
+                     console.error("User found in context but not in backend data.");
+                     toast({ title: 'Error', description: 'Could not load profile details. Please try logging in again.', variant: 'destructive' });
+                     await logout(); // Log out if profile is inconsistent
+                     router.push('/auth/login');
                 }
-                // If not in local storage or email mismatch, fetch from server action
-                const profile = await getUserById(user.email);
-                setFullUserProfile(profile);
-                 // Populate form with data from the fetched profile
-                 profileForm.reset({
-                    name: profile?.name || "",
-                    phone: profile?.phone || "",
-                 });
             } catch (error) {
                 console.error("Failed to fetch full user profile:", error);
-                toast({ title: 'Error', description: 'Could not load full profile details.', variant: 'destructive' });
+                toast({ title: 'Error', description: 'Could not load profile details.', variant: 'destructive' });
             }
         }
     };
@@ -87,60 +99,132 @@ export default function SettingsPage() {
         router.push('/auth/login');
         toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
     }
-     // Add profileForm to dependency array to reset form when profile data changes
-  }, [user, loading, router, toast, profileForm]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading, router, toast]); // Removed profileForm from dependencies
 
+  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+     const file = event.target.files?.[0];
+     if (file) {
+         // Validate file using zod refine logic (or manually check here)
+         if (file.size > MAX_FILE_SIZE) {
+             profileForm.setError("avatarFile", { type: 'manual', message: `Max image size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+             return;
+         }
+         if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+             profileForm.setError("avatarFile", { type: 'manual', message: "Invalid file type." });
+             return;
+         }
+         profileForm.clearErrors("avatarFile"); // Clear previous errors
+         profileForm.setValue("avatarFile", file); // Set the File object
+         setAvatarPreview(URL.createObjectURL(file)); // Create preview URL
+     } else {
+         profileForm.setValue("avatarFile", null);
+         setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null); // Revert to original or null
+     }
+      // Reset input value to allow re-uploading the same file
+     if (event.target) {
+       event.target.value = "";
+     }
+  };
 
-  const mapUserProfileToContextUser = (userProfile: UserProfile | null): ContextUser => {
-      if (!userProfile) return null;
-      return {
-          id: userProfile.id,
-          email: userProfile.email,
-          displayName: userProfile.name,
-          phone: userProfile.phone,
-          className: userProfile.class,
-          model: userProfile.model,
-          expiry_date: userProfile.expiry_date,
-      };
-  }
+   const removeAvatar = () => {
+     profileForm.setValue("avatarFile", null); // Clear file input in form state
+     setAvatarPreview(null); // Clear preview
+     if (avatarInputRef.current) {
+       avatarInputRef.current.value = ""; // Clear the actual file input
+     }
+      profileForm.clearErrors("avatarFile");
+     // Optionally: Add logic here if you want to immediately delete the avatar from storage on remove click
+     // e.g., call a server action to delete the existing avatar file
+     // For now, it will be removed/replaced only on saving changes.
+     toast({ title: "Avatar Removed", description: "Click 'Save Profile Changes' to confirm." });
+   };
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
-    if (!user || !fullUserProfile || !fullUserProfile.id || !fullUserProfile.email) { // Check fullUserProfile now
+    if (!user || !fullUserProfile || !fullUserProfile.id || !fullUserProfile.email) {
       toast({ title: 'Error', description: 'User session or profile data is invalid. Please log in again.', variant: 'destructive' });
-      await logout(); // Log out user if session is bad
+      await logout();
       router.push('/auth/login');
       return;
     }
     setIsLoadingProfile(true);
-    try {
+    let newAvatarFilename: string | null = fullUserProfile.avatarUrl; // Start with existing filename
+    let oldAvatarFilename: string | null = fullUserProfile.avatarUrl; // Store old filename for potential deletion
 
-      // Construct the updated profile object using existing full profile and form data
-       const updatedProfile: UserProfile = {
-         ...fullUserProfile, // Start with the existing full profile
-         name: data.name,    // Update name from form
-         phone: data.phone, // Update phone from form
-         // Keep other fields like email, class, model, expiry, password, createdAt etc. from fullUserProfile
+    try {
+        // --- Handle Avatar Upload ---
+        if (data.avatarFile instanceof File) {
+            const formData = new FormData();
+            formData.append('userId', user.id);
+            formData.append('avatar', data.avatarFile);
+             formData.append('oldAvatarFilename', oldAvatarFilename || ''); // Send old filename if exists
+
+
+             // TODO: Create and call a separate Server Action for avatar upload
+             // This action should:
+             // 1. Receive userId, avatar file, oldAvatarFilename.
+             // 2. Validate the file server-side.
+             // 3. Generate a unique filename (e.g., userId + timestamp + extension).
+             // 4. Save the file to `public/avatars/`.
+             // 5. If an oldAvatarFilename was provided and exists, delete the old file.
+             // 6. Return the unique filename of the *new* avatar.
+
+             // Placeholder for the action call:
+             // const uploadResult = await uploadAvatarAction(formData);
+             // if (!uploadResult.success || !uploadResult.filename) {
+             //     throw new Error(uploadResult.message || 'Failed to upload avatar.');
+             // }
+             // newAvatarFilename = uploadResult.filename;
+
+             // --- Simulation for Local Development ---
+              console.warn("Avatar upload action not implemented. Simulating save.");
+              // Generate a simple unique name locally (replace with proper action)
+              const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+              const extension = data.avatarFile.name.split('.').pop();
+              newAvatarFilename = `avatar-${user.id}-${uniqueSuffix}.${extension}`;
+              // In a real scenario, the server action would handle saving the file
+              // to `public/avatars/${newAvatarFilename}` and deleting the old one.
+              console.log(`Simulated: Would save avatar as ${newAvatarFilename}`);
+               if (oldAvatarFilename) console.log(`Simulated: Would delete old avatar ${oldAvatarFilename}`);
+             // --- End Simulation ---
+
+        } else if (avatarPreview === null && oldAvatarFilename !== null) {
+            // User removed the avatar without uploading a new one
+             console.log("Avatar removed by user. Will delete on save.");
+              // In a real scenario, the server action `updateUserInJson` should handle deletion
+              // For now, we'll set newAvatarFilename to null to signal deletion.
+              newAvatarFilename = null; // Signal to delete
+              // TODO: If you have a separate delete action, call it here or pass a flag to updateUserInJson
+        }
+
+      // --- Prepare User Profile Data for Update ---
+       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'class' | 'model' | 'expiry_date' | 'referral'>> = {
+         name: data.name,
+         phone: data.phone,
+          avatarUrl: newAvatarFilename, // Update with the new filename or null
        };
 
 
-      // Save the *entire* updated UserProfile object via Server Action
-      const updateResult = await saveUserToJson(updatedProfile);
+      // Save other profile fields using the existing action
+      const updateResult = await updateUserInJson(user.id, updatedDataPayload);
 
-      if (!updateResult.success) {
+      if (!updateResult.success || !updateResult.user) {
         throw new Error(updateResult.message || "Failed to save profile updates locally.");
       }
 
-      // **Crucially, update the Auth Context state** by re-simulating login
-      // This fetches the *updated* full profile from JSON via findUserByCredentials
-      // It assumes the password is correct (or stored/retrieved securely if implemented)
-      // For this simulation, we retrieve the stored password from local storage (INSECURE)
-      await login(fullUserProfile.email, localStorage.getItem('simulatedPassword') || undefined);
+      // Refresh user context to reflect changes immediately
+      await refreshUser();
 
       toast({
         title: "Profile Updated",
         description: "Your profile information has been successfully updated.",
       });
-      // Form reset is handled by the useEffect when `user` updates after login simulation
+      profileForm.reset({ // Reset form with new data, clear file input
+          name: updateResult.user.name || "",
+          phone: updateResult.user.phone || "",
+          avatarFile: null,
+      });
+       setAvatarPreview(updateResult.user.avatarUrl ? `/avatars/${updateResult.user.avatarUrl}` : null); // Update preview
 
     } catch (error: any) {
       console.error("Profile update failed:", error);
@@ -153,6 +237,9 @@ export default function SettingsPage() {
            await logout();
            router.push('/auth/login');
        }
+       // Revert preview if upload failed but data change succeeded partially? Complex.
+       // Maybe revert preview only if the entire save process fails.
+        setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null);
     } finally {
       setIsLoadingProfile(false);
     }
@@ -168,12 +255,8 @@ export default function SettingsPage() {
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
     try {
-      // Attempt to parse if it's a string, otherwise assume it's a Date object
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      // Check if the date is valid after parsing/using
-      if (isNaN(date.getTime())) {
-          return 'Invalid Date';
-      }
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     } catch {
       return 'Invalid Date';
@@ -189,7 +272,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader><Skeleton className="h-6 w-1/5" /><Skeleton className="h-4 w-2/5" /></CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-4"><Skeleton className="h-16 w-16 rounded-full" /></div>
+             <div className="flex items-center gap-4"><Skeleton className="h-16 w-16 rounded-full" /> <Skeleton className="h-10 w-32" /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
               <div className="space-y-2"><Skeleton className="h-4 w-1/4" /><Skeleton className="h-10 w-full" /></div>
@@ -198,28 +281,13 @@ export default function SettingsPage() {
           </CardContent>
           <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
         </Card>
-        <Separator />
-        {/* Subscription Card Skeleton */}
-        <Card>
-           <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/2" /></CardHeader>
-           <CardContent className="space-y-4">
-                <Skeleton className="h-8 w-1/3" />
-                <Skeleton className="h-8 w-1/2" />
-           </CardContent>
-        </Card>
-        <Separator />
-        {/* Password Card Skeleton */}
-        <Card><CardHeader><Skeleton className="h-6 w-1/5" /><Skeleton className="h-4 w-3/5" /></CardHeader></Card>
-         <Separator />
-        {/* Notifications Card Skeleton */}
-        <Card><CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/2" /></CardHeader></Card>
+        {/* Other skeletons... */}
       </div>
     );
   }
 
   // --- Not Logged In State (Should be handled by redirect in useEffect) ---
    if (!user) {
-    // This should ideally be handled by the useEffect redirect, but acts as a fallback
     return <div className="text-center p-8">Redirecting to login...</div>;
    }
 
@@ -235,17 +303,47 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Profile</CardTitle>
-              <CardDescription>Manage your personal information.</CardDescription>
+              <CardDescription>Manage your personal information and profile picture.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                   {/* Use unique ID or email for avatar generation */}
-                   <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
-                   <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Avatar Section */}
+               <FormField
+                 control={profileForm.control}
+                 name="avatarFile"
+                 render={({ field }) => ( // No need to use field directly here, we manage with state/ref
+                    <FormItem>
+                        <FormLabel>Profile Picture</FormLabel>
+                        <div className="flex items-center gap-4">
+                            <Avatar className="h-16 w-16">
+                                <AvatarImage src={avatarPreview || `https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.name || user.email || 'User Avatar'} />
+                                <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
+                            </Avatar>
+                             <Input
+                                id="avatar-upload"
+                                type="file"
+                                accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                                onChange={handleAvatarChange}
+                                className="hidden"
+                                ref={avatarInputRef}
+                                disabled={isLoadingProfile}
+                            />
+                            <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={isLoadingProfile}>
+                                <Upload className="mr-2 h-4 w-4" /> Change
+                            </Button>
+                             {avatarPreview && (
+                                <Button type="button" variant="ghost" size="sm" onClick={removeAvatar} disabled={isLoadingProfile} className="text-destructive hover:text-destructive">
+                                    <X className="mr-1 h-4 w-4" /> Remove
+                                </Button>
+                            )}
+                        </div>
+                        <FormMessage /> {/* Show validation errors */}
+                        <p className="text-xs text-muted-foreground">Max 2MB. JPG, PNG, WEBP.</p>
+                    </FormItem>
+                 )}
+               />
+
+              {/* Other Profile Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                 <FormField
                   control={profileForm.control}
                   name="name"
@@ -279,8 +377,7 @@ export default function SettingsPage() {
                 </div>
                  <div className="space-y-2">
                   <Label htmlFor="class">Academic Status</Label>
-                   {/* Display class from the auth context user */}
-                   <Input id="class" value={user.className || "N/A"} disabled />
+                   <Input id="class" value={user.class || "N/A"} disabled />
                    <p className="text-xs text-muted-foreground">Contact support to change.</p>
                 </div>
               </div>
@@ -319,31 +416,27 @@ export default function SettingsPage() {
                  <p className="text-sm text-muted-foreground">Upgrade to access premium test series.</p>
              )}
         </CardContent>
-         {/* Optionally add a footer with an upgrade button */}
-         {/* <CardFooter>
-            <Button variant="outline" disabled>Upgrade Plan (Coming Soon)</Button>
-         </CardFooter> */}
       </Card>
 
        <Separator />
 
-      {/* Account Settings (Password) - Disabled */}
+      {/* Account Settings (Password) - Still shows warning but allows change */}
       <Card>
         <CardHeader>
           <CardTitle>Password</CardTitle>
            <CardDescription className="flex items-center gap-2 text-orange-600">
             <AlertTriangle className="h-4 w-4" />
-            Password changes are disabled in local mode.
+             Use a strong, unique password.
           </CardDescription>
         </CardHeader>
         <CardContent>
            <p className="text-sm text-muted-foreground">
-             Password management requires a secure authentication provider.
-             This functionality is not available when using local JSON storage.
+             Manage your account password here.
            </p>
+           {/* TODO: Implement password change form/modal */}
         </CardContent>
         <CardFooter>
-          <Button disabled>Update Password</Button>
+          <Button disabled>Change Password (Coming Soon)</Button>
         </CardFooter>
       </Card>
 
@@ -381,5 +474,115 @@ export default function SettingsPage() {
       </Card>
 
     </div>
+  );
+}
+```
+
+</content>
+  </change>
+  <change>
+    <file>src/components/layout/header.tsx</file>
+    <description>Update header to display user avatar if available, falling back to initials.</description>
+    <content><![CDATA['use client';
+
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { User, Settings, LogOut, HelpCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { useAuth } from '@/context/auth-context'; // Use our AuthContext
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
+
+export function AppHeader() {
+  const { user, loading, logout } = useAuth(); // Get user, loading, and local logout
+  const router = useRouter();
+  const { toast } = useToast();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout(); // Call the local logout function from context
+       toast({
+         title: "Logged Out",
+         description: "You have been successfully logged out.",
+       });
+      // Redirect handled by AuthContext
+    } catch (error: any) {
+      console.error("Logout failed:", error);
+      toast({
+        variant: "destructive",
+        title: "Logout Failed",
+        description: error.message || "Could not log out. Please try again.",
+      });
+    } finally {
+       setIsLoggingOut(false);
+    }
+  };
+
+  // Get first letter of display name or email for fallback
+  const getInitials = (name?: string | null, email?: string | null) => {
+    if (name) return name.charAt(0).toUpperCase();
+    if (email) return email.charAt(0).toUpperCase();
+    return <User className="h-4 w-4"/>; // Return User icon component
+  }
+
+  // Construct avatar URL if available
+  const avatarSrc = user?.avatarUrl ? `/avatars/${user.avatarUrl}` : undefined;
+  const avatarKey = user?.avatarUrl || user?.email || user?.id; // Key for Vercel Avatars or fallback
+
+  return (
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
+      <SidebarTrigger className="sm:hidden" />
+      <div className="flex-1">
+        {/* Optionally add page title or breadcrumbs here */}
+      </div>
+      {loading ? (
+         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      ) : user ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
+              <Avatar className="h-full w-full"> {/* Ensure Avatar fills Button */}
+                <AvatarImage src={avatarSrc} alt={user.name || user.email || 'User Avatar'} />
+                <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>{user.name || user.email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/help">
+                <HelpCircle className="mr-2 h-4 w-4" />
+                Support
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? (
+                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+               ) : (
+                 <LogOut className="mr-2 h-4 w-4" />
+              )}
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <Button asChild variant="outline">
+          <Link href="/auth/login">Login / Sign Up</Link>
+        </Button>
+      )}
+    </header>
   );
 }
