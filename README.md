@@ -21,18 +21,19 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     ```
 3.  **Set up Firebase:**
     *   Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/).
-    *   Enable **Firebase Authentication** (Email/Password provider).
+    *   Enable **Firebase Authentication** (Email/Password and Google providers).
     *   In your Firebase project settings, go to **Project settings** > **General**.
     *   Under **Your apps**, register a new Web app.
     *   Copy the `firebaseConfig` object values.
 4.  **Set up Google AI:**
     *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 5.  **Configure Environment Variables:**
-    *   Rename `.env.example` to `.env`.
+    *   Rename `.env.example` to `.env` if it doesn't exist.
     *   **CRITICAL: Fill in ALL Firebase configuration values** copied in step 3 into the corresponding `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file.
-    *   **Ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is correct.** An invalid or missing API key (or other missing `NEXT_PUBLIC_FIREBASE_*` variables) is the most common cause of setup problems and will likely result in `auth/invalid-api-key` errors, preventing login/signup. The application might show warnings or fail to load authentication features if these keys are missing or incorrect.
+    *   **Ensure `NEXT_PUBLIC_FIREBASE_API_KEY` is correct.** An invalid or missing API key (or other missing `NEXT_PUBLIC_FIREBASE_*` variables) is the most common cause of setup problems and will likely result in `auth/invalid-api-key` errors, preventing login/signup. The application might show warnings or fail to load authentication features if these keys are missing or incorrect. The application might show warnings or fail to load authentication features if these keys are missing or incorrect.
     *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in.
+    *   Set `ADMIN_PASSWORD` to a secure password for the default admin user.
 6.  **Run the development server:**
     ```bash
     npm run dev
@@ -51,7 +52,8 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
     *   **Solution:** Double-check that **ALL** `NEXT_PUBLIC_FIREBASE_*` variables in your `.env` file exactly match the values from your Firebase project settings (Project Settings > General > Your Apps > Web App > Firebase SDK snippet > Config). Pay special attention to `NEXT_PUBLIC_FIREBASE_API_KEY`. Ensure there are no typos or extra spaces.
     *   Make sure you have saved the `.env` file (not `.env.example`).
     *   **Restart your development server (`npm run dev`)** after making changes to the `.env` file. Environment variables are typically loaded only at server start.
-*   **Login/Signup not working**: Often related to the `auth/invalid-api-key` error above. Ensure Firebase Authentication (Email/Password provider) is enabled in your Firebase project console (Build > Authentication > Sign-in method).
+*   **Login/Signup not working**: Often related to the `auth/invalid-api-key` error above. Ensure Firebase Authentication (Email/Password and Google providers) are enabled in your Firebase project console (Build > Authentication > Sign-in method).
+*   **Application shows errors related to missing variables:** Ensure all `NEXT_PUBLIC_FIREBASE_*` variables are present and correctly formatted in your `.env` file.
 
 ## Project Structure
 
@@ -66,7 +68,7 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
 *   `src/ai/`: Genkit AI flows and configuration (`ai-instance.ts`, `dev.ts`, `flows/`).
 *   `src/types/`: TypeScript type definitions (`index.ts`).
 *   `src/data/`: Contains local data files like `users.json`. **Note:** `users.json` is used for demonstration and is not a secure or scalable way to store user data in production. Use Firestore instead.
-*   `src/actions/`: Server Actions (e.g., `save-user.ts`).
+*   `src/actions/`: Server Actions (e.g., `user-actions.ts`).
 *   `public/`: Static assets.
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
 *   `.env`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY.**
