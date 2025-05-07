@@ -216,6 +216,11 @@ export async function saveUserToJson(
                         ? userProfileData.createdAt.toISOString()
                         : (userProfileData.createdAt ? new Date(userProfileData.createdAt).toISOString() : new Date().toISOString()),
         model: userProfileData.model || 'free',
+        email: userProfileData.email, // Ensure email is present
+        name: userProfileData.name || null, // Ensure name is present
+        phone: userProfileData.phone || null, // Ensure phone is present
+        class: userProfileData.class || null, // Ensure class is present
+        referral: userProfileData.referral || '' ,
     };
      if (userToSave.model === 'free') userToSave.expiry_date = null;
 
@@ -443,3 +448,4 @@ async function initializeDataStore() {
 // For a true "on server start", this might be in a different context or a startup script.
 // For this local file-based system, it's checked on first read.
 initializeDataStore();
+

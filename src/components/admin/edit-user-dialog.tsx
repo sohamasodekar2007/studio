@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -8,9 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { CalendarIcon, Loader2, ShieldCheck } from "lucide-react"; // Added ShieldCheck
+import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
-import type { UserProfile } from '@/types';
+import type { UserProfile,  UserModel } from '@/types';
 import { updateUserInJson } from '@/actions/user-actions';
 import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox for admin role
 
@@ -18,9 +24,11 @@ import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox for admi
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   phone: z.string()
-           .min(10, { message: "Phone number must be 10 digits." })
+           .min(10, { message: "Please enter a valid 10-digit phone number." })
            .max(10, { message: "Phone number must be 10 digits." })
            .regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
+  model: z.enum(["free", "chapterwise", "full_length", "combo"], { required_error: "Please select a user model." }),
+  expiry_date: z.date().nullable().optional(),
   isAdmin: z.boolean().optional(), // Add isAdmin field
 });
 
@@ -37,29 +45,47 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  const isCurrentUserAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  // Determine if the current user IS the primary admin based on email
+  const isPrimaryAdminAccount = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
     defaultValues: {
       name: user.name || '',
       phone: user.phone || '',
-      isAdmin: isCurrentUserAdmin, // Initialize isAdmin state
+      model: user.model || 'free',
+      expiry_date: user.expiry_date ? new Date(user.expiry_date) : null,
+      isAdmin: user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL, // Initialize isAdmin state
     },
     // mode: "onChange",
   });
 
+  const currentModel = form.watch("model"); // Watch model field for conditional rendering
+
   const onSubmit = async (data: EditUserFormValues) => {
     setIsLoading(true);
     try {
-      const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'model' | 'expiry_date' | 'password' | 'referral' | 'class' | 'email'>> = { // keep email, password and creation data
-        name: data.name,
-        phone: data.phone,
-      };
+      // Enforce restrictions
+        if (isPrimaryAdminAccount && data.model !== 'combo') {
+            throw new Error("The primary admin account must have the combo plan.");
+        }
 
+
+      // Format expiry_date to ISO string or null BEFORE updating
+       const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
+       if (data.model === 'free') data.expiry_date = null;
+
+       // Prepare the data payload specifically for the update action
+        const updatedData: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'referral' | 'class'>> = {
+            name: data.name,
+            phone: data.phone,
+            model: data.model,
+            expiry_date: expiryDateString,
+        };
+      // Save the *entire* updated UserProfile object via Server Action
       const result = await updateUserInJson(user.id, updatedData);
 
-      if (!result.success) {
+      if (!result.success || !result.user) { // Check if the updated user is returned
         throw new Error(result.message || 'Failed to update user.');
       }
 
@@ -68,14 +94,9 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
         description: `${user.email}'s details have been successfully updated.`,
       });
 
-      // Construct the updated user profile object to pass back
-      const fullyUpdatedUser: UserProfile = {
-          ...user, // Start with original user data
-          name: data.name,    // Update name from form
-          phone: data.phone, // Update phone from form
-      };
-      onUserUpdate(fullyUpdatedUser); // Call the callback with the updated user object
-      onClose();
+      // Use the user data returned from the successful update action
+      onUserUpdate(result.user);
+      onClose(); // Close dialog
 
     } catch (error: any) {
       console.error('Failed to update user:', error);
@@ -95,7 +116,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
         <DialogHeader>
           <DialogTitle>Edit User: {user.email}</DialogTitle>
           <DialogDescription>
-            Update the user's name and phone number. Click save when you're done.
+            Update the user's name, phone number, subscription model, and expiry date.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -107,7 +128,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled={isLoading} />
+                    <Input {...field} disabled={isLoading || isPrimaryAdminAccount} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -120,39 +141,87 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
                 <FormItem>
                   <FormLabel>Phone Number</FormLabel>
                   <FormControl>
-                    <Input type="tel" {...field} disabled={isLoading} />
+                    <Input type="tel" {...field} disabled={isLoading || isPrimaryAdminAccount} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-             {/* Admin Role Toggle */}
-             {/*<FormField
-                control={form.control}
-                name="isAdmin"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                        <FormLabel htmlFor="admin-switch" className="text-base">Make Admin</FormLabel>
-                        <FormDescription>
-                            Grant this user full administrative privileges.
-                        </FormDescription>
-                    </div>
+            {/* User Model Select */}
+            <FormField
+              control={form.control}
+              name="model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Subscription Model *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading || isPrimaryAdminAccount}>
                     <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={isLoading}
-                      />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select model" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-            />*/}
+                    <SelectContent>
+                      {userModels.map((model) => (
+                        <SelectItem key={model} value={model} className="capitalize">
+                          {model.replace('_', ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+             {/* Expiry Date Picker (Only for Paid User Models) */}
+             {currentModel !== 'free' && (
+                     <FormField
+                         control={form.control}
+                         name="expiry_date"
+                         render={({ field }) => (
+                             <FormItem className="flex flex-col">
+                             <FormLabel>Expiry Date *</FormLabel>
+                             <Popover>
+                                 <PopoverTrigger asChild>
+                                 <FormControl>
+                                     <Button
+                                     variant={"outline"}
+                                     className={cn(
+                                         "w-full pl-3 text-left font-normal",
+                                         !field.value && "text-muted-foreground"
+                                     )}
+                                     disabled={isLoading || isPrimaryAdminAccount}
+                                     >
+                                     {field.value ? (
+                                         format(field.value, "PPP") // Format date nicely
+                                     ) : (
+                                         <span>Pick an expiry date</span>
+                                     )}
+                                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                     </Button>
+                                 </FormControl>
+                                 </PopoverTrigger>
+                                 <PopoverContent className="w-auto p-0" align="start">
+                                 <Calendar
+                                     mode="single"
+                                     selected={field.value ?? undefined} // Pass undefined if null
+                                     onSelect={field.onChange}
+                                     disabled={(date) =>
+                                         date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading || isPrimaryAdminAccount // Disable past dates and for admin
+                                     }
+                                     initialFocus
+                                 />
+                                 </PopoverContent>
+                             </Popover>
+                             <FormMessage />
+                             </FormItem>
+                         )}
+                     />
+                 )}
 
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
-                <Button type="submit" disabled={isLoading}>
+                 <Button type="submit" disabled={isLoading || isPrimaryAdminAccount}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Changes
                 </Button>
@@ -163,3 +232,4 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
     </Dialog>
   );
 }
+

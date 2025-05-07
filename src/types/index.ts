@@ -13,9 +13,11 @@ export const pricingTypes = ["FREE", "PAID", "FREE_PREMIUM"] as const;
 export type PricingType = typeof pricingTypes[number];
 
 // Define Exam types (Used in Question Bank)
-export const exams = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"] as const;
-export type Exam = typeof exams[number];
+export const exams = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "Other"] as const;
+export type ExamOption = typeof exams[number]; // Used in Question Bank
 
+export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"] as const;
+export type ClassLevel = typeof classLevels[number];
 
 // Interface for User Data (Stored in users.json)
 export interface UserProfile {
@@ -31,6 +33,9 @@ export interface UserProfile {
   createdAt?: string; // Optional ISO timestamp
 }
 
+// Type for Context User (less sensitive data)
+export type ContextUser = Omit<UserProfile, 'password'> | null;
+
 // ---- Question Bank Types (Remain largely the same) ----
 
 export const questionTypes = ["image", "text"] as const;
@@ -39,11 +44,6 @@ export type QuestionType = typeof questionTypes[number];
 export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
 export type DifficultyLevel = typeof difficultyLevels[number];
 
-export const examOptions = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "Other"] as const;
-export type ExamOption = typeof examOptions[number]; // Used in Question Bank
-
-export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"] as const;
-export type ClassLevel = typeof classLevels[number];
 
 // Interface for Question Bank Item (stored in individual JSON files)
 export interface QuestionBankItem {
@@ -84,6 +84,7 @@ export type AudienceType = AcademicStatus; // Type remains the same
 // Define Test Streams
 export const testStreams = ["PCM", "PCB"] as const;
 export type TestStream = typeof testStreams[number];
+
 
 // Interface for individual question within a generated test JSON
 export interface TestQuestion {
@@ -213,3 +214,4 @@ export interface TestResultSummary {
         explanationImageUrl?: string | null;
     }>;
 }
+
