@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   Home,
   Users,
-  BookOpen,
   Settings,
   BarChart3,
   ShieldCheck,
@@ -17,7 +16,7 @@ import {
   PlusCircle, 
   List, 
   Globe,
-  PieChart // Added PieChart for Reports
+  PieChart 
 } from 'lucide-react';
 import {
   Sidebar,
@@ -42,7 +41,7 @@ const adminNavItems = [
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/admin/reports', label: 'Reports', icon: PieChart }, // Added Reports link
+  { href: '/admin/reports', label: 'Reports', icon: PieChart }, 
 ];
 
 const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
@@ -52,7 +51,13 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { user } = useAuth(); 
 
-  const isActive = (href: string) => pathname === href || (href !== '/admin' && href !== '/' && pathname.startsWith(href));
+  const isActive = (href: string) => {
+    if (href === '/admin' || href === '/') {
+        return pathname === href;
+    }
+    return pathname.startsWith(href);
+  };
+
 
   const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
@@ -77,7 +82,7 @@ export function AdminSidebar() {
       <SidebarContent className="flex-1 mt-4">
         <SidebarMenu>
            <SidebarMenuItem>
-              <Link href={homeNavItem.href} legacyBehavior passHref>
+              <Link href={homeNavItem.href} passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive(homeNavItem.href)} tooltip={homeNavItem.label}>
                   <homeNavItem.icon />
                   <span>{homeNavItem.label}</span>
@@ -86,7 +91,7 @@ export function AdminSidebar() {
             </SidebarMenuItem>
           {adminNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href} legacyBehavior passHref>
+              <Link href={item.href} passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive(item.href)} tooltip={item.label}>
                   <item.icon />
                   <span>{item.label}</span>
@@ -100,7 +105,7 @@ export function AdminSidebar() {
       <SidebarFooter className="mt-auto">
         <SidebarMenu>
           <SidebarMenuItem>
-             <Link href={settingsNavItem.href} legacyBehavior passHref>
+             <Link href={settingsNavItem.href} passHref legacyBehavior>
                <SidebarMenuButton as="a" isActive={isActive(settingsNavItem.href)} tooltip={settingsNavItem.label}>
                  <settingsNavItem.icon />
                  <span>{settingsNavItem.label}</span>
@@ -112,3 +117,4 @@ export function AdminSidebar() {
     </Sidebar>
   );
 }
+
