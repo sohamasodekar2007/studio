@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, History, Eye } from 'lucide-react';
 import type { TestSession, TestResultSummary, GeneratedTest } from '@/types'; // Assuming TestResultSummary might be used or adapted
+import { getGeneratedTestByCode } from '@/actions/generated-test-actions'; // Import the missing function
 
 // Helper function to calculate basic summary from session data if full result summary isn't stored
 // This is a simplified version. Ideally, the full TestResultSummary should be stored and retrieved.
@@ -184,3 +185,4 @@ export default function ProgressPage() {
     </div>
   );
 }
+
