@@ -234,7 +234,7 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
 
         const success = await writeUsers(users);
         return { success, message: success ? undefined : 'Failed to write users file.' };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error adding user to JSON:', error);
         return { success: false, message: 'Failed to add user.' };
     }
@@ -274,7 +274,7 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
              console.error(`Failed to write update for user ${userId} to users.json`);
         }
         return { success, message: success ? undefined : 'Failed to write users file.' };
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error updating user ${userId} in JSON:`, error);
         return { success: false, message: 'Failed to update user.' };
     }
@@ -310,7 +310,7 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
 
         const success = await writeUsers(users);
         return { success, message: success ? undefined : 'Failed to write users file.' };
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error deleting user ${userId} from JSON:`, error);
         return { success: false, message: 'Failed to delete user.' };
     }
@@ -338,9 +338,27 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
 
         const success = await writeUsers(users);
         return { success, message: success ? undefined : 'Failed to write users file.' };
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Error updating password for user ${userId} in JSON:`, error);
         return { success: false, message: 'Failed to update password.' };
     }
 }
 
+/**
+ * Retrieves a single user by their ID from users.json.
+ * @param userId The ID of the user to retrieve.
+ * @returns A promise resolving to the UserProfile if found, otherwise null.
+ */
+export async function getUserById(userId: string): Promise<UserProfile | null> {
+  if (!userId) {
+    return null;
+  }
+  try {
+    const users = await readUsers();
+    const foundUser = users.find(u => u.id === userId);
+    return foundUser || null;
+  } catch (error) {
+    console.error(`Error finding user by ID ${userId}:`, error);
+    return null;
+  }
+}

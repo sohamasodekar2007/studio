@@ -78,8 +78,8 @@ export interface QuestionBankItem {
 // ---- Generated Test Definition Types ----
 
 // Define Audience Types (reusing Academic Status)
-export const audienceTypes = academicStatuses;
-export type AudienceType = AcademicStatus;
+export const audienceTypes = academicStatuses; // Use the same const for audience
+export type AudienceType = AcademicStatus; // Type remains the same
 
 // Define Test Streams
 export const testStreams = ["PCM", "PCB"] as const;
@@ -96,6 +96,8 @@ export interface TestQuestion {
     marks: number;
     explanation_text?: string | null;     // Textual explanation
     explanation_image_url?: string | null;// Public URL to the explanation image
+    explanation?: string | null; // Fallback for older data or text-only explanations
+    question?: string | null; // Fallback for older question text storage
 }
 
 
@@ -185,7 +187,7 @@ export interface TestSession {
 export interface TestResultSummary {
     testCode: string;
     userId: string;
-    userName?: string; // Optional
+    user?: UserProfile; // Add user profile for displaying name
     testName: string;
     attemptId: string; // Unique ID for this attempt (e.g., testCode-userId-startTime)
     submittedAt: string; // ISO timestamp

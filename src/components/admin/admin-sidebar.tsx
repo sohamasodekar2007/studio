@@ -1,4 +1,4 @@
-
+// src/components/admin/admin-sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -14,9 +14,10 @@ import {
   FileText,
   Banknote,
   Edit,
-  PlusCircle, // Added icon for Create Test
-  List, // Added icon for Manage Tests
-  Globe, // Icon for redirecting to main website
+  PlusCircle, 
+  List, 
+  Globe,
+  PieChart // Added PieChart for Reports
 } from 'lucide-react';
 import {
   Sidebar,
@@ -27,41 +28,39 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarTrigger,
-} from '@/components/ui/sidebar'; // Use the main Sidebar components
-import { useAuth } from '@/context/auth-context'; // Get user context if needed later
+} from '@/components/ui/sidebar'; 
+import { useAuth } from '@/context/auth-context'; 
 
 // Define navigation items for the admin sidebar
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests/manage', label: 'Manage Tests', icon: List }, // Updated link and icon
+  { href: '/admin/tests/manage', label: 'Manage Tests', icon: List }, 
   { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle },
   { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
   { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit },
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/admin/reports', label: 'Reports', icon: PieChart }, // Added Reports link
 ];
 
 const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
-const homeNavItem = { href: '/', label: 'Main Website', icon: Globe }; // New item for main website
+const homeNavItem = { href: '/', label: 'Main Website', icon: Globe }; 
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const { user } = useAuth(); // Could be used to conditionally show items
+  const { user } = useAuth(); 
 
   const isActive = (href: string) => pathname === href || (href !== '/admin' && href !== '/' && pathname.startsWith(href));
 
-  // Check if the current user is the designated admin
   const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  // Only render the sidebar if the user is an admin
   if (!isAdmin) {
     return null;
   }
 
   return (
-    // Use the main Sidebar component structure
     <Sidebar side="left" variant="sidebar" collapsible="icon">
       <SidebarHeader className="flex items-center justify-between p-2">
         <Link
@@ -70,15 +69,13 @@ export function AdminSidebar() {
           aria-label="Admin Dashboard Home"
           >
           <ShieldCheck className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold">SPHERE Admin</h1> {/* Updated Name */}
+          <h1 className="text-lg font-semibold">SPHERE Admin</h1> 
         </Link>
-         {/* Desktop Toggle Trigger */}
         <SidebarTrigger className="hidden sm:flex mr-1" />
       </SidebarHeader>
 
       <SidebarContent className="flex-1 mt-4">
         <SidebarMenu>
-           {/* Add Home button to redirect to main website */}
            <SidebarMenuItem>
               <Link href={homeNavItem.href} legacyBehavior passHref>
                 <SidebarMenuButton as="a" isActive={isActive(homeNavItem.href)} tooltip={homeNavItem.label}>
