@@ -4,31 +4,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types'; // Added QuestionStatus
+import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Import enum directly for usage
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, Sparkles, XSquare, Send, Clock } from 'lucide-react'; // Added Clock
+import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, Sparkles, XSquare, Send, Clock } from 'lucide-react';
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge'; // Added Badge import
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 // Placeholder for server action to save test results
 // import { saveChapterwiseTestAttempt } from '@/actions/test-submission-actions';
 
 const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
-  [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700',
-  [QuestionStatusEnum.Unanswered]: 'bg-red-400 hover:bg-red-500 text-white',
-  [QuestionStatusEnum.Answered]: 'bg-green-500 hover:bg-green-600 text-white',
-  [QuestionStatusEnum.MarkedForReview]: 'bg-purple-500 hover:bg-purple-600 text-white',
-  [QuestionStatusEnum.AnsweredAndMarked]: 'bg-blue-500 hover:bg-blue-600 text-white',
+  [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200',
+  [QuestionStatusEnum.Unanswered]: 'bg-red-400 hover:bg-red-500 text-white dark:bg-red-600 dark:hover:bg-red-500',
+  [QuestionStatusEnum.Answered]: 'bg-green-500 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-500',
+  [QuestionStatusEnum.MarkedForReview]: 'bg-purple-500 hover:bg-purple-600 text-white dark:bg-purple-600 dark:hover:bg-purple-500',
+  [QuestionStatusEnum.AnsweredAndMarked]: 'bg-blue-500 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-500',
 };
 
 export default function ChapterwiseTestPage() {
@@ -54,9 +54,9 @@ export default function ChapterwiseTestPage() {
   // MathJax typesetting
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax) {
-      (window as any).MathJax.typesetPromise?.();
+      (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
     }
-  }, [currentQuestionIndex, testData]);
+  }, [currentQuestionIndex, testData, generatedAnswer]); // Added generatedAnswer if MathJax applies to AI responses elsewhere
 
 
   const loadTest = useCallback(async () => {
@@ -79,7 +79,6 @@ export default function ChapterwiseTestPage() {
           initialStatuses[index] = QuestionStatusEnum.NotVisited;
         });
         setQuestionStatuses(initialStatuses);
-        // Mark first question as unanswered (or not visited if preferred)
         if (data.questions.length > 0) {
              setQuestionStatuses(prev => ({...prev, 0: QuestionStatusEnum.Unanswered}));
         }
@@ -104,12 +103,11 @@ export default function ChapterwiseTestPage() {
         return;
     }
     if (!authLoading && user && !userId) {
-        // If userId is not in query params, redirect to the same page with userId from auth context
         router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
         return;
     }
 
-    if (userId) { // Only load if userId is confirmed
+    if (userId) {
         loadTest();
     }
   }, [testCode, userId, authLoading, user, router, toast, loadTest]);
@@ -121,7 +119,7 @@ export default function ChapterwiseTestPage() {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-          handleSubmitTest(); // Auto-submit when time is up
+          handleSubmitTest(); 
           return 0;
         }
         return prevTime - 1;
@@ -129,7 +127,7 @@ export default function ChapterwiseTestPage() {
     }, 1000);
     return () => clearInterval(timerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, showInstructions, testData]); // handleSubmitTest dependency will be added if it's memoized
+  }, [timeLeft, showInstructions, testData]); 
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -151,13 +149,10 @@ export default function ChapterwiseTestPage() {
 
   const navigateQuestion = (index: number) => {
     if (index >= 0 && testData && index < testData.questions.length) {
-      // Update status of current question before navigating if it was 'NotVisited' or 'Unanswered' and no answer was made
       if (questionStatuses[currentQuestionIndex] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
            setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
       }
-
       setCurrentQuestionIndex(index);
-      // Update status of new question to 'Unanswered' if it's 'NotVisited'
        if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
            setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
        }
@@ -169,20 +164,17 @@ export default function ChapterwiseTestPage() {
     if (currentStatus === QuestionStatusEnum.Answered) {
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
     } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        // Toggle back to Answered if already AnsweredAndMarked
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-        // Toggle back to Unanswered (or NotVisited if preferred)
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
     }
-    else { // Unanswered or NotVisited
+    else { 
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
 
   const handleClearResponse = () => {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
-    // If it was answered/marked, revert to just marked or unanswered
     const currentStatus = questionStatuses[currentQuestionIndex];
     if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
@@ -197,7 +189,7 @@ export default function ChapterwiseTestPage() {
 
     const attemptId = `${testCode}-${userId}-${Date.now()}`;
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
-      questionId: q.id || `q-${index}`, // Fallback if question ID from bank isn't in TestQuestion
+      questionId: q.id || `q-${index}`, 
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
@@ -205,22 +197,16 @@ export default function ChapterwiseTestPage() {
     const sessionData: TestSession = {
       testId: testCode,
       userId: userId,
-      startTime: Date.now() - ((testData.duration * 60) - timeLeft) * 1000, // Approximate start time
+      startTime: Date.now() - ((testData.duration * 60) - timeLeft) * 1000, 
       endTime: Date.now(),
       answers: submittedAnswers,
-      // Score calculation would happen here or on the results page
     };
 
     console.log("Submitting test session:", sessionData);
 
-    // Placeholder for saving to local JSON
     try {
-      // Simulate saving (in a real app, this would be an API call/server action)
-      // await saveChapterwiseTestAttempt(sessionData); // Example server action call
       localStorage.setItem(`testResult-${attemptId}`, JSON.stringify(sessionData));
-
       toast({ title: "Test Submitted!", description: "Your responses have been recorded." });
-      // Redirect to a results page (to be created)
       router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not submit your test." });
@@ -267,7 +253,6 @@ export default function ChapterwiseTestPage() {
 
   return (
     <div className="flex flex-col h-screen max-h-screen bg-muted overflow-hidden">
-      {/* Test Header */}
       <header className="flex items-center justify-between p-3 border-b bg-card shadow-sm">
         <h1 className="text-lg font-semibold truncate flex-1 mr-4">{testData.name}</h1>
         <div className="flex items-center gap-4">
@@ -284,7 +269,6 @@ export default function ChapterwiseTestPage() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Main Content Area (Question + Options) */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           <Card className="mb-6">
             <CardHeader>
@@ -294,13 +278,41 @@ export default function ChapterwiseTestPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base">
-              {currentQuestion.type === 'image' && currentQuestion.image_url ? (
-                <Image src={currentQuestion.image_url} alt={`Question ${currentQuestionIndex + 1}`} width={600} height={400} className="rounded-md border max-w-full h-auto mx-auto" data-ai-hint="question diagram physics" />
-              ) : currentQuestion.question ? (
-                <div dangerouslySetInnerHTML={{ __html: currentQuestion.question.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-              ) : (
-                <p>Question content not available.</p>
-              )}
+              {(() => {
+                if (currentQuestion.type === 'image') {
+                  if (currentQuestion.image_url) {
+                    return (
+                      <Image 
+                        src={currentQuestion.image_url} 
+                        alt={`Question ${currentQuestionIndex + 1}`} 
+                        width={600}
+                        height={400}
+                        className="rounded-md border max-w-full h-auto mx-auto" 
+                        data-ai-hint="question diagram"
+                        onError={(e) => console.error('Image load error for:', currentQuestion.image_url, e.currentTarget.currentSrc)}
+                      />
+                    );
+                  } else {
+                    return <p className="text-destructive font-semibold">Error: Image question is missing the image URL.</p>;
+                  }
+                } else if (currentQuestion.type === 'text') {
+                  if (currentQuestion.question) { 
+                    return (
+                      <div 
+                        dangerouslySetInnerHTML={{ 
+                          __html: currentQuestion.question
+                                    .replace(/\$(.*?)\$/g, '\\($1\\)')
+                                    .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') 
+                        }} 
+                      />
+                    );
+                  } else {
+                    return <p className="text-muted-foreground">Text for this question is not available.</p>;
+                  }
+                } else {
+                  return <p className="text-muted-foreground">Question content not available or type is unrecognized (Type: {currentQuestion.type || 'N/A'}).</p>;
+                }
+              })()}
             </CardContent>
           </Card>
 
@@ -316,16 +328,16 @@ export default function ChapterwiseTestPage() {
                   key={optionKey}
                   htmlFor={`option-${optionKey}`}
                   className={cn(
-                    "flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-all hover:border-primary",
+                    "flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-all hover:border-primary",
                     userAnswers[currentQuestionIndex] === optionKey ? "border-primary bg-primary/5 ring-2 ring-primary" : "border-border"
                   )}
                 >
-                  <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary"/>
+                  <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary mt-1"/>
                   <span className="font-medium">{optionKey}.</span>
-                  {currentQuestion.type === 'text' && optionText ? (
-                     <div className="prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
+                  {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
+                     <div className="prose-sm dark:prose-invert max-w-none flex-1" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
                   ) : (
-                    <span>{optionText}</span> // For image questions, options are just "A", "B", "C", "D" typically
+                    <span className="flex-1">{optionText}</span>
                   )}
                 </Label>
               );
@@ -334,7 +346,7 @@ export default function ChapterwiseTestPage() {
 
           <div className="flex flex-wrap gap-2 justify-between items-center mt-6">
             <div className="flex gap-2">
-                 <Button variant="outline" onClick={handleMarkForReview} className="text-purple-600 border-purple-600 hover:bg-purple-50">
+                 <Button variant="outline" onClick={handleMarkForReview} className="text-purple-600 border-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-400 dark:hover:bg-purple-900/30">
                     <Flag className="mr-2 h-4 w-4" />
                     {questionStatuses[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || questionStatuses[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked ? 'Unmark' : 'Mark for Review'}
                 </Button>
@@ -379,7 +391,6 @@ export default function ChapterwiseTestPage() {
           </div>
         </main>
 
-        {/* Question Navigation Panel */}
         <aside className="w-64 md:w-72 border-l bg-card p-4 overflow-y-auto hidden lg:block">
           <h3 className="font-semibold mb-3 text-center">Question Palette</h3>
           <div className="grid grid-cols-4 md:grid-cols-5 gap-2">
@@ -437,3 +448,5 @@ export default function ChapterwiseTestPage() {
   );
 }
 
+
+    
