@@ -1,7 +1,7 @@
 // src/actions/question-bank-actions.ts
 'use server';
 
-import type { QuestionBankItem, QuestionType, DifficultyLevel, ExamOption, ClassLevel } from '@/types';
+import type { QuestionBankItem, QuestionType, DifficultyLevel, ExamOption, ClassLevel, PyqShift } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
@@ -91,9 +91,15 @@ export async function addQuestionToBank(
         const questionImageFile = formData.get('questionImage') as File | null;
         const explanationImageFile = formData.get('explanationImage') as File | null;
 
+        // Extract PYQ Data
+        const isPyq = formData.get('isPyq') === 'true';
+        const pyqExam = formData.get('pyqExam') as ExamOption | null;
+        const pyqDateString = formData.get('pyqDate') as string | null; // Date as YYYY-MM-DD string
+        const pyqShift = formData.get('pyqShift') as PyqShift | null;
+
         // --- Basic Validation ---
         if (!subject || !lesson || !classLevel || !examType || !difficulty || !questionType || !correctAnswer) {
-            return { success: false, question: null, error: 'Missing required fields.' };
+            return { success: false, question: null, error: 'Missing required base fields.' };
         }
         if (questionType === 'text' && (!questionText || !optionA || !optionB || !optionC || !optionD)) {
              return { success: false, question: null, error: 'Text question requires question text and all options.' };
@@ -101,6 +107,11 @@ export async function addQuestionToBank(
         if (questionType === 'image' && !questionImageFile) {
              return { success: false, question: null, error: 'Image question requires an image upload.' };
         }
+        // PYQ Validation
+        if (isPyq && (!pyqExam || !pyqDateString || !pyqShift)) {
+             return { success: false, question: null, error: 'PYQ requires Exam, Date, and Shift.' };
+        }
+
 
         // --- Prepare Directory Structure for JSON files ---
         const lessonJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson);
@@ -155,6 +166,12 @@ export async function addQuestionToBank(
                 text: explanationText || null,
                 image: explanationImageFilename, // Just the filename
             },
+            isPyq: isPyq,
+            pyqDetails: isPyq && pyqExam && pyqDateString && pyqShift ? {
+                exam: pyqExam,
+                date: pyqDateString, // Store as YYYY-MM-DD string
+                shift: pyqShift,
+            } : null,
             created: nowISO,
             modified: nowISO,
         };
@@ -194,6 +211,9 @@ export async function updateQuestionDetails(
         const explanationText = formData.get('explanationText') as string | null;
         const explanationImageFile = formData.get('explanationImage') as File | null;
         const removeExplanationImage = formData.get('removeExplanationImage') === 'true';
+
+        // Note: PYQ details are not currently updatable via this function.
+        // They are set only during creation. If needed, add fields to update PYQ status/details.
 
         if (!questionId || !subject || !lesson || !correctAnswer) {
             return { success: false, question: null, error: 'Missing required fields for update.' };
@@ -244,7 +264,7 @@ export async function updateQuestionDetails(
 
         const nowISO = new Date().toISOString();
         const updatedQuestion: QuestionBankItem = {
-            ...existingQuestion,
+            ...existingQuestion, // Retain all existing data, including PYQ details
             correct: correctAnswer,
             explanation: {
                 text: explanationText || null,

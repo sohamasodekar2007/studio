@@ -12,10 +12,11 @@ export type UserModel = typeof userModels[number];
 export const pricingTypes = ["FREE", "PAID", "FREE_PREMIUM"] as const;
 export type PricingType = typeof pricingTypes[number];
 
-// Define Exam types (Used in Question Bank)
-export const exams = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "Other"] as const;
+// Define Exam types (Used in Question Bank and PYQ) - Added more options
+export const exams = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET", "WBJEE", "KCET", "BITSAT", "VITEEE", "CUET", "AIEEE", "Other"] as const;
 export type ExamOption = typeof exams[number]; // Used in Question Bank
 
+// Define Class Levels for Question Bank
 export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"] as const;
 export type ClassLevel = typeof classLevels[number];
 
@@ -26,25 +27,29 @@ export interface UserProfile {
   password?: string; // Store hashed password
   name: string | null;
   phone: string | null;
-  avatarUrl?: string | null; // Optional field for profile picture URL/path
+  avatarUrl?: string | null; // Filename (e.g., avatar-userid-timestamp.png)
   referral?: string; // Optional referral code
   class: AcademicStatus | null; // Academic status
   model: UserModel; // User's subscription model
   expiry_date: string | null; // ISO string date or null for free/admin
   createdAt?: string; // Optional ISO timestamp
+  role?: 'User' | 'Admin'; // Optional role, primarily for client-side display logic
 }
 
 // Type for Context User (less sensitive data, includes avatar)
 export type ContextUser = Omit<UserProfile, 'password'> | null;
 
 
-// ---- Question Bank Types (Remain largely the same) ----
+// ---- Question Bank Types ----
 
 export const questionTypes = ["image", "text"] as const;
 export type QuestionType = typeof questionTypes[number];
 
 export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
 export type DifficultyLevel = typeof difficultyLevels[number];
+
+export const pyqShifts = ["S1", "S2", "Single"] as const; // Shift 1, Shift 2, or Single Shift Exam
+export type PyqShift = typeof pyqShifts[number];
 
 
 // Interface for Question Bank Item (stored in individual JSON files)
@@ -53,7 +58,7 @@ export interface QuestionBankItem {
   subject: string;
   lesson: string;
   class: ClassLevel;
-  examType: ExamOption;
+  examType: ExamOption; // The primary exam this question is tagged for initially
   difficulty: DifficultyLevel;
   tags: string[];
   type: QuestionType;
@@ -72,6 +77,12 @@ export interface QuestionBankItem {
     text?: string | null;
     image?: string | null; // Filename
   };
+  isPyq?: boolean; // Flag to indicate if it's a PYQ
+  pyqDetails?: {
+    exam: ExamOption; // The specific exam it appeared in
+    date: string; // ISO date string (YYYY-MM-DD)
+    shift: PyqShift; // S1, S2, or Single
+  } | null;
   created: string; // ISO timestamp
   modified: string; // ISO timestamp
 }
@@ -80,7 +91,7 @@ export interface QuestionBankItem {
 // ---- Generated Test Definition Types ----
 
 // Define Audience Types (reusing Academic Status)
-// export const audienceTypes = academicStatuses; // Use the same const for audience // Replaced by academicStatuses
+// export const audienceTypes = academicStatuses; // Replaced by academicStatuses
 export type AudienceType = AcademicStatus; // Type remains the same
 
 // Define Test Streams
@@ -121,7 +132,7 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise'; // Discriminator
     test_subject: [string]; // Array with exactly one subject
     lesson: string;
-    examFilter: ExamOption | 'all';
+    examFilter: ExamOption | 'all'; // Filter used during generation
     questions: TestQuestion[]; // Chapterwise tests directly embed questions
 
     // Ensure fields from FullLengthTestJson are not present or explicitly undefined
@@ -138,7 +149,7 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
     testType: 'full_length'; // Discriminator
     stream: TestStream;
     test_subject: string[]; // Can have multiple subjects (Physics, Chemistry, Maths/Bio)
-    examFilter: ExamOption | 'all';
+    examFilter: ExamOption | 'all'; // Filter used during generation
     weightage?: {
         physics: number;
         chemistry: number;
@@ -216,4 +227,24 @@ export interface TestResultSummary {
         explanationImageUrl?: string | null;
     }>;
     totalMarks?: number; // Add total marks possible
+}
+
+// ---- Short Notes Types ----
+export interface ShortNote {
+    id: string; // Unique identifier for the note (e.g., timestamp or UUID)
+    title: string;
+    description: string;
+    subject: string;
+    examType: ExamOption;
+    contentType: 'pdf' | 'html'; // Type of content
+    filePath: string; // Path relative to short_notes/ (e.g., "pdf_pages/physics_kinematics.pdf" or "html_pages/chem_thermo.php")
+    createdAt: string; // ISO timestamp
+    modifiedAt: string; // ISO timestamp
+}
+
+// Interface for the JSON file storing note metadata per subject/exam
+export interface ShortNotesMetadata {
+    subject: string;
+    examType: ExamOption;
+    notes: ShortNote[];
 }

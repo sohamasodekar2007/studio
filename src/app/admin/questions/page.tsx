@@ -2,10 +2,10 @@
 'use client';
 
 import { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import crypto from 'crypto'; // Used for hashing image names
+import { format } from "date-fns"; // Import format
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -15,13 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
+import { Calendar } from "@/components/ui/calendar"; // Import Calendar
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // For Combobox and Date Picker
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown } from "lucide-react"; // Added ClipboardPaste, Check, ChevronsUpDown
-import { type QuestionBankItem, questionTypes, difficultyLevels, examOptions, classLevels, type QuestionType } from '@/types';
+import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon } from "lucide-react";
+import {
+    type QuestionBankItem, questionTypes, difficultyLevels, examOptions, classLevels, type QuestionType,
+    pyqShifts, type PyqShift, type ExamOption as PyqExamOption // Import PYQ related types
+} from '@/types';
 import Image from 'next/image';
 import { addQuestionToBank } from '@/actions/question-bank-actions'; // Import the server action
 import { getSubjects, getLessonsForSubject } from '@/actions/question-bank-query-actions'; // Import query actions
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // For Combobox
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"; // For Combobox
 import { cn } from "@/lib/utils";
 
@@ -33,7 +38,7 @@ const questionSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
   class: z.enum(classLevels, { required_error: "Class is required" }),
   lesson: z.string().min(1, "Lesson name is required"),
-  examType: z.enum(examOptions, { required_error: "Exam type is required" }),
+  examType: z.enum(examOptions, { required_error: "Primary exam type is required" }), // Changed label
   difficulty: z.enum(difficultyLevels, { required_error: "Difficulty level is required" }),
   tags: z.string().optional(), // Simple string for now, parse later
   questionType: z.enum(questionTypes, { required_error: "Question type is required" }),
@@ -51,6 +56,12 @@ const questionSchema = z.object({
   correctAnswer: z.enum(["A", "B", "C", "D"], { required_error: "Correct answer is required" }),
   explanationText: z.string().optional(),
   explanationImage: z.any().optional(), // Use 'any' for File object
+
+  // PYQ Fields
+  isPyq: z.boolean().default(false).optional(),
+  pyqExam: z.enum(examOptions).optional(),
+  pyqDate: z.date().optional().nullable(), // Date object
+  pyqShift: z.enum(pyqShifts).optional(),
 
 }).refine(data => {
     // If text question, questionText and options are required
@@ -90,6 +101,16 @@ const questionSchema = z.object({
 }, {
     message: `Explanation image must be a valid image file (JPG, PNG, WEBP) and less than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
     path: ["explanationImage"],
+}).refine(data => {
+    // If isPyq is true, then pyqExam, pyqDate, and pyqShift are required
+    if (data.isPyq) {
+      return !!data.pyqExam && !!data.pyqDate && !!data.pyqShift;
+    }
+    return true;
+  }, {
+    message: "Exam, Date, and Shift are required for PYQ.",
+    // Apply error path to one of the required fields if isPyq is true
+    path: ["pyqExam"],
 });
 
 
@@ -132,11 +153,17 @@ export default function AdminQuestionBankPage() {
       correctAnswer: undefined,
       explanationText: '',
       explanationImage: null,
+      isPyq: false,
+      pyqExam: undefined,
+      pyqDate: null,
+      pyqShift: undefined,
     },
   });
 
   const questionType = form.watch('questionType'); // Watch for changes
   const selectedSubject = form.watch('subject'); // Watch selected subject
+  const isPyqChecked = useWatch({ control: form.control, name: "isPyq" }); // Watch PYQ checkbox
+
 
    // --- Fetch Subjects ---
    useEffect(() => {
@@ -287,12 +314,24 @@ export default function AdminQuestionBankPage() {
     try {
        const formData = new FormData();
 
-       // Append text fields
+       // Append text fields and simple booleans
         Object.entries(data).forEach(([key, value]) => {
-            if (key !== 'questionImage' && key !== 'explanationImage' && value !== null && value !== undefined) {
-                formData.append(key, String(value));
-            }
+            // Skip file objects and PYQ date object for now
+             if (key !== 'questionImage' && key !== 'explanationImage' && key !== 'pyqDate' && value !== null && value !== undefined && typeof value !== 'object') {
+                 formData.append(key, String(value));
+             }
+             // Append boolean specifically
+             if (key === 'isPyq') {
+                 formData.append(key, data.isPyq ? 'true' : 'false');
+             }
         });
+
+        // Append PYQ details if isPyq is true
+         if (data.isPyq) {
+             if (data.pyqExam) formData.append('pyqExam', data.pyqExam);
+             if (data.pyqDate) formData.append('pyqDate', format(data.pyqDate, 'yyyy-MM-dd')); // Format date
+             if (data.pyqShift) formData.append('pyqShift', data.pyqShift);
+         }
 
        // Append files if they exist
         if (data.questionImage instanceof File) {
@@ -491,7 +530,7 @@ export default function AdminQuestionBankPage() {
                 name="examType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Exam Type *</FormLabel>
+                    <FormLabel>Primary Exam Type *</FormLabel>
                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
@@ -531,7 +570,9 @@ export default function AdminQuestionBankPage() {
                 name="tags"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tags (comma-separated)</FormLabel>
+                     <FormLabel className="flex items-center gap-1">
+                        <TagIcon className="h-4 w-4 text-muted-foreground" /> Tags (comma-separated)
+                     </FormLabel>
                     <FormControl>
                       <Input placeholder="e.g., algebra, geometry" {...field} disabled={isLoading} />
                     </FormControl>
@@ -539,6 +580,113 @@ export default function AdminQuestionBankPage() {
                   </FormItem>
                 )}
               />
+               {/* PYQ Checkbox */}
+                <FormField
+                  control={form.control}
+                  name="isPyq"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm md:col-span-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={isLoading}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Is this a Previous Year Question (PYQ)?
+                        </FormLabel>
+                        <FormMessage />
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                {/* Conditional PYQ Fields */}
+                {isPyqChecked && (
+                    <>
+                    <FormField
+                        control={form.control}
+                        name="pyqExam"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>PYQ Exam *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Select PYQ Exam" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="pyqDate"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                            <FormLabel>PYQ Date *</FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    disabled={isLoading}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP") // Format date nicely
+                                    ) : (
+                                        <span>Pick PYQ date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value ?? undefined}
+                                    onSelect={field.onChange}
+                                    disabled={isLoading}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                     <FormField
+                        control={form.control}
+                        name="pyqShift"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>PYQ Shift *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Select Shift" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {pyqShifts.map((shift) => <SelectItem key={shift} value={shift}>{shift}</SelectItem>)}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    </>
+                )}
             </CardContent>
           </Card>
 
@@ -594,7 +742,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
                         <FormControl>
-                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
+                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -644,7 +792,7 @@ export default function AdminQuestionBankPage() {
                                  </Button>
                                  {questionImagePreview && (
                                     <div className="relative h-24 w-auto border rounded-md overflow-hidden">
-                                        <Image src={questionImagePreview} alt="Question Preview" height={96} width={150} objectFit="contain" />
+                                        <Image src={questionImagePreview} alt="Question Preview" height={96} width={150} style={{ objectFit: 'contain' }} />
                                         <Button
                                             type="button"
                                             variant="destructive"
@@ -702,7 +850,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
                         <FormControl>
-                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
+                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -745,7 +893,7 @@ export default function AdminQuestionBankPage() {
                                 </Button>
                                  {explanationImagePreview && (
                                     <div className="relative h-24 w-auto border rounded-md overflow-hidden">
-                                        <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} objectFit="contain" />
+                                        <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} />
                                         <Button
                                             type="button"
                                             variant="destructive"
