@@ -1,10 +1,25 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth"; // Import Auth type explicitly
+// NOTE: The following analytics import and initialization were removed as they are not currently used in the application.
+// import { getAnalytics } from "firebase/analytics";
 // import { getFirestore } from "firebase/firestore"; // Uncomment if using Firestore
 // import { getStorage } from "firebase/storage"; // Uncomment if using Storage
 
-// --- Firebase configuration validation ---
+// --- Firebase configuration ---
+// IMPORTANT: Ideally, these values should come from environment variables (.env file).
+// Hardcoding them here as per the user's request, but this is NOT recommended for production.
+const firebaseConfig: FirebaseOptions = {
+  apiKey: "AIzaSyAVmKzEE8TqWsoyP8snMZBL1j7Rz0xpI1I", // User provided value
+  authDomain: "edunexus-a271c.firebaseapp.com", // User provided value
+  projectId: "edunexus-a271c", // User provided value
+  storageBucket: "edunexus-a271c.appspot.com", // Corrected the domain based on standard Firebase pattern
+  messagingSenderId: "194103261842", // User provided value
+  appId: "1:194103261842:web:707df6a2e5d9511720444b", // User provided value
+  measurementId: "G-2QLLE1VJ7P" // User provided value (Optional)
+};
+
+// --- Validation (Still checks environment variables for consistency/awareness) ---
 const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
@@ -18,59 +33,43 @@ const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 let firebaseInitializationError: string | null = null;
 
 if (missingEnvVars.length > 0) {
-  firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing: ${missingEnvVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
-  console.error("**********************************************************************************");
-  console.error(firebaseInitializationError);
-  console.error("**********************************************************************************");
+  // Warning about missing ENV vars, even though hardcoded values are used below.
+  const warningMsg = `WARNING: Firebase config is hardcoded in firebase.ts, but the following environment variables are missing or unset: ${missingEnvVars.join(', ')}. Ensure your .env file is correctly set up for consistency and best practices, even if using hardcoded values temporarily.`;
+  console.warn("**********************************************************************************");
+  console.warn(warningMsg);
+  console.warn("**********************************************************************************");
+  // Do not set firebaseInitializationError here if we intend to proceed with hardcoded values.
 }
-
-const firebaseConfig: FirebaseOptions = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
-};
 
 // --- Initialization ---
 let app = null;
-let authInstance: Auth | null = null; // Explicitly type as Auth | null
+let authInstance: Auth | null = null;
 
-if (!firebaseInitializationError) {
-   // CRITICAL CHECK: Ensure the API key is present and looks potentially valid before initializing.
-   // A very basic check, Firebase SDK does more thorough validation.
-   if (!firebaseConfig.apiKey || firebaseConfig.apiKey.length < 10 || !firebaseConfig.apiKey.startsWith("AIza")) {
-      firebaseInitializationError = "CRITICAL FIREBASE CONFIG ERROR: NEXT_PUBLIC_FIREBASE_API_KEY is missing, empty, too short, or doesn't look like a valid Firebase Web API Key in your .env file. Expected format: NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSy...";
-      console.error("**********************************************************************************");
-      console.error(firebaseInitializationError);
-      console.error("**********************************************************************************");
-   } else {
-       try {
-           if (!getApps().length) {
-               app = initializeApp(firebaseConfig);
-               console.log("Firebase App Initialized.");
-           } else {
-               app = getApp();
-                console.log("Firebase App Re-used.");
-           }
-           // Attempt to get Auth only if app initialized successfully
-           authInstance = getAuth(app);
-            console.log("Firebase Auth Initialized successfully."); // Add success log
-       } catch (error: any) {
-            firebaseInitializationError = `FATAL ERROR DURING FIREBASE INITIALIZATION: ${error.message}. This likely means your Firebase config in .env is incorrect, incomplete, or the API key is invalid. Please verify all NEXT_PUBLIC_FIREBASE_* variables match your Firebase project settings.`;
-            console.error("**********************************************************************************");
-            console.error(firebaseInitializationError, error); // Log the specific error too
-            console.error("**********************************************************************************");
-            app = null; // Ensure app is null on error
-            authInstance = null; // Ensure auth is null on error
-       }
-   }
-} else {
-    console.warn("Firebase initialization skipped due to missing environment variables.");
-    app = null; // Explicitly set app to null if initialization is skipped
+try {
+    // Basic check on the hardcoded API key
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.length < 10 || !firebaseConfig.apiKey.startsWith("AIza")) {
+        throw new Error("Provided Firebase API Key is missing, empty, too short, or doesn't look valid.");
+    }
+
+    if (!getApps().length) {
+        app = initializeApp(firebaseConfig);
+        console.log("Firebase App Initialized with provided config.");
+    } else {
+        app = getApp();
+        console.log("Firebase App Re-used.");
+    }
+    // Attempt to get Auth only if app initialized successfully
+    authInstance = getAuth(app);
+    console.log("Firebase Auth Initialized successfully.");
+} catch (error: any) {
+    firebaseInitializationError = `FATAL ERROR DURING FIREBASE INITIALIZATION: ${error.message}. Check the hardcoded configuration in src/lib/firebase.ts or ensure environment variables are correctly set if reverting to .env usage.`;
+    console.error("**********************************************************************************");
+    console.error(firebaseInitializationError, error);
+    console.error("**********************************************************************************");
+    app = null;
+    authInstance = null;
 }
+
 
 // Export the potentially null auth instance. Consumers MUST check for null.
 const auth = authInstance;
