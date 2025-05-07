@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar"; // Import Calendar
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Import Popover
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, ShieldCheck } from "lucide-react"; // Added ShieldCheck
 import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, type UserModel } from '@/types';
@@ -42,6 +41,8 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const [isLoading, setIsLoading] = useState(false);
 
   // Determine if the current user IS the primary admin based on email
+  // Note: This check prevents changing the *primary* admin's plan via this dialog.
+  // The "Make Admin Equivalent" button grants equivalent access via 'combo' plan.
   const isPrimaryAdminAccount = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const form = useForm<ChangePlanFormValues>({
@@ -54,26 +55,25 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
 
     const currentModel = form.watch("model"); // Watch model field for conditional rendering
 
-  const onSubmit = async (data: ChangePlanFormValues) => {
+  // Function to handle the main form submission
+  const handleFormSubmit = async (data: ChangePlanFormValues) => {
     setIsLoading(true);
 
-    // Primary admin's model should always be 'combo' and have a long expiry
     if (isPrimaryAdminAccount) {
          toast({
             variant: 'destructive',
-            title: 'Update Failed',
-            description: 'Cannot change the subscription model or expiry date for the primary admin account.',
+            title: 'Update Denied',
+            description: 'The subscription model and expiry date for the primary admin account cannot be changed here.',
          });
          setIsLoading(false);
          return;
     }
 
-
     try {
        // Format expiry_date to ISO string or null BEFORE updating
        const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
+
        // Prepare the data payload specifically for the update action
-       // Only include fields that are changing (model, expiry_date)
        const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class'>> = {
          model: data.model,
          expiry_date: expiryDateString,
@@ -106,6 +106,23 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
     }
   };
 
+   // Function to handle the "Make Admin Equivalent" button click
+   const handleMakeAdminEquivalent = async () => {
+        if (isPrimaryAdminAccount) {
+            toast({ variant: 'warning', title: 'Action Not Needed', description: 'This user is already the primary admin.' });
+            return;
+        }
+        // Set form values for admin-equivalent plan
+        const farFutureDate = new Date('2099-12-31T00:00:00.000Z');
+        const adminPlanValues: ChangePlanFormValues = {
+            model: 'combo',
+            expiry_date: farFutureDate,
+        };
+        // Trigger the main form submission with these values
+        await handleFormSubmit(adminPlanValues);
+   };
+
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
@@ -117,7 +134,8 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* We use handleSubmit with the specific handler */}
+          <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
             {/* User Model Select */}
             <FormField
               control={form.control}
@@ -186,13 +204,25 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
+                     {isPrimaryAdminAccount && <p className="text-xs text-muted-foreground">Primary admin expiry cannot be changed.</p>}
                   </FormItem>
                 )}
               />
             )}
 
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
+            <DialogFooter className="pt-4">
+                {/* "Make Admin Equivalent" Button */}
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleMakeAdminEquivalent}
+                    disabled={isLoading || isPrimaryAdminAccount}
+                    className="mr-auto" // Push to the left
+                 >
+                    <ShieldCheck className="mr-2 h-4 w-4" /> Make Admin Equivalent
+                </Button>
+                 {/* Regular Buttons */}
+                <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>Cancel</Button>
                 <Button type="submit" disabled={isLoading || isPrimaryAdminAccount}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Update Plan
