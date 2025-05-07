@@ -1,3 +1,4 @@
+// src/actions/question-bank-actions.ts
 'use server';
 
 import type { QuestionBankItem, QuestionType, DifficultyLevel, ExamOption, ClassLevel } from '@/types';
@@ -5,7 +6,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 
-const questionBankBasePath = path.join(process.cwd(), 'src', 'data', 'question_bank');
+// Base path for JSON question data files
+const jsonQuestionBankBasePath = path.join(process.cwd(), 'src', 'data', 'question_bank');
+// Base path for publicly served images (for next/image)
+const publicImagesBasePath = path.join(process.cwd(), 'public', 'question_bank_images');
+
 
 // Helper function to ensure directory exists
 async function ensureDirExists(dirPath: string): Promise<void> {
@@ -21,12 +26,11 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 // Helper function to generate a unique filename
 async function generateUniqueFilename(prefix: 'Q' | 'E', fileExtension: string, fileBuffer: Buffer): Promise<string> {
     const timestamp = Date.now();
-    // Create a hash of the file content for uniqueness against identical uploads
     const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex').substring(0, 6);
     return `${prefix}_${timestamp}_${hash}.${fileExtension.toLowerCase()}`;
 }
 
-// Helper function to save an image file
+// Helper function to save an image file to the public directory
 async function saveImage(
     file: File,
     subject: string,
@@ -34,36 +38,38 @@ async function saveImage(
     prefix: 'Q' | 'E'
 ): Promise<string | null> {
     try {
-        const imagesDir = path.join(questionBankBasePath, subject, lesson, 'images');
+        // Images are saved relative to the publicImagesBasePath
+        const imagesDir = path.join(publicImagesBasePath, subject, lesson, 'images');
         await ensureDirExists(imagesDir);
 
         const fileBuffer = Buffer.from(await file.arrayBuffer());
-        const fileExtension = path.extname(file.name).substring(1); // Get extension without dot
+        const fileExtension = path.extname(file.name).substring(1);
         const uniqueFilename = await generateUniqueFilename(prefix, fileExtension, fileBuffer);
         const filePath = path.join(imagesDir, uniqueFilename);
 
         await fs.writeFile(filePath, fileBuffer);
-        console.log(`Image saved: ${filePath}`);
-        return uniqueFilename; // Return only the filename, not the full path
+        console.log(`Image saved to public path: ${filePath}`);
+        return uniqueFilename; // Return only the filename
 
     } catch (error) {
         console.error(`Error saving ${prefix} image:`, error);
-        return null; // Indicate failure
+        return null;
     }
 }
 
 
 /**
  * Adds a new question (including handling image uploads) to the local question bank.
- * Data is stored in a JSON file within a structured directory.
+ * Question JSON data is stored in `src/data/question_bank`.
+ * Images are stored in `public/question_bank_images`.
  *
  * @param formData - The FormData object containing question details and optional images.
  * @returns A promise resolving with success status, the new question object (or null on failure), and optional error message.
  */
 export async function addQuestionToBank(
     formData: FormData
-): Promise<{ success: boolean; question: QuestionBankItem | null; error?: string }}> {
-    console.log("Received FormData Keys:", Array.from(formData.keys()));
+): Promise<{ success: boolean; question: QuestionBankItem | null; error?: string }> {
+    console.log("Received FormData Keys for Add Question:", Array.from(formData.keys()));
 
     try {
         // --- Extract Data ---
@@ -96,13 +102,13 @@ export async function addQuestionToBank(
              return { success: false, question: null, error: 'Image question requires an image upload.' };
         }
 
-        // --- Prepare Directory Structure ---
-        const lessonDir = path.join(questionBankBasePath, subject, lesson);
-        const questionsDir = path.join(lessonDir, 'questions');
-        await ensureDirExists(lessonDir); // Ensure base subject/lesson dir exists
-        await ensureDirExists(questionsDir); // Ensure questions subdir exists
+        // --- Prepare Directory Structure for JSON files ---
+        const lessonJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson);
+        const questionsJsonDir = path.join(lessonJsonDir, 'questions');
+        await ensureDirExists(lessonJsonDir);
+        await ensureDirExists(questionsJsonDir);
 
-        // --- Handle Image Uploads ---
+        // --- Handle Image Uploads (saves to public directory) ---
         let questionImageFilename: string | null = null;
         if (questionType === 'image' && questionImageFile) {
             questionImageFilename = await saveImage(questionImageFile, subject, lesson, 'Q');
@@ -115,9 +121,7 @@ export async function addQuestionToBank(
         if (explanationImageFile) {
             explanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E');
              if (!explanationImageFilename) {
-                 // Decide if this is critical - maybe allow saving question without explanation image?
                  console.warn('Failed to save explanation image, but proceeding with question save.');
-                // return { success: false, question: null, error: 'Failed to save explanation image.' };
              }
         }
 
@@ -134,15 +138,14 @@ export async function addQuestionToBank(
             class: classLevel,
             examType,
             difficulty,
-            tags: tagsString.split(',').map(tag => tag.trim()).filter(tag => tag), // Parse tags
+            tags: tagsString.split(',').map(tag => tag.trim()).filter(tag => tag),
             type: questionType,
             question: {
                 text: questionType === 'text' ? questionText : null,
-                image: questionType === 'image' ? questionImageFilename : null,
+                image: questionType === 'image' ? questionImageFilename : null, // Just the filename
             },
-            // For image questions, default options might be A/B/C/D as text
             options: questionType === 'image' ? { A: 'A', B: 'B', C: 'C', D: 'D' } : {
-                A: optionA || '', // Ensure non-null for text questions
+                A: optionA || '',
                 B: optionB || '',
                 C: optionC || '',
                 D: optionD || '',
@@ -150,21 +153,16 @@ export async function addQuestionToBank(
             correct: correctAnswer,
             explanation: {
                 text: explanationText || null,
-                image: explanationImageFilename,
+                image: explanationImageFilename, // Just the filename
             },
             created: nowISO,
             modified: nowISO,
         };
 
-        // --- Save Question JSON ---
-        const questionFilePath = path.join(questionsDir, `${questionId}.json`);
-        await fs.writeFile(questionFilePath, JSON.stringify(newQuestion, null, 2), 'utf-8');
-        console.log(`Question JSON saved: ${questionFilePath}`);
-
-        // --- TODO: Update Master Index (Optional but recommended) ---
-        // You might want a single index file listing all questions for easier lookup.
-        // This would involve reading the index, adding the new question's path/ID, and writing it back.
-
+        // --- Save Question JSON to src/data/... ---
+        const questionJsonFilePath = path.join(questionsJsonDir, `${questionId}.json`);
+        await fs.writeFile(questionJsonFilePath, JSON.stringify(newQuestion, null, 2), 'utf-8');
+        console.log(`Question JSON saved: ${questionJsonFilePath}`);
 
         return { success: true, question: newQuestion };
 
@@ -176,10 +174,11 @@ export async function addQuestionToBank(
 
 
 /**
- * Updates specific details of an existing question in the question bank.
- * Primarily focuses on updating correct answer and explanation (text and/or image).
+ * Updates specific details of an existing question.
+ * Images are saved/deleted from `public/question_bank_images`.
+ * JSON is updated in `src/data/question_bank`.
  *
- * @param formData - FormData containing the questionId, subject, lesson, correctAnswer, explanationText, and optional new explanationImage.
+ * @param formData - FormData containing questionId, subject, lesson, correctAnswer, explanationText, and optional new explanationImage.
  * @returns A promise resolving with success status, the updated question object (or null on failure), and optional error message.
  */
 export async function updateQuestionDetails(
@@ -188,108 +187,79 @@ export async function updateQuestionDetails(
     console.log("Received FormData Keys for Update:", Array.from(formData.keys()));
 
     try {
-        // --- Extract Data ---
         const questionId = formData.get('questionId') as string;
         const subject = formData.get('subject') as string;
         const lesson = formData.get('lesson') as string;
         const correctAnswer = formData.get('correctAnswer') as "A" | "B" | "C" | "D";
         const explanationText = formData.get('explanationText') as string | null;
-        const explanationImageFile = formData.get('explanationImage') as File | null; // New image file
-        const removeExplanationImage = formData.get('removeExplanationImage') === 'true'; // Flag to remove existing image
+        const explanationImageFile = formData.get('explanationImage') as File | null;
+        const removeExplanationImage = formData.get('removeExplanationImage') === 'true';
 
-        // --- Basic Validation ---
         if (!questionId || !subject || !lesson || !correctAnswer) {
-            return { success: false, question: null, error: 'Missing required fields for update (ID, Subject, Lesson, Correct Answer).' };
+            return { success: false, question: null, error: 'Missing required fields for update.' };
         }
 
-        // --- File Paths ---
-        const questionsDir = path.join(questionBankBasePath, subject, lesson, 'questions');
-        const imagesDir = path.join(questionBankBasePath, subject, lesson, 'images');
-        const questionFilePath = path.join(questionsDir, `${questionId}.json`);
+        // Paths for JSON and public images
+        const questionsJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions');
+        const questionJsonFilePath = path.join(questionsJsonDir, `${questionId}.json`);
+        const publicLessonImagesDir = path.join(publicImagesBasePath, subject, lesson, 'images'); // For deleting/saving new images
 
-        // --- Read Existing Question ---
         let existingQuestion: QuestionBankItem;
         try {
-            const fileContent = await fs.readFile(questionFilePath, 'utf-8');
+            const fileContent = await fs.readFile(questionJsonFilePath, 'utf-8');
             existingQuestion = JSON.parse(fileContent) as QuestionBankItem;
         } catch (readError: any) {
-            if (readError.code === 'ENOENT') {
-                return { success: false, question: null, error: `Question file not found: ${questionId}` };
-            }
+            if (readError.code === 'ENOENT') return { success: false, question: null, error: `Question file not found: ${questionId}` };
             console.error(`Error reading existing question file ${questionId}:`, readError);
             return { success: false, question: null, error: 'Could not read existing question data.' };
         }
 
-        const existingExplanationImage = existingQuestion.explanation.image;
-        let newExplanationImageFilename: string | null = existingExplanationImage; // Default to existing
+        const existingExplanationImageFilename = existingQuestion.explanation.image;
+        let newExplanationImageFilename: string | null = existingExplanationImageFilename;
 
-        // --- Handle Explanation Image Update ---
-        // 1. If a new image is uploaded
-        if (explanationImageFile) {
-            // Delete the old image if it exists
-            if (existingExplanationImage) {
+        if (explanationImageFile) { // New image uploaded
+            if (existingExplanationImageFilename) {
                 try {
-                    await fs.unlink(path.join(imagesDir, existingExplanationImage));
-                    console.log(`Deleted old explanation image: ${existingExplanationImage}`);
+                    await fs.unlink(path.join(publicLessonImagesDir, existingExplanationImageFilename));
+                    console.log(`Deleted old public explanation image: ${existingExplanationImageFilename}`);
                 } catch (delError: any) {
-                    if (delError.code !== 'ENOENT') console.warn(`Could not delete old explanation image ${existingExplanationImage}:`, delError);
+                    if (delError.code !== 'ENOENT') console.warn(`Could not delete old public explanation image ${existingExplanationImageFilename}:`, delError);
                 }
             }
-            // Save the new image
-            newExplanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E');
+            newExplanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E'); // Saves to public
             if (!newExplanationImageFilename) {
-                // Decide if this is critical. Maybe allow update without new image saving?
                 console.warn('Failed to save new explanation image, update proceeding without image change.');
-                 newExplanationImageFilename = null; // Ensure it's null if save failed
-                // return { success: false, question: null, error: 'Failed to save new explanation image.' };
+                newExplanationImageFilename = null;
             }
-        }
-        // 2. If the remove flag is set and no new image was uploaded
-        else if (removeExplanationImage && existingExplanationImage) {
-            // Delete the old image
+        } else if (removeExplanationImage && existingExplanationImageFilename) { // Remove existing image
              try {
-                 await fs.unlink(path.join(imagesDir, existingExplanationImage));
-                 console.log(`Deleted existing explanation image: ${existingExplanationImage}`);
-                  newExplanationImageFilename = null; // Set filename to null
+                 await fs.unlink(path.join(publicLessonImagesDir, existingExplanationImageFilename));
+                 console.log(`Deleted existing public explanation image: ${existingExplanationImageFilename}`);
+                 newExplanationImageFilename = null;
              } catch (delError: any) {
-                 if (delError.code !== 'ENOENT') console.warn(`Could not delete existing explanation image ${existingExplanationImage}:`, delError);
-                 // Keep existing filename if deletion fails? Or set to null? Let's set to null.
+                 if (delError.code !== 'ENOENT') console.warn(`Could not delete existing public explanation image ${existingExplanationImageFilename}:`, delError);
                  newExplanationImageFilename = null;
              }
         }
-         // 3. If neither upload nor remove flag, keep the existing image filename (already defaulted)
 
-
-        // --- Update Question Object ---
         const nowISO = new Date().toISOString();
         const updatedQuestion: QuestionBankItem = {
             ...existingQuestion,
             correct: correctAnswer,
             explanation: {
                 text: explanationText || null,
-                image: newExplanationImageFilename, // Use the determined filename
+                image: newExplanationImageFilename, // Store just the filename
             },
-            modified: nowISO, // Update modified timestamp
+            modified: nowISO,
         };
 
-        // --- Save Updated Question JSON ---
-        await fs.writeFile(questionFilePath, JSON.stringify(updatedQuestion, null, 2), 'utf-8');
-        console.log(`Updated Question JSON saved: ${questionFilePath}`);
-
-        // --- TODO: Update Master Index if needed ---
+        await fs.writeFile(questionJsonFilePath, JSON.stringify(updatedQuestion, null, 2), 'utf-8');
+        console.log(`Updated Question JSON saved: ${questionJsonFilePath}`);
 
         return { success: true, question: updatedQuestion };
 
     } catch (error: any) {
         console.error(`Error updating question ${formData.get('questionId')}:`, error);
-        return { success: false, question: null, error: error.message || 'An unknown error occurred while updating the question.' };
+        return { success: false, question: null, error: error.message || 'An unknown error occurred.' };
     }
 }
-
-
-
-// --- TODO: Implement other CRUD operations ---
-// export async function getQuestionById(id: string): Promise<QuestionBankItem | null> { ... }
-// export async function updateQuestion(id: string, data: Partial<QuestionBankItem>, ...): Promise<{ success: boolean; ... }> { ... } // Full update
-// export async function deleteQuestion(id: string): Promise<{ success: boolean; ... }> { ... }
-// export async function getAllQuestions(filters?): Promise<QuestionBankItem[]> { ... }

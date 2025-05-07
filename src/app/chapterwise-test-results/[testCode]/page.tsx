@@ -1,4 +1,4 @@
-
+// src/app/chapterwise-test-results/[testCode]/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,13 +9,33 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest } from '@/types';
+import type { TestSession, TestResultSummary, GeneratedTest, TestQuestion } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+// Helper to get all questions from a test definition, regardless of type (chapterwise/full_length)
+function getAllQuestionsFromTest(testDef: GeneratedTest | null): TestQuestion[] {
+    if (!testDef) return [];
+    if (testDef.testType === 'chapterwise' && testDef.questions) {
+        return testDef.questions;
+    } else if (testDef.testType === 'full_length') {
+        return [
+            ...(testDef.physics || []),
+            ...(testDef.chemistry || []),
+            ...(testDef.maths || []),
+            ...(testDef.biology || []),
+        ].filter(q => q); // Filter out any undefined subject arrays
+    }
+    return [];
+}
+
+
 function calculateResults(session: TestSession, testDef: GeneratedTest | null): TestResultSummary | null {
-    if (!testDef || !testDef.questions) return null;
+    if (!testDef) return null;
+    const allQuestions = getAllQuestionsFromTest(testDef);
+    if (allQuestions.length === 0) return null;
+
 
     let correctCount = 0;
     let incorrectCount = 0;
@@ -24,8 +44,18 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
     let score = 0;
 
     const detailedAnswers = session.answers.map((userAns, index) => {
-        const questionDef = testDef.questions?.[index];
-        if (!questionDef) return { questionIndex: index, userAnswer: null, correctAnswer: 'N/A', isCorrect: false, status: userAns.status, questionTextOrImage: 'Error: Question not found' };
+        const questionDef = allQuestions[index];
+        if (!questionDef) return {
+            questionIndex: index,
+            userAnswer: null,
+            correctAnswer: 'N/A',
+            isCorrect: false,
+            status: userAns.status,
+            questionText: 'Error: Question not found',
+            questionImageUrl: null,
+            explanationText: null,
+            explanationImageUrl: null,
+        };
 
         totalMarksPossible += questionDef.marks;
         let isCorrect = false;
@@ -43,16 +73,18 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
         }
         return {
             questionIndex: index,
-            questionTextOrImage: questionDef.question,
+            questionText: questionDef.question_text,
+            questionImageUrl: questionDef.question_image_url,
             userAnswer: userAns.selectedOption,
             correctAnswer: correctAnswerKey,
             isCorrect,
             status: userAns.status,
-            explanation: questionDef.explanation,
+            explanationText: questionDef.explanation_text,
+            explanationImageUrl: questionDef.explanation_image_url,
         };
     });
 
-    const unansweredCount = testDef.questions.length - attemptedCount;
+    const unansweredCount = allQuestions.length - attemptedCount;
     const percentage = totalMarksPossible > 0 ? (score / totalMarksPossible) * 100 : 0;
     const timeTakenSeconds = session.endTime ? (session.endTime - session.startTime) / 1000 : 0;
     const timeTakenMinutes = Math.round(timeTakenSeconds / 60);
@@ -64,7 +96,7 @@ function calculateResults(session: TestSession, testDef: GeneratedTest | null): 
         testName: testDef.name,
         attemptId: `${session.testId}-${session.userId}-${session.startTime}`,
         submittedAt: session.endTime ? new Date(session.endTime).toISOString() : new Date().toISOString(),
-        totalQuestions: testDef.questions.length,
+        totalQuestions: allQuestions.length,
         attempted: attemptedCount,
         correct: correctCount,
         incorrect: incorrectCount,
@@ -88,7 +120,7 @@ export default function TestResultsPage() {
   const attemptId = searchParams.get('attemptId');
 
   const [results, setResults] = useState<TestResultSummary | null>(null);
-  const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
+  const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null); // Store full test def
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +150,7 @@ export default function TestResultsPage() {
         if (!testDefData) {
           throw new Error("Original test definition not found.");
         }
-        setTestDefinition(testDefData);
+        setTestDefinition(testDefData); // Store the fetched test definition
 
         const storedSessionJson = localStorage.getItem(`testResult-${attemptId}`);
         if (!storedSessionJson) {
@@ -173,12 +205,12 @@ export default function TestResultsPage() {
     );
   }
 
-  if (!results) {
+  if (!results || !testDefinition) { // Also check for testDefinition
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Results Not Available</h1>
-        <p className="text-muted-foreground mb-6">We could not find the results for this test attempt.</p>
+        <p className="text-muted-foreground mb-6">We could not find the results or test definition for this attempt.</p>
         <Button asChild>
           <Link href="/tests">Go to Test Series</Link>
         </Button>
@@ -186,11 +218,16 @@ export default function TestResultsPage() {
     );
   }
 
+  // Calculate total marks based on the actual questions in the test definition
+  const allQuestionsInTest = getAllQuestionsFromTest(testDefinition);
+  const totalPossibleMarks = allQuestionsInTest.reduce((sum, q) => sum + q.marks, 0);
+
+
   const aiAnalysis = `Based on your performance in ${results.testName}:
 - You demonstrated strength in questions related to topics where you answered correctly.
 - Areas for improvement include topics related to questions you answered incorrectly or skipped.
 - Focus on revising fundamentals for weaker topics and practicing more problems.
-- Your time management was [Good/Okay/Needs Improvement - Requires detailed timing data per question not currently stored].
+- Your time management was ${results.timeTakenMinutes < (testDefinition.duration * 0.8) ? 'Good' : results.timeTakenMinutes > testDefinition.duration ? 'Needs Improvement' : 'Okay'}.
 Keep practicing! Consistency is key.`;
 
 
@@ -207,7 +244,7 @@ Keep practicing! Consistency is key.`;
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <Card className="p-4 bg-muted dark:bg-muted/50">
               <CardTitle className="text-4xl font-bold text-green-600 dark:text-green-400">{results.score}</CardTitle>
-              <CardDescription>Score / {results.totalQuestions * (testDefinition?.questions?.[0]?.marks || 1)}</CardDescription>
+              <CardDescription>Score / {totalPossibleMarks}</CardDescription>
             </Card>
             <Card className="p-4 bg-muted dark:bg-muted/50">
               <CardTitle className="text-4xl font-bold text-blue-600 dark:text-blue-400">{results.percentage.toFixed(2)}%</CardTitle>
@@ -247,7 +284,7 @@ Keep practicing! Consistency is key.`;
                <Progress value={(results.unanswered / results.totalQuestions) * 100} className="h-2 bg-gray-100 dark:bg-gray-800/30 [&>div]:bg-gray-400 dark:[&>div]:bg-gray-500"/>
             </div>
           </div>
-          
+
           <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700/50 dark:text-blue-300">
             <Star className="h-4 w-4 !text-blue-600 dark:!text-blue-400" />
             <AlertTitle>Rank & Detailed History</AlertTitle>

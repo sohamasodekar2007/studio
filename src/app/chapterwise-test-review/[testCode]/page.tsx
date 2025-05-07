@@ -1,19 +1,21 @@
+// src/app/chapterwise-test-review/[testCode]/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
+import type { TestSession, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import Script from 'next/script';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -27,7 +29,7 @@ const OPTION_STYLES = {
   base: "border-border hover:border-primary dark:border-gray-700 dark:hover:border-primary",
   selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
   selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
-  correctUnselected: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300", // No ring for just correct but not selected
+  correctUnselected: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 };
 
 
@@ -47,7 +49,6 @@ export default function TestReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
 
-   // MathJax typesetting logic
    const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
            (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error:", err));
@@ -55,8 +56,11 @@ export default function TestReviewPage() {
    }, []);
 
    useEffect(() => {
-       typesetMathJax();
-   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]); // Rerun when index or data changes
+       if (isOpen) { // Assuming isOpen is a state variable passed to a dialog or similar
+        typesetMathJax();
+       }
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]); // isOpen should be added if used
 
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptId) {
@@ -69,14 +73,17 @@ export default function TestReviewPage() {
     setError(null);
     try {
       const testDefData = await getGeneratedTestByCode(testCode);
-      // Basic validation for test definition structure
       if (!testDefData) {
           throw new Error("Original test definition not found.");
       }
-      // Check if questions array exists based on test type
        if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
           throw new Error("Test definition is invalid or has no questions.");
+       } else if (testDefData.testType === 'full_length' && 
+                  !(testDefData.physics || testDefData.chemistry || testDefData.maths || testDefData.biology)?.some(arr => arr && arr.length > 0)
+       ) {
+           throw new Error("Full length test definition is invalid or has no questions in any subject section.");
        }
+
 
       setTestDefinition(testDefData);
 
@@ -110,7 +117,6 @@ export default function TestReviewPage() {
   }, [testCode, userId, attemptId, authLoading, user, router, fetchReviewData]);
 
 
-   // Consolidate questions from different subjects if it's a full_length test
     const allQuestions = useMemo(() => {
         if (!testDefinition) return [];
         if (testDefinition.testType === 'chapterwise') {
@@ -121,7 +127,7 @@ export default function TestReviewPage() {
                 ...(testDefinition.chemistry || []),
                 ...(testDefinition.maths || []),
                 ...(testDefinition.biology || []),
-            ];
+            ].filter(q => q); // Filter out undefined arrays if a subject is missing
         }
         return [];
     }, [testDefinition]);
@@ -176,33 +182,24 @@ export default function TestReviewPage() {
 
   const totalQuestions = allQuestions.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
-  // Handle cases where answer might not start with "Option "
-  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim()
-                           ?? currentReviewQuestion.answer; // Assume it's just the key if format differs
+  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim() ?? currentReviewQuestion.answer;
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
-   const isExplanationImage = (explanation: string | null | undefined): boolean => {
-     if (!explanation || typeof explanation !== 'string') return false;
-     // Basic check: does it look like a file path or URL?
-     // More robust check could involve regex or specific patterns.
-     return explanation.includes('/') || explanation.includes('.');
-   };
-
-    // Helper function to render content (handles text, image, MathJax)
-    const renderContent = (content: string | undefined | null, imageUrl: string | undefined | null) => {
-        if (imageUrl) {
+    const renderContent = (text: string | undefined | null, imageUrl: string | undefined | null, isQuestion: boolean = false) => {
+        // For image questions/explanations, imageUrl will be the direct public path
+        if (imageUrl && (isQuestion && currentReviewQuestion.type === 'image' || !isQuestion)) {
             return (
                  <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
-                    <Image src={imageUrl} alt="Question/Explanation Image" layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="question explanation"/>
+                    <Image src={imageUrl} alt={isQuestion ? "Question Image" : "Explanation Image"} layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint={isQuestion ? "question diagram" : "explanation image"}/>
                  </div>
              );
-        } else if (content) {
+        } else if (text) { // For text questions/explanations
              return (
                  <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground"
-                    dangerouslySetInnerHTML={{ __html: content.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                    dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                  />
              );
         }
@@ -211,6 +208,15 @@ export default function TestReviewPage() {
 
 
   return (
+    <>
+    <Script
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+            console.log('MathJax loaded for review page');
+            typesetMathJax();
+        }}
+      />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
       <div className="flex justify-between items-center">
         <Button variant="outline" asChild>
@@ -243,11 +249,9 @@ export default function TestReviewPage() {
             )}
         </CardHeader>
         <CardContent className="space-y-4">
-            {/* Render Question Content */}
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContent(currentQuestionReviewIndex !== undefined ? currentReviewQuestion?.question : null, currentReviewQuestion?.image_url)}
+                 {renderContent(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url, true)}
             </div>
-
 
           <div className="space-y-2 pt-4">
             <p className="font-semibold text-card-foreground">Options:</p>
@@ -263,11 +267,9 @@ export default function TestReviewPage() {
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium mt-0.5">{optionKey}.</span>
-                   {/* Render Option Content (Handles MathJax) */}
                    <div className="flex-1">
                         {renderContent(optionText, null)}
                    </div>
-                  {/* Status Icons */}
                   {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                   {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
@@ -276,17 +278,13 @@ export default function TestReviewPage() {
             })}
           </div>
 
-          {(currentReviewQuestion.explanation) && (
+          {(currentReviewQuestion.explanation_text || currentReviewQuestion.explanation_image_url) && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
-               {/* Render Explanation Content */}
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
-                 {renderContent(
-                      isExplanationImage(currentReviewQuestion.explanation) ? null : currentReviewQuestion.explanation,
-                      isExplanationImage(currentReviewQuestion.explanation) ? `/question_bank_images/${testDefinition.test_subject[0]}/${testDefinition.lesson}/${currentReviewQuestion.explanation}` : null
-                 )}
+                 {renderContent(currentReviewQuestion.explanation_text, currentReviewQuestion.explanation_image_url, false)}
               </div>
             </div>
           )}
@@ -301,5 +299,6 @@ export default function TestReviewPage() {
         </CardFooter>
       </Card>
     </div>
+    </>
   );
 }

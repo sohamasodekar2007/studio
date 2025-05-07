@@ -19,7 +19,7 @@ export type Exam = typeof exams[number];
 
 // Interface for User Data (Stored in users.json)
 export interface UserProfile {
-  id: string | number; // Use randomized 10-digit number or string
+  id: string; // User ID is now always a string (UUID)
   email: string | null;
   password?: string; // Store hashed password in production
   name: string | null;
@@ -87,17 +87,17 @@ export type TestStream = typeof testStreams[number];
 
 // Interface for individual question within a generated test JSON
 export interface TestQuestion {
-    question: string; // Text or image filename
-    image_url?: string | null; // URL if image question
-    options: string[]; // Array of 4 strings ["Option A: ...", "Option B: ...", ...]
-    answer: string; // Correct answer text ("Option A", "Option B", etc.) // This should represent the correct option key like "A", "B"
+    id?: string; // Original question ID from bank, if applicable
+    type?: QuestionType; // 'text' or 'image', from original question
+    question_text?: string | null;        // Textual content of the question
+    question_image_url?: string | null;   // Public URL to the question image
+    options: string[];                    // Array of 4 option strings
+    answer: string;                       // Correct option key e.g., "A", "B" (NOT "Option A")
     marks: number;
-    explanation?: string | null; // Text or image path/URL
-    // Fields from QuestionBankItem that might be useful for display or logic in test
-    id?: string; // Original question ID from bank
-    type?: QuestionType; // 'text' or 'image'
-    originalOptions?: { A: string; B: string; C: string; D: string }; // Store original options structure if needed
+    explanation_text?: string | null;     // Textual explanation
+    explanation_image_url?: string | null;// Public URL to the explanation image
 }
+
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
@@ -109,19 +109,18 @@ interface BaseGeneratedTest {
     type: PricingType; // FREE, PAID, FREE_PREMIUM
     audience: AudienceType;
     createdAt?: string; // ISO timestamp
-    // Common field for the test questions
-    questions?: TestQuestion[]; // Array of questions, structure might vary slightly or be standardized
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
-// Ensure 'testType' is added for discriminated union if needed at schema level
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise'; // Discriminator
     test_subject: [string]; // Array with exactly one subject
     lesson: string;
     examFilter: ExamOption | 'all';
-    // 'questions' field is inherited from BaseGeneratedTest and used here
-    physics?: undefined; // Ensure these are not present for chapterwise
+    questions: TestQuestion[]; // Chapterwise tests directly embed questions
+
+    // Ensure fields from FullLengthTestJson are not present or explicitly undefined
+    physics?: undefined;
     chemistry?: undefined;
     maths?: undefined;
     biology?: undefined;
@@ -138,17 +137,20 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
     weightage?: {
         physics: number;
         chemistry: number;
-        maths?: number;
-        biology?: number;
+        maths?: number; // Optional based on stream
+        biology?: number; // Optional based on stream
     };
     // Subject-specific question arrays for full length tests
     physics?: TestQuestion[];
     chemistry?: TestQuestion[];
     maths?: TestQuestion[];
     biology?: TestQuestion[];
-    // 'questions' from BaseGeneratedTest might be undefined or used differently for full length
-    lesson?: undefined; // Ensure this is not present for full_length
+
+    // Ensure fields from ChapterwiseTestJson are not present or explicitly undefined
+    questions?: undefined; // Full length tests have subject-specific arrays
+    lesson?: undefined;
 }
+
 
 // Discriminated union for generated tests
 export type GeneratedTest = ChapterwiseTestJson | FullLengthTestJson;
@@ -164,28 +166,28 @@ export enum QuestionStatus {
 }
 
 export interface UserAnswer {
-  questionId: string; // Or index if using array index
+  questionId: string; // Or index if using array index for the specific test
   selectedOption: string | null; // e.g., "A", "B", "C", "D", or null if unanswered
   status: QuestionStatus;
   timeTaken?: number; // Optional: time spent on this question
 }
 
 export interface TestSession {
-  testId: string;
+  testId: string; // Corresponds to test_code
   userId: string;
   startTime: number; // Timestamp
   endTime?: number; // Timestamp, set on submit
-  answers: UserAnswer[];
-  score?: number;
-  // Add other relevant session data
+  answers: UserAnswer[]; // Array of user's answers
+  // score?: number; // Score might be calculated on results page
 }
 
+// For displaying results summary
 export interface TestResultSummary {
     testCode: string;
     userId: string;
-    userName?: string;
+    userName?: string; // Optional
     testName: string;
-    attemptId: string; // Unique ID for this attempt
+    attemptId: string; // Unique ID for this attempt (e.g., testCode-userId-startTime)
     submittedAt: string; // ISO timestamp
     totalQuestions: number;
     attempted: number;
@@ -196,12 +198,16 @@ export interface TestResultSummary {
     percentage: number;
     timeTakenMinutes: number; // Total time taken for the test
     detailedAnswers: Array<{
-        questionIndex: number; // or questionId
-        questionTextOrImage: string; // A representation of the question
+        questionIndex: number;
+        // Question content representation (one of these will be populated)
+        questionText?: string | null;
+        questionImageUrl?: string | null;
         userAnswer: string | null; // e.g. "A"
         correctAnswer: string; // e.g. "C"
         isCorrect: boolean;
-        status: QuestionStatus; // From UserAnswer
-        explanation?: string | null;
+        status: QuestionStatus;
+        // Explanation content (one of these might be populated)
+        explanationText?: string | null;
+        explanationImageUrl?: string | null;
     }>;
 }

@@ -7,19 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+// Popover and Label are not directly used but might be part of a larger form setup, keeping them.
+// import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+// import { Label } from "@/components/ui/label";
+// import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Filter, Edit, Trash2, Eye, FileText, Image as ImageIcon, Loader2 } from "lucide-react"; // Renamed Image icon
+import { MoreHorizontal, Search, Edit, Trash2, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
-import { examOptions, classLevels } from '@/types'; // Import filter options
-import { Badge } from "@/components/ui/badge"; // Import Badge component
-// Import the actual server actions
+import { examOptions, classLevels } from '@/types';
+import { Badge } from "@/components/ui/badge";
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
-// Import the EditQuestionDialog
 import EditQuestionDialog from '@/components/admin/edit-question-dialog';
 import {
   AlertDialog,
@@ -32,6 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import Script from 'next/script'; // For MathJax
 
 
 export default function EditQuestionsPage() {
@@ -43,22 +43,26 @@ export default function EditQuestionsPage() {
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // --- State for Edit Dialog ---
   const [editingQuestion, setEditingQuestion] = useState<QuestionBankItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  // --- End Edit Dialog State ---
-
-  // --- Filter State ---
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<ClassLevel | 'all'>('all');
   const [selectedExam, setSelectedExam] = useState<ExamOption | 'all'>('all');
-  const [useBothFilters, setUseBothFilters] = useState(false);
-  // --- End Filter State ---
+  // const [useBothFilters, setUseBothFilters] = useState(false); // Kept for potential future use
+
+  // MathJax typesetting
+  const typesetMathJax = useCallback(() => {
+    if (typeof window !== 'undefined' && (window as any).MathJax) {
+        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    }
+  }, []);
+
+  useEffect(() => {
+      typesetMathJax();
+  }, [questions, typesetMathJax]); // Rerun when questions data changes
 
 
-  // --- Fetch Initial Data (Subjects) ---
    const fetchSubjects = useCallback(async () => {
         setIsLoadingSubjects(true);
         try {
@@ -66,7 +70,7 @@ export default function EditQuestionsPage() {
             setSubjects(fetchedSubjects);
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not load subjects." });
-            setSubjects([]); // Ensure empty on error
+            setSubjects([]);
         } finally {
             setIsLoadingSubjects(false);
         }
@@ -76,24 +80,23 @@ export default function EditQuestionsPage() {
         fetchSubjects();
     }, [fetchSubjects]);
 
-  // --- Fetch Lessons when Subject Changes ---
    const fetchLessons = useCallback(async () => {
        if (selectedSubject) {
          setIsLoadingLessons(true);
-         setLessons([]); // Clear previous lessons
-         setQuestions([]); // Clear questions too
+         setLessons([]);
+         setQuestions([]);
          try {
            const fetchedLessons = await getLessonsForSubject(selectedSubject);
            setLessons(fetchedLessons);
-           setSelectedLesson(''); // Reset lesson selection when subject changes
+           setSelectedLesson('');
          } catch (err) {
            toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` });
-           setLessons([]); // Ensure empty on error
+           setLessons([]);
          } finally {
            setIsLoadingLessons(false);
          }
        } else {
-         setLessons([]); // Clear lessons if no subject selected
+         setLessons([]);
          setSelectedLesson('');
          setQuestions([]);
        }
@@ -101,57 +104,52 @@ export default function EditQuestionsPage() {
 
    useEffect(() => {
        fetchLessons();
-   }, [fetchLessons]); // Depend on the memoized fetchLessons function
+   }, [fetchLessons]);
 
-  // --- Fetch Questions when Subject AND Lesson Change (and other filters) ---
    const fetchQuestions = useCallback(async () => {
       if (selectedSubject && selectedLesson) {
            setIsLoadingQuestions(true);
-           setQuestions([]); // Clear previous questions
-
+           setQuestions([]);
            const filters = {
              subject: selectedSubject,
              lesson: selectedLesson,
              class: selectedClass !== 'all' ? selectedClass : undefined,
              examType: selectedExam !== 'all' ? selectedExam : undefined,
            };
-
-           console.log("Fetching questions with filters:", filters);
            try {
                const fetchedQuestions = await getQuestionsForLesson(filters);
                setQuestions(fetchedQuestions);
            } catch (err) {
                 console.error("Error loading questions:", err);
                 toast({ variant: "destructive", title: "Error", description: "Could not load questions." });
-                setQuestions([]); // Ensure empty on error
+                setQuestions([]);
            } finally {
                 setIsLoadingQuestions(false);
            }
        } else {
-           setQuestions([]); // Clear questions if subject or lesson is not selected
+           setQuestions([]);
        }
-   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, toast]); // Removed fetchQuestions from deps
+   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, toast]);
 
    useEffect(() => {
-       // Trigger fetch only when the necessary filters are set
        if (selectedSubject && selectedLesson) {
            fetchQuestions();
        } else {
-           setQuestions([]); // Clear if filters incomplete
-           setIsLoadingQuestions(false); // Ensure loading is off
+           setQuestions([]);
+           setIsLoadingQuestions(false);
        }
-   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, useBothFilters, fetchQuestions]); // Include fetchQuestions here
+   }, [selectedSubject, selectedLesson, selectedClass, selectedExam, fetchQuestions]);
 
-    // Function to update the questions list after editing
     const handleQuestionUpdate = useCallback((updatedQuestion: QuestionBankItem) => {
         setQuestions(prevQuestions =>
             prevQuestions.map(q => (q.id === updatedQuestion.id ? updatedQuestion : q))
         );
-        setIsEditDialogOpen(false); // Close dialog after update
-    }, []);
+        setIsEditDialogOpen(false);
+        setEditingQuestion(null);
+        typesetMathJax(); // Retypeset after update
+    }, [typesetMathJax]);
 
 
-  // --- Filtered Questions for Display (using search term) ---
   const displayQuestions = useMemo(() => {
     return questions.filter(q =>
       (q.question.text?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -160,22 +158,17 @@ export default function EditQuestionsPage() {
     );
   }, [questions, searchTerm]);
 
-   // --- Action Handlers ---
    const handleEdit = (question: QuestionBankItem) => {
         setEditingQuestion(question);
         setIsEditDialogOpen(true);
    };
 
    const handleDelete = async (id: string, subject: string, lesson: string) => {
-     console.log("Delete question:", id, subject, lesson);
-     // Confirmation is now handled by AlertDialogTrigger
-
      try {
          const result = await deleteQuestion({ questionId: id, subject, lesson });
          if (result.success) {
            toast({ title: "Question Deleted", description: `${id} has been removed.` });
-            // Re-fetch questions after deletion by calling the memoized fetch function
-           await fetchQuestions();
+           await fetchQuestions(); // Re-fetch questions
          } else {
            throw new Error(result.message || 'Failed to delete question.');
          }
@@ -185,42 +178,59 @@ export default function EditQuestionsPage() {
    };
 
     const renderQuestionPreview = (q: QuestionBankItem) => {
-        if (q.type === 'image') {
-             // IMPORTANT: Adjust this path based on how images are served publicly
-            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}`;
-            return <span className="flex items-center gap-1 text-blue-600"><ImageIcon className="h-4 w-4"/> [Image: {q.question.image}]</span>;
+        if (q.type === 'image' && q.question.image) {
+            // Images are in public/question_bank_images/{subject}/{lesson}/images/{filename}
+            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/images/${q.question.image}`;
+            return (
+                <span className="flex items-center gap-1 text-blue-600 hover:underline" title={`View Image: ${q.question.image}`}>
+                    <ImageIcon className="h-4 w-4"/>
+                    <a href={imagePath} target="_blank" rel="noopener noreferrer">
+                        [Image: {q.question.image.substring(0, 20)}...]
+                    </a>
+                </span>
+            );
         }
         const text = q.question.text || '[No Text]';
-        // Basic MathJax preview (relies on MathJax being loaded globally)
-        return <span className="line-clamp-1" title={text} dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') || '[No Text]' }}></span>;
+        // For MathJax, ensure the text is directly in the HTML or handled by a MathJax component
+        return (
+            <span
+                className="line-clamp-1"
+                title={text}
+                dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+            />
+        );
     }
 
 
   return (
+    <>
+    {/* MathJax Script */}
+     <Script
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+          console.log('MathJax loaded for edit questions page');
+          typesetMathJax(); // Initial typeset
+        }}
+      />
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Edit Questions</h1>
           <p className="text-muted-foreground">Filter, view, edit, and manage questions in the bank.</p>
         </div>
-        {/* Maybe add bulk actions button here later */}
       </div>
 
-      {/* Filter Panel */}
        <Card>
          <CardHeader>
              <CardTitle>Filter Questions</CardTitle>
          </CardHeader>
          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {/* Subject Dropdown */}
             <div className="space-y-1.5">
              <Label htmlFor="subject-filter">Subject *</Label>
              <Select
                value={selectedSubject}
-               onValueChange={(value) => {
-                 setSelectedSubject(value);
-                 // Lessons and questions will auto-update via useEffect
-               }}
+               onValueChange={setSelectedSubject}
                disabled={isLoadingSubjects}
              >
                <SelectTrigger id="subject-filter">
@@ -234,15 +244,11 @@ export default function EditQuestionsPage() {
              </Select>
             </div>
 
-            {/* Lesson Dropdown */}
             <div className="space-y-1.5">
                 <Label htmlFor="lesson-filter">Lesson *</Label>
                 <Select
                     value={selectedLesson}
-                    onValueChange={(value) => {
-                        setSelectedLesson(value);
-                        // Questions will auto-update via useEffect
-                    }}
+                    onValueChange={setSelectedLesson}
                     disabled={isLoadingLessons || !selectedSubject || subjects.length === 0}
                 >
                     <SelectTrigger id="lesson-filter">
@@ -256,7 +262,6 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
-            {/* Class Filter */}
             <div className="space-y-1.5">
                 <Label htmlFor="class-filter">Class</Label>
                 <Select
@@ -274,7 +279,6 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
-              {/* Exam Filter */}
              <div className="space-y-1.5">
                 <Label htmlFor="exam-filter">Exam Type</Label>
                 <Select
@@ -291,14 +295,9 @@ export default function EditQuestionsPage() {
                     </SelectContent>
                 </Select>
              </div>
-
-             {/* 'Use Both Filters' Toggle - kept for potential future implementation */}
-             {/* ... */}
-
          </CardContent>
        </Card>
 
-      {/* Question Table */}
        <Card>
          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <div>
@@ -316,7 +315,7 @@ export default function EditQuestionsPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
-                  disabled={questions.length === 0 && !isLoadingQuestions && (!selectedSubject || !selectedLesson)} // Disable if no lesson selected or no questions
+                  disabled={questions.length === 0 && !isLoadingQuestions && (!selectedSubject || !selectedLesson)}
                 />
             </div>
          </CardHeader>
@@ -336,7 +335,7 @@ export default function EditQuestionsPage() {
                 </TableHeader>
                 <TableBody>
                     {isLoadingQuestions ? (
-                        Array.from({ length: 5 }).map((_, index) => ( // Increased skeleton rows
+                        Array.from({ length: 5 }).map((_, index) => (
                         <TableRow key={`skel-${index}`}>
                             <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-full" /></TableCell>
@@ -417,7 +416,6 @@ export default function EditQuestionsPage() {
                      )}
                 </TableBody>
             </Table>
-             {/* TODO: Add Pagination */}
           </CardContent>
            <CardFooter>
               <div className="text-xs text-muted-foreground">
@@ -426,19 +424,18 @@ export default function EditQuestionsPage() {
            </CardFooter>
        </Card>
 
-        {/* Edit Question Dialog */}
         {editingQuestion && (
             <EditQuestionDialog
                 question={editingQuestion}
                 isOpen={isEditDialogOpen}
                 onClose={() => {
                     setIsEditDialogOpen(false);
-                    setEditingQuestion(null); // Clear the question being edited
+                    setEditingQuestion(null);
                 }}
                 onQuestionUpdate={handleQuestionUpdate}
             />
         )}
-
     </div>
+    </>
   );
 }

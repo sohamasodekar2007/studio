@@ -1,3 +1,4 @@
+// src/components/admin/edit-question-dialog.tsx
 'use client';
 
 import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
@@ -7,32 +8,37 @@ import * as z from 'zod';
 import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input"; // For potential future use
+import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Image as ImageIcon, FileText, Upload, ClipboardPaste, X, Info } from "lucide-react";
+// import { Checkbox } from "@/components/ui/checkbox"; // Not used directly in this form
+import { Loader2, Upload, ClipboardPaste, X } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem } from '@/types';
-import { updateQuestionDetails } from '@/actions/question-bank-actions'; // Server action for updating
+import { updateQuestionDetails } from '@/actions/question-bank-actions';
+import Script from 'next/script'; // For MathJax
 
-// --- Zod Schema Definition for Editing ---
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 const editQuestionSchema = z.object({
-  // Readonly fields (passed via props, not part of form state for editing core fields)
-  // questionId: z.string(),
-  // subject: z.string(),
-  // lesson: z.string(),
-
-  // Editable fields
   correctAnswer: z.enum(["A", "B", "C", "D"], { required_error: "Correct answer is required" }),
   explanationText: z.string().optional(),
-  explanationImage: z.any().optional(), // Use 'any' for File object or existing filename string
-  removeExplanationImage: z.boolean().optional(), // Hidden field to signal image removal
+  explanationImage: z.any().optional(),
+  removeExplanationImage: z.boolean().optional(),
+}).refine(data => {
+    // Validate explanationImage file if present
+    if (data.explanationImage && data.explanationImage instanceof File) {
+        if (data.explanationImage.size > MAX_FILE_SIZE) return false;
+        if (!ACCEPTED_IMAGE_TYPES.includes(data.explanationImage.type)) return false;
+    }
+    return true;
+}, {
+    message: `Explanation image must be a valid image file (JPG, PNG, WEBP) and less than ${MAX_FILE_SIZE / 1024 / 1024}MB.`,
+    path: ["explanationImage"],
 });
+
 
 type EditQuestionFormValues = z.infer<typeof editQuestionSchema>;
 
@@ -40,7 +46,7 @@ interface EditQuestionDialogProps {
   question: QuestionBankItem;
   isOpen: boolean;
   onClose: () => void;
-  onQuestionUpdate: (updatedQuestion: QuestionBankItem) => void; // Callback to update parent list
+  onQuestionUpdate: (updatedQuestion: QuestionBankItem) => void;
 }
 
 export default function EditQuestionDialog({ question, isOpen, onClose, onQuestionUpdate }: EditQuestionDialogProps) {
@@ -54,33 +60,41 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
     defaultValues: {
       correctAnswer: question.correct,
       explanationText: question.explanation.text || '',
-      explanationImage: question.explanation.image || null, // Store initial filename if exists
+      explanationImage: question.explanation.image || null,
       removeExplanationImage: false,
     },
   });
 
-   // Effect to set initial image preview if an image exists
+  // MathJax typesetting
+  const typesetMathJax = useCallback(() => {
+    if (typeof window !== 'undefined' && (window as any).MathJax) {
+        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error in dialog:", err));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) { // Only typeset when dialog is open and content is visible
+        typesetMathJax();
+    }
+  }, [question, isOpen, typesetMathJax]);
+
    useEffect(() => {
        if (question.explanation.image && typeof question.explanation.image === 'string') {
-           // Construct the potential path to the image based on convention
-           // IMPORTANT: This path might need adjustment based on how images are served publicly
-           const imagePath = `/question_bank_images/${question.subject}/${question.lesson}/${question.explanation.image}`;
+           // Images are in public/question_bank_images/{subject}/{lesson}/images/{filename}
+           const imagePath = `/question_bank_images/${question.subject}/${question.lesson}/images/${question.explanation.image}`;
            setExplanationImagePreview(imagePath);
        } else {
            setExplanationImagePreview(null);
        }
-       // Reset form when question changes (important if dialog is reused)
         form.reset({
             correctAnswer: question.correct,
             explanationText: question.explanation.text || '',
             explanationImage: question.explanation.image || null,
             removeExplanationImage: false,
         });
-
    }, [question, form]);
 
 
-   // --- Image Handling Callbacks (Similar to Add Question) ---
    const processImageFile = useCallback((
     file: File | null,
     setPreview: (url: string | null) => void
@@ -96,16 +110,13 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
         setPreview(null);
         return;
       }
-
       form.clearErrors('explanationImage');
-      form.setValue('explanationImage', file); // Set File object
-      form.setValue('removeExplanationImage', false); // Ensure remove flag is off if new image added
+      form.setValue('explanationImage', file);
+      form.setValue('removeExplanationImage', false);
       const reader = new FileReader();
       reader.onloadend = () => setPreview(reader.result as string);
       reader.readAsDataURL(file);
     } else {
-      // If file is nullified (e.g., by removeImage), keep the field null
-      // form.setValue('explanationImage', null); // This might clear the existing filename unintentionally
       setPreview(null);
     }
   }, [form]);
@@ -120,15 +131,10 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
   }, [processImageFile]);
 
    const removeImage = useCallback(() => {
-        // Clear preview
         setExplanationImagePreview(null);
-        // Reset file input
         if (explanationFileInputRef.current) explanationFileInputRef.current.value = "";
-        // Set the File object to null in the form state
         form.setValue('explanationImage', null);
-        // Explicitly set the flag to remove the existing image on the server
         form.setValue('removeExplanationImage', true);
-        // Clear any validation errors
         form.clearErrors('explanationImage');
    }, [form]);
 
@@ -169,8 +175,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
         }
      }
    }, [processImageFile, toast]);
-   // --- End Image Handling ---
-
 
   const onSubmit = async (data: EditQuestionFormValues) => {
     setIsLoading(true);
@@ -200,8 +204,8 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
             title: 'Question Updated',
             description: `Details for ${question.id} have been saved.`,
         });
-        onQuestionUpdate(result.question); // Pass updated question back to parent
-        onClose(); // Close the dialog
+        onQuestionUpdate(result.question);
+        onClose();
 
     } catch (error: any) {
       console.error('Failed to update question:', error);
@@ -217,12 +221,12 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
 
    const renderQuestionPreview = (q: QuestionBankItem) => {
         if (q.type === 'image' && q.question.image) {
-            // IMPORTANT: Adjust this path based on how images are served
-            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/${q.question.image}`;
+            // Path for publicly served images
+            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/images/${q.question.image}`;
              return (
                 <div className="space-y-2">
                     <p className="text-sm font-medium">Question Image:</p>
-                    <Image src={imagePath} alt="Question Image Preview" width={300} height={200} className="rounded border max-w-full h-auto" />
+                    <Image src={imagePath} alt="Question Image Preview" width={300} height={200} className="rounded border max-w-full h-auto object-contain" data-ai-hint="question diagram"/>
                      <p className="text-xs text-muted-foreground">Options A, B, C, D are assumed to be in the image.</p>
                 </div>
             );
@@ -231,16 +235,15 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
             return (
                  <div className="space-y-2">
                     <p className="text-sm font-medium">Question Text:</p>
-                    <div className="prose prose-sm dark:prose-invert max-w-none border p-3 rounded-md text-foreground">
-                        {/* Render MathJax content dangerously */}
+                    <div className="prose prose-sm dark:prose-invert max-w-none border p-3 rounded-md text-foreground bg-background">
                         <p dangerouslySetInnerHTML={{ __html: q.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></p>
                     </div>
                     <p className="text-sm font-medium mt-2">Options:</p>
                      <ul className="list-disc list-inside pl-4 text-sm">
-                        <li>A: {q.options.A}</li>
-                        <li>B: {q.options.B}</li>
-                        <li>C: {q.options.C}</li>
-                        <li>D: {q.options.D}</li>
+                        <li>A: <span dangerouslySetInnerHTML={{ __html: (q.options.A || "").replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></span></li>
+                        <li>B: <span dangerouslySetInnerHTML={{ __html: (q.options.B || "").replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></span></li>
+                        <li>C: <span dangerouslySetInnerHTML={{ __html: (q.options.C || "").replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></span></li>
+                        <li>D: <span dangerouslySetInnerHTML={{ __html: (q.options.D || "").replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></span></li>
                      </ul>
                  </div>
             );
@@ -250,8 +253,18 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl"> {/* Wider dialog */}
+    <>
+    {/* MathJax Script */}
+    <Script
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload" // Load when dialog might become visible or after main content
+        onLoad={() => {
+            console.log('MathJax loaded for edit dialog.');
+            if (isOpen) typesetMathJax();
+        }}
+      />
+    <Dialog open={isOpen} onOpenChange={(open) => {if (!open) onClose(); else typesetMathJax();}}>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit Question: {question.id}</DialogTitle>
           <DialogDescription>
@@ -259,16 +272,13 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
           </DialogDescription>
         </DialogHeader>
 
-         {/* Display Question Preview */}
          <div className="my-4 p-4 border rounded-md bg-muted/30 max-h-60 overflow-y-auto">
              <h4 className="text-base font-semibold mb-2">Question Preview</h4>
             {renderQuestionPreview(question)}
          </div>
 
-
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Correct Answer */}
              <FormField
                 control={form.control}
                 name="correctAnswer"
@@ -290,7 +300,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 )}
             />
 
-            {/* Explanation Text */}
              <FormField
                 control={form.control}
                 name="explanationText"
@@ -305,11 +314,10 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 )}
             />
 
-            {/* Explanation Image */}
             <FormField
                 control={form.control}
-                name="explanationImage" // Name matches schema
-                render={({ field }) => ( // field contains value, onChange etc.
+                name="explanationImage"
+                render={({ field }) => (
                 <FormItem>
                     <FormLabel>Explanation Image (Optional)</FormLabel>
                     <FormControl>
@@ -343,13 +351,13 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                             </Button>
                              {explanationImagePreview && (
                                 <div className="relative h-24 w-auto border rounded-md overflow-hidden group">
-                                    <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} />
+                                    <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} data-ai-hint="explanation image"/>
                                     <Button
                                         type="button"
                                         variant="destructive"
                                         size="icon"
                                         className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
-                                        onClick={removeImage} // Use removeImage callback
+                                        onClick={removeImage}
                                         disabled={isLoading}
                                         title="Remove Image"
                                     >
@@ -367,14 +375,11 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 </FormItem>
                 )}
             />
-             {/* Hidden field for remove flag */}
              <FormField
                 control={form.control}
                 name="removeExplanationImage"
                 render={({ field }) => <input type="hidden" {...field} value={field.value?.toString()} />}
              />
-
-
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
                 <Button type="submit" disabled={isLoading}>
@@ -386,5 +391,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
         </Form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

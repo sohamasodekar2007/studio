@@ -17,16 +17,15 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    // Allow serving local images for question previews if needed
-    // domains: ['localhost'], // Only if serving local images directly via API
+    // Local images from public/question_bank_images will be served directly,
+    // so no 'domains' configuration needed for them if using relative paths in next/image src.
   },
-   // Add static file serving configuration if needed for question bank images
-   // This might not be necessary if images are directly linked via public path
+   // Removed rewrite as images are now in public folder
    // async rewrites() {
    //   return [
    //     {
-   //       source: '/question_bank_images/:subject/:lesson/:image',
-   //       destination: '/data/question_bank/:subject/:lesson/images/:image', // Adjust if needed
+   //       source: '/question_bank_images/:subject/:lesson/images/:image',
+   //       destination: '/data/question_bank/:subject/:lesson/images/:image', // This was incorrect path for public serving
    //     },
    //   ]
    // },

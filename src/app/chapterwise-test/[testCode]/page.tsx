@@ -1,27 +1,26 @@
-
+// src/app/chapterwise-test/[testCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
-import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Import enum directly for usage
+import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, Sparkles, XSquare, Send, Clock } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, Clock } from 'lucide-react'; // Removed Sparkles
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
-import { Progress } from '@/components/ui/progress';
+// import { Progress } from '@/components/ui/progress'; // Not used currently
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
-// Placeholder for server action to save test results
-// import { saveChapterwiseTestAttempt } from '@/actions/test-submission-actions';
+// import Link from 'next/link'; // Not used currently
+import Script from 'next/script'; // For MathJax
 
 const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
   [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200',
@@ -46,17 +45,20 @@ export default function ChapterwiseTestPage() {
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<number, string | null>>({}); // { questionIndex: selectedOptionKey }
+  const [userAnswers, setUserAnswers] = useState<Record<number, string | null>>({});
   const [questionStatuses, setQuestionStatuses] = useState<Record<number, QuestionStatus>>({});
-  const [timeLeft, setTimeLeft] = useState(0); // in seconds
+  const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // MathJax typesetting
-  useEffect(() => {
+  const typesetMathJax = useCallback(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax) {
-      (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
     }
-  }, [currentQuestionIndex, testData]); // Removed generatedAnswer
+  }, []);
+
+  useEffect(() => {
+      typesetMathJax();
+  }, [currentQuestionIndex, testData, typesetMathJax]);
 
 
   const loadTest = useCallback(async () => {
@@ -72,16 +74,16 @@ export default function ChapterwiseTestPage() {
         setError("Test not found, invalid, or has no questions.");
         setTestData(null);
       } else {
-        setTestData(data as GeneratedTest); // Type assertion
+        setTestData(data);
         setTimeLeft(data.duration * 60);
         const initialStatuses: Record<number, QuestionStatus> = {};
         data.questions.forEach((_, index) => {
           initialStatuses[index] = QuestionStatusEnum.NotVisited;
         });
-        setQuestionStatuses(initialStatuses);
         if (data.questions.length > 0) {
-             setQuestionStatuses(prev => ({...prev, 0: QuestionStatusEnum.Unanswered}));
+             initialStatuses[0] = QuestionStatusEnum.Unanswered; // Mark first question as unanswered
         }
+        setQuestionStatuses(initialStatuses);
       }
     } catch (err: any) {
       setError(err.message || "Failed to load test data.");
@@ -97,7 +99,7 @@ export default function ChapterwiseTestPage() {
       router.push(`/auth/login?redirect=/chapterwise-test/${testCode}${userId ? `?userId=${userId}` : ''}`);
       return;
     }
-    if (!authLoading && user && userId && user.id.toString() !== userId) {
+    if (!authLoading && user && userId && user.id !== userId) { // Ensure user ID is string for comparison
         toast({ variant: 'destructive', title: 'Access Denied', description: 'You are trying to access a test for another user.'});
         router.push('/');
         return;
@@ -112,14 +114,13 @@ export default function ChapterwiseTestPage() {
     }
   }, [testCode, userId, authLoading, user, router, toast, loadTest]);
 
-  // Timer effect
   useEffect(() => {
-    if (timeLeft <= 0 || showInstructions || !testData) return;
+    if (timeLeft <= 0 || showInstructions || !testData || isSubmitting) return; // Added isSubmitting check
     const timerId = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-          handleSubmitTest(); 
+          if (!isSubmitting) handleSubmitTest(); // Prevent double submission
           return 0;
         }
         return prevTime - 1;
@@ -127,7 +128,7 @@ export default function ChapterwiseTestPage() {
     }, 1000);
     return () => clearInterval(timerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, showInstructions, testData]); 
+  }, [timeLeft, showInstructions, testData, isSubmitting]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -148,7 +149,7 @@ export default function ChapterwiseTestPage() {
   };
 
   const navigateQuestion = (index: number) => {
-    if (index >= 0 && testData && index < testData.questions.length) {
+    if (index >= 0 && testData && testData.questions && index < testData.questions.length) {
       if (questionStatuses[currentQuestionIndex] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
            setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
       }
@@ -168,7 +169,7 @@ export default function ChapterwiseTestPage() {
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
     }
-    else { 
+    else {
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
@@ -184,12 +185,12 @@ export default function ChapterwiseTestPage() {
   };
 
   const handleSubmitTest = async () => {
-    if (!testData || !user || !userId) return;
+    if (!testData || !user || !userId || isSubmitting) return; // Prevent multiple submissions
     setIsSubmitting(true);
 
     const attemptId = `${testCode}-${userId}-${Date.now()}`;
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
-      questionId: q.id || `q-${index}`, 
+      questionId: q.id || `q-${index}`,
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
@@ -197,12 +198,10 @@ export default function ChapterwiseTestPage() {
     const sessionData: TestSession = {
       testId: testCode,
       userId: userId,
-      startTime: Date.now() - ((testData.duration * 60) - timeLeft) * 1000, 
+      startTime: Date.now() - ((testData.duration * 60) - timeLeft) * 1000,
       endTime: Date.now(),
       answers: submittedAnswers,
     };
-
-    console.log("Submitting test session:", sessionData);
 
     try {
       localStorage.setItem(`testResult-${attemptId}`, JSON.stringify(sessionData));
@@ -210,7 +209,7 @@ export default function ChapterwiseTestPage() {
       router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not submit your test." });
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Allow retry if submission fails
     }
   };
 
@@ -235,7 +234,7 @@ export default function ChapterwiseTestPage() {
     );
   }
 
-  if (!testData || !currentQuestion) {
+  if (!testData || !testData.questions || testData.questions.length === 0 || !currentQuestion) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
@@ -252,6 +251,15 @@ export default function ChapterwiseTestPage() {
   const optionKeys = ["A", "B", "C", "D"];
 
   return (
+    <>
+    <Script
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+          console.log('MathJax loaded for test page');
+          typesetMathJax();
+        }}
+      />
     <div className="flex flex-col h-screen max-h-screen bg-muted overflow-hidden">
       <header className="flex items-center justify-between p-3 border-b bg-card shadow-sm">
         <h1 className="text-lg font-semibold truncate flex-1 mr-4">{testData.name}</h1>
@@ -278,41 +286,27 @@ export default function ChapterwiseTestPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base">
-              {(() => {
-                if (currentQuestion.type === 'image') {
-                  if (currentQuestion.image_url) {
-                    return (
-                      <Image 
-                        src={currentQuestion.image_url} 
-                        alt={`Question ${currentQuestionIndex + 1}`} 
-                        width={600}
-                        height={400}
-                        className="rounded-md border max-w-full h-auto mx-auto" 
-                        data-ai-hint="question diagram"
-                        onError={(e) => console.error('Image load error for:', currentQuestion.image_url, e.currentTarget.currentSrc)}
-                      />
-                    );
-                  } else {
-                    return <p className="text-destructive font-semibold">Error: Image question is missing the image URL.</p>;
-                  }
-                } else if (currentQuestion.type === 'text') {
-                  if (currentQuestion.question) { 
-                    return (
-                      <div 
-                        dangerouslySetInnerHTML={{ 
-                          __html: currentQuestion.question
-                                    .replace(/\$(.*?)\$/g, '\\($1\\)')
-                                    .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') 
-                        }} 
-                      />
-                    );
-                  } else {
-                    return <p className="text-muted-foreground">Text for this question is not available.</p>;
-                  }
-                } else {
-                  return <p className="text-muted-foreground">Question content not available or type is unrecognized (Type: {currentQuestion.type || 'N/A'}).</p>;
-                }
-              })()}
+             {/* Updated rendering logic for question content */}
+              {currentQuestion.type === 'image' && currentQuestion.question_image_url ? (
+                  <Image
+                    src={currentQuestion.question_image_url}
+                    alt={`Question ${currentQuestionIndex + 1}`}
+                    width={600}
+                    height={400}
+                    className="rounded-md border max-w-full h-auto mx-auto"
+                    data-ai-hint="question diagram"
+                  />
+              ) : currentQuestion.question_text ? (
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: currentQuestion.question_text
+                                .replace(/\$(.*?)\$/g, '\\($1\\)')
+                                .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]')
+                    }}
+                  />
+              ) : (
+                <p className="text-muted-foreground">Question content not available.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -445,8 +439,6 @@ export default function ChapterwiseTestPage() {
         </aside>
       </div>
     </div>
+    </>
   );
 }
-
-
-    
