@@ -1,3 +1,4 @@
+
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth"; // Import Auth type explicitly
@@ -27,20 +28,23 @@ const requiredEnvVars = [
     'NEXT_PUBLIC_FIREBASE_APP_ID',
 ];
 
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 let firebaseInitializationError: string | null = null;
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-if (missingEnvVars.length > 0) {
-    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing: ${missingEnvVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
-    console.error("**********************************************************************************");
-    console.error(firebaseInitializationError);
-    console.error("**********************************************************************************");
-} else if (!firebaseConfig.apiKey || !firebaseConfig.apiKey.startsWith("AIza")) {
-    // Basic check even if env vars are present
-    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY in your .env file appears invalid. It is either missing, empty, or doesn't start with 'AIza'.`;
-    console.error("**********************************************************************************");
-    console.error(firebaseInitializationError);
-    console.error("**********************************************************************************");
+// Check for missing environment variables only if running client-side or if env vars are accessible server-side during build
+if (typeof window !== 'undefined' || process.env.NODE_ENV === 'development') { // Added check for environment
+    if (missingEnvVars.length > 0) {
+        firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing: ${missingEnvVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
+        console.error("**********************************************************************************");
+        console.error(firebaseInitializationError);
+        console.error("**********************************************************************************");
+    } else if (!firebaseConfig.apiKey || !firebaseConfig.apiKey.startsWith("AIza")) {
+        // Basic check even if env vars are present
+        firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY in your .env file appears invalid (missing, empty, or doesn't start with 'AIza').`;
+        console.error("**********************************************************************************");
+        console.error(firebaseInitializationError);
+        console.error("**********************************************************************************");
+    }
 }
 
 // --- Initialization ---
@@ -51,7 +55,7 @@ let authInstance: Auth | null = null;
 if (!firebaseInitializationError) {
     try {
         if (!getApps().length) {
-            console.log("Initializing Firebase App with config:", firebaseConfig); // Log the config being used
+            console.log("Initializing Firebase App..."); // Simpler log
             app = initializeApp(firebaseConfig);
             console.log("Firebase App Initialized successfully.");
         } else {
@@ -63,23 +67,22 @@ if (!firebaseInitializationError) {
         console.log("Firebase Auth Initialized successfully.");
     } catch (error: any) {
         // Catch errors during initializeApp or getAuth, often related to config or console setup
-        // Provide specific guidance for common errors like auth/configuration-not-found
         let specificHint = "";
         if (error.code === 'auth/configuration-not-found') {
-             specificHint = " This often means Authentication isn't enabled in your Firebase project console, or the necessary sign-in providers (like Email/Password or Google) are disabled. Please check the 'Authentication > Sign-in method' tab in your Firebase console.";
+             specificHint = " This usually means Authentication isn't enabled in your Firebase project console, or the required sign-in providers (Email/Password, Google) are disabled. Check the 'Authentication > Sign-in method' tab in your Firebase console.";
         } else if (error.code === 'auth/invalid-api-key') {
-             specificHint = " The API key in your .env file (NEXT_PUBLIC_FIREBASE_API_KEY) seems incorrect. Please verify it matches the one in your Firebase project settings.";
+             specificHint = " The API key in your .env file (NEXT_PUBLIC_FIREBASE_API_KEY) seems incorrect. Please verify it against your Firebase project settings.";
         }
 
-        firebaseInitializationError = `FATAL ERROR DURING FIREBASE INITIALIZATION: ${error.message} (Code: ${error.code || 'N/A'}).${specificHint} Please double-check your Firebase Console setup and the values in your .env file.`;
+        firebaseInitializationError = `FATAL ERROR DURING FIREBASE INITIALIZATION: ${error.message} (Code: ${error.code || 'N/A'}).${specificHint} Check your Firebase Console setup and the values in your .env file. Restart the server after fixing the .env file.`;
         console.error("**********************************************************************************");
         console.error(firebaseInitializationError, error);
         console.error("**********************************************************************************");
-        app = null;
-        authInstance = null;
+        app = null; // Ensure app is null on error
+        authInstance = null; // Ensure auth is null on error
     }
 } else {
-     console.warn("Firebase initialization skipped due to configuration errors found in environment variables.");
+     console.warn("Firebase initialization skipped due to configuration errors. Please check your .env file and restart the server.");
 }
 
 // Export the potentially null auth instance. Consumers MUST check for null.
