@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import { saveUserToJson, readUsers, getUserById } from '@/actions/user-actions';
-import { findUserByEmail } from '@/actions/auth-actions'; // Import findUserByEmail from auth-actions
+import { findUserByEmail } from '@/actions/auth-actions'; // Corrected import
 import { sendWelcomeEmail, generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -68,12 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ContextUser>(null);
   const [loading, setLoading] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(localStorageError);
+  const [isMounted, setIsMounted] = useState(false); // Track if component has mounted
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
+
+  // Set mounted state
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Check local storage for logged-in user on initial load (client-side only)
   useEffect(() => {
+    if (!isMounted) return; // Only run after mount
+
     setLoading(true);
     console.log("AuthProvider: Checking local storage for user...");
     try {
@@ -83,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const storedUser = JSON.parse(storedUserJson);
             // Basic validation of stored data
             if (storedUser && storedUser.id && storedUser.email) {
-                 setUser(storedUser);
+                 setUser(mapUserProfileToContextUser(storedUser)); // Use mapping function
             } else {
                  console.warn("AuthProvider: Invalid user data in local storage, clearing.");
                  localStorage.removeItem('loggedInUser');
@@ -101,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
     console.log("AuthProvider: Initial load complete. Loading state:", false);
-  }, []);
+  }, [isMounted]); // Depend on isMounted
 
 
   const mapUserProfileToContextUser = (userProfile: UserProfile | null): ContextUser => {
@@ -118,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshUser = useCallback(async () => {
+    if (!isMounted) return; // Ensure component is mounted
     setLoading(true);
     const currentUserJson = localStorage.getItem('loggedInUser');
     if (currentUserJson) {
@@ -127,8 +137,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const updatedProfile = await getUserById(currentUser.id); // Fetch latest profile
                 const contextUser = mapUserProfileToContextUser(updatedProfile);
                 setUser(contextUser);
-                if (contextUser) localStorage.setItem('loggedInUser', JSON.stringify(contextUser));
-                else localStorage.removeItem('loggedInUser'); // User might have been deleted
+                if (contextUser) {
+                    // Need the full profile to store (including password hash/plain for local)
+                    const fullUpdatedProfile = await findUserByEmail(contextUser.email || ''); // Fetch full profile again
+                     if (fullUpdatedProfile) {
+                         const { password, ...userToStore } = fullUpdatedProfile; // Exclude password before storing
+                         localStorage.setItem('loggedInUser', JSON.stringify(userToStore));
+                         // Update simulated password if needed (INSECURE)
+                         if (fullUpdatedProfile.password) {
+                            localStorage.setItem('simulatedPassword', fullUpdatedProfile.password);
+                         }
+                     } else {
+                         localStorage.removeItem('loggedInUser'); // Remove if full profile not found
+                     }
+                } else {
+                     localStorage.removeItem('loggedInUser'); // User might have been deleted
+                }
              } catch (e) {
                  console.error("Refresh User: Error fetching updated profile", e);
                  // Keep potentially stale user data or log out? For now, keep stale.
@@ -142,10 +166,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          setUser(null);
     }
     setLoading(false);
-  }, [toast]);
+  }, [toast, isMounted]);
 
 
   const login = useCallback(async (email: string, password?: string) => {
+    if (!isMounted) return;
     if (!password) {
         toast({ variant: 'destructive', title: 'Login Failed', description: 'Password is required.' });
         throw new Error('Password is required.');
@@ -187,9 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [router, toast]);
+  }, [router, toast, isMounted]);
 
   const logout = useCallback(async () => {
+     if (!isMounted) return;
     setLoading(true);
     setUser(null);
     localStorage.removeItem('loggedInUser');
@@ -197,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     toast({ title: "Logged Out", description: "You have been successfully logged out." });
     router.push('/auth/login');
     setLoading(false);
-  }, [router, toast]);
+  }, [router, toast, isMounted]);
 
   // Adjusted signUp function for local storage
   const signUp = useCallback(async (
@@ -207,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phoneNumber?: string | null,
     academicStatus?: UserAcademicStatus | null
   ) => {
+     if (!isMounted) return;
     if (!password) {
         toast({ variant: 'destructive', title: 'Signup Failed', description: 'Password is required.' });
         throw new Error('Password is required.');
@@ -234,11 +261,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       // Save to users.json using the server action
-      const saveResult = await saveUserToJson(newUserProfile);
-      if (!saveResult.success) {
-        console.error("CRITICAL: Failed to save new user profile to local JSON:", saveResult.message);
-        throw new Error(saveResult.message || 'Could not create user profile.');
-      }
+       const saveResult = await saveUserToJson(newUserProfile); // Call action to add
+       if (!saveResult.success) {
+         console.error("CRITICAL: Failed to save new user profile to local JSON:", saveResult.message);
+         throw new Error(saveResult.message || 'Could not create user profile.');
+       }
 
       // Send welcome email simulation
       if (newUserProfile.email) {
@@ -266,7 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [router, toast]);
+  }, [router, toast, isMounted]);
 
    // OTP Action Wrappers
   const sendOtpAction = useCallback(async (email: string) => {
@@ -290,13 +317,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Route protection & user loading logic (adapted for local storage)
   useEffect(() => {
-    // Skip protection during initial loading phase
-    if (loading) return;
+    // Skip protection during initial loading phase or if not mounted
+    if (loading || !isMounted) return;
 
     const isAuthPage = pathname.startsWith('/auth');
     const isAdminRoute = pathname.startsWith('/admin');
      // Expanded public routes to include test-related paths
-    const publicRoutes = ['/', '/help', '/terms', '/privacy', '/tests', '/study-tips', '/doubt-solving'];
+    const publicRoutes = ['/', '/help', '/terms', '/privacy', '/tests', '/study-tips', '/doubt-solving', '/progress'];
     const isPublicRoute = publicRoutes.includes(pathname) ||
                           pathname.startsWith('/tests/') ||
                           pathname.startsWith('/take-test/') ||
@@ -327,11 +354,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     // Removed toast dependency as it might cause loops if toasts trigger re-renders which trigger useEffect
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isMounted]);
 
   // --- UI Loading State ---
-   // Only show skeleton if truly loading data for the first time, not just routing
-   if (loading && typeof window !== 'undefined' && !localStorage.getItem('loggedInUser') && !user) {
+   // Show skeleton only during the initial loading phase AND if not on an auth page
+   // This prevents flashing the skeleton on auth pages before redirecting
+   if (loading && !user && isMounted && !pathname.startsWith('/auth')) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
          <div className="space-y-4 w-full max-w-md p-4">
