@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
+import type { TestSession, GeneratedTest, QuestionStatus, TestQuestion, QuestionType } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
@@ -56,9 +56,7 @@ export default function TestReviewPage() {
    }, []);
 
    useEffect(() => {
-       // Typeset MathJax when the relevant data changes
        typesetMathJax();
-   // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]);
 
   const fetchReviewData = useCallback(async () => {
@@ -77,12 +75,11 @@ export default function TestReviewPage() {
       }
        if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
           throw new Error("Test definition is invalid or has no questions.");
-       } else if (testDefData.testType === 'full_length' && 
+       } else if (testDefData.testType === 'full_length' &&
                   !(testDefData.physics || testDefData.chemistry || testDefData.maths || testDefData.biology)?.some(arr => arr && arr.length > 0)
        ) {
            throw new Error("Full length test definition is invalid or has no questions in any subject section.");
        }
-
 
       setTestDefinition(testDefData);
 
@@ -118,15 +115,15 @@ export default function TestReviewPage() {
 
     const allQuestions = useMemo(() => {
         if (!testDefinition) return [];
-        if (testDefinition.testType === 'chapterwise') {
-            return testDefinition.questions || [];
+        if (testDefinition.testType === 'chapterwise' && testDefinition.questions) {
+            return testDefinition.questions;
         } else if (testDefinition.testType === 'full_length') {
             return [
                 ...(testDefinition.physics || []),
                 ...(testDefinition.chemistry || []),
                 ...(testDefinition.maths || []),
                 ...(testDefinition.biology || []),
-            ].filter(q => q); // Filter out undefined arrays if a subject is missing
+            ].filter(q => q);
         }
         return [];
     }, [testDefinition]);
@@ -181,23 +178,48 @@ export default function TestReviewPage() {
 
   const totalQuestions = allQuestions.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
-  // Handle cases where answer might not start with "Option "
-  const correctOptionKey = currentReviewQuestion.answer?.startsWith('Option ') 
-                           ? currentReviewQuestion.answer.replace('Option ', '').trim() 
-                           : currentReviewQuestion.answer;
+  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim() || currentReviewQuestion.answer;
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
-    const renderContent = (text: string | undefined | null, imageUrl: string | undefined | null, isQuestion: boolean = false) => {
-        // For image questions/explanations, imageUrl will be the direct public path
-        if (imageUrl && (isQuestion && currentReviewQuestion.type === 'image' || !isQuestion)) {
+    const renderContent = (
+        text: string | undefined | null,
+        imageUrl: string | undefined | null,
+        isQuestionContext: boolean = false,
+        questionTypeContext?: QuestionType | null
+    ) => {
+        let displayImageUrl: string | null = null;
+
+        if (isQuestionContext) {
+            // If type is explicitly 'image' and imageUrl exists
+            if (questionTypeContext === 'image' && imageUrl) {
+                displayImageUrl = imageUrl;
+            }
+            // Heuristic for older data: if type is missing, but imageUrl exists and text does not, assume image
+            else if (!questionTypeContext && imageUrl && !text) {
+                displayImageUrl = imageUrl;
+            }
+        } else { // For explanation
+            if (imageUrl) { // If explanation has an image, prioritize it
+                displayImageUrl = imageUrl;
+            }
+        }
+
+        if (displayImageUrl) {
             return (
                  <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
-                    <Image src={imageUrl} alt={isQuestion ? "Question Image" : "Explanation Image"} layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint={isQuestion ? "question diagram" : "explanation image"}/>
+                    <Image
+                        src={displayImageUrl}
+                        alt={isQuestionContext ? "Question Image" : "Explanation Image"}
+                        layout="fill"
+                        objectFit="contain"
+                        className="rounded-md border"
+                        data-ai-hint={isQuestionContext ? "question diagram" : "explanation image"}
+                    />
                  </div>
              );
-        } else if (text) { // For text questions/explanations
+        } else if (text) {
              return (
                  <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground"
@@ -205,7 +227,7 @@ export default function TestReviewPage() {
                  />
              );
         }
-        return <p className="text-muted-foreground text-sm">[Content not available]</p>;
+        return <p className="text-muted-foreground text-sm">{isQuestionContext ? "[Question content not available]" : "[Explanation not available]"}</p>;
     };
 
 
@@ -215,8 +237,7 @@ export default function TestReviewPage() {
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-            console.log('MathJax loaded for review page');
-            typesetMathJax(); // Typeset MathJax once the script is loaded
+            if (isOpen) typesetMathJax();
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -252,7 +273,7 @@ export default function TestReviewPage() {
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContent(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url, true)}
+                 {renderContent(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url, true, currentReviewQuestion?.type)}
             </div>
 
           <div className="space-y-2 pt-4">
@@ -270,7 +291,11 @@ export default function TestReviewPage() {
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium mt-0.5">{optionKey}.</span>
                    <div className="flex-1">
-                        {renderContent(optionText, null)}
+                        {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
+                             <div className="prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
+                        ) : (
+                          <span>{optionText}</span>
+                        )}
                    </div>
                   {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
@@ -304,4 +329,3 @@ export default function TestReviewPage() {
     </>
   );
 }
-
