@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { GraduationCap, Loader2, Chrome } from "lucide-react"; // Added Chrome for Google icon
+import { GraduationCap, Loader2 } from "lucide-react"; // Removed Chrome icon
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
-import { Separator } from '@/components/ui/separator'; // Import Separator
+// import { Separator } from '@/components/ui/separator'; // No longer needed
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -23,9 +23,10 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { toast } = useToast();
-  const { login, signInWithGoogle, loading: authLoading, initializationError } = useAuth(); // Use real Firebase functions
+  // Use local login function from AuthContext
+  const { login, loading: authLoading, initializationError } = useAuth();
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Separate loading state for Google
+  // Removed Google loading state
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -37,39 +38,25 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
+        toast({ variant: 'destructive', title: 'Configuration Error', description: "Authentication system not ready.", duration: 7000 });
         return;
     }
     setIsLoadingEmail(true);
     try {
+      // Call local login function
       await login(data.email, data.password);
-      // Redirection and success toast handled by onAuthStateChanged in context
+      // Redirection and success toast handled by AuthContext/login function
     } catch (error: any) {
       // Error toast is handled within AuthContext/login on failure now
-      console.error("Login failed:", error.message); // Keep console log for debugging
+      console.error("Login failed:", error.message);
     } finally {
       setIsLoadingEmail(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-     if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
-        return;
-    }
-    setIsGoogleLoading(true);
-    try {
-      await signInWithGoogle(); // Call the real Firebase Google sign-in function
-      // Redirection and success toast handled within onAuthStateChanged
-    } catch (error: any) {
-      // Error toast is handled within AuthContext/signInWithGoogle on failure now
-      console.error("Google Sign-in failed:", error.message); // Keep console log
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
+  // Removed handleGoogleSignIn
 
-  const isLoading = isLoadingEmail || isGoogleLoading || authLoading; // Combined loading state
+  const isLoading = isLoadingEmail || authLoading; // Combined loading state
 
 
   return (
@@ -123,23 +110,7 @@ export default function LoginPage() {
                 Log in
               </Button>
 
-              {/* OR Separator */}
-              <div className="flex items-center w-full my-1">
-                <Separator className="flex-1" />
-                <span className="mx-2 text-xs text-muted-foreground">OR</span>
-                <Separator className="flex-1" />
-              </div>
-
-              {/* Google Sign In Button */}
-              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
-                 {isGoogleLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                 ) : (
-                    <Chrome className="mr-2 h-4 w-4" /> // Using Chrome icon for Google
-                 )}
-                 Sign in with Google
-              </Button>
-
+              {/* Removed OR Separator and Google Sign In Button */}
 
               <div className="text-center text-sm mt-2"> {/* Added margin-top */}
                 Don&apos;t have an account?{" "}

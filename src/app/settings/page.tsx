@@ -13,72 +13,89 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Loader2, AlertTriangle, Star, CalendarClock } from "lucide-react"; // Added Star, CalendarClock
+import { User, Loader2, AlertTriangle, Star, CalendarClock, KeyRound } from "lucide-react"; // Added KeyRound
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { saveUserToJson } from '@/actions/user-actions'; // Correct import path
-import { findUserByEmail } from '@/actions/auth-actions'; // Need this for finding user by email
-import type { UserProfile, AcademicStatus, UserModel } from '@/types'; // Import necessary types
+import { saveUserToJson, getUserById } from '@/actions/user-actions'; // Use user-actions
+import type { UserProfile, AcademicStatus, UserModel } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge'; // Import Badge
+import { Badge } from '@/components/ui/badge';
+import ResetPasswordDialog from '@/components/admin/reset-password-dialog'; // Reuse for user password reset
 
 // --- Profile Form Schema ---
-// Allow updating name, phone. Class, model, expiry are read-only here.
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }),
-  // class is not editable here
+  phone: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(15, { message: "Phone number seems too long." }),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function SettingsPage() {
-  const { user, loading, login, logout } = useAuth(); // Get logout as well
+  const { user, loading, logout, refreshUser } = useAuth(); // Get refreshUser from context
   const { toast } = useToast();
   const router = useRouter();
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [fullUserProfile, setFullUserProfile] = useState<UserProfile | null>(null); // State to hold the full profile
+  const [fullUserProfile, setFullUserProfile] = useState<UserProfile | null>(null);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false); // State for password reset dialog
 
-  // --- Profile Form Initialization ---
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: {
-      name: "",
-      phone: "",
-    },
+    defaultValues: { name: "", phone: "" },
   });
 
   // Effect to fetch the full user profile from local storage or JSON
-  // This ensures we have all fields needed for saving, not just the ones in the auth context
   useEffect(() => {
     const fetchFullProfile = async () => {
-        if (user && user.email) {
+        if (user && user.id) { // Use user.id now
             try {
                 // Attempt to get from local storage first (might be slightly stale but faster)
                 const storedUserJson = localStorage.getItem('loggedInUser');
+                let storedProfile: UserProfile | null = null;
                 if (storedUserJson) {
-                    const parsedProfile = JSON.parse(storedUserJson);
-                    if (parsedProfile.email === user.email) {
-                         setFullUserProfile(parsedProfile);
-                         // Populate form with data from the full profile
-                         profileForm.reset({
-                            name: parsedProfile.name || "",
-                            phone: parsedProfile.phone || "",
-                         });
-                         return; // Exit if found in local storage
+                    try {
+                        storedProfile = JSON.parse(storedUserJson);
+                    } catch (e) {
+                        console.warn("Could not parse loggedInUser from local storage", e);
+                        localStorage.removeItem('loggedInUser'); // Clear invalid data
                     }
                 }
-                // If not in local storage or email mismatch, fetch from server action
-                const profile = await findUserByEmail(user.email);
-                setFullUserProfile(profile);
-                 // Populate form with data from the fetched profile
-                 profileForm.reset({
-                    name: profile?.name || "",
-                    phone: profile?.phone || "",
-                 });
+
+                // Validate stored profile against current user ID
+                if (storedProfile && storedProfile.id === user.id) {
+                    setFullUserProfile(storedProfile);
+                    profileForm.reset({
+                        name: storedProfile.name || "",
+                        phone: storedProfile.phone || "",
+                    });
+                    return; // Exit if found and valid in local storage
+                }
+
+                // If not in local storage or ID mismatch, fetch from server action using ID
+                console.log("Fetching full profile via action for user ID:", user.id);
+                const profile = await getUserById(user.id); // Fetch by ID
+                 if (profile) {
+                     // Construct the UserProfile type which expects a password field
+                     // Since getUserById omits password, we add it back as undefined
+                     const profileWithPasswordPlaceholder: UserProfile = {
+                         ...(profile as Omit<UserProfile, 'password'>), // Cast to ensure type match
+                         password: '', // Add empty password, it won't be saved unless changed
+                     };
+                     setFullUserProfile(profileWithPasswordPlaceholder);
+                     profileForm.reset({
+                        name: profileWithPasswordPlaceholder.name || "",
+                        phone: profileWithPasswordPlaceholder.phone || "",
+                     });
+                     // Update local storage with fetched profile
+                     localStorage.setItem('loggedInUser', JSON.stringify(profileWithPasswordPlaceholder));
+                 } else {
+                     console.error(`Failed to fetch profile for user ID: ${user.id}. Logging out.`);
+                     toast({ title: 'Error', description: 'Could not load profile details. Please log in again.', variant: 'destructive' });
+                     await logout();
+                 }
             } catch (error) {
                 console.error("Failed to fetch full user profile:", error);
-                toast({ title: 'Error', description: 'Could not load full profile details.', variant: 'destructive' });
+                toast({ title: 'Error', description: 'Could not load profile details.', variant: 'destructive' });
+                await logout(); // Log out on error
             }
         }
     };
@@ -86,32 +103,29 @@ export default function SettingsPage() {
     if (!loading && user) {
         fetchFullProfile();
     } else if (!loading && !user) {
-        router.push('/auth/login');
-        toast({ title: 'Unauthorized', description: 'Please log in to access settings.', variant: 'destructive' });
+        router.push('/auth/login?redirect=/settings'); // Redirect to login if not logged in
     }
-     // Add profileForm to dependency array to reset form when profile data changes
-  }, [user, loading, router, toast, profileForm]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading, router, toast, profileForm, logout]);
 
 
   // --- Profile Update Logic ---
   const onProfileSubmit = async (data: ProfileFormValues) => {
-    if (!user || !fullUserProfile || !fullUserProfile.id || !fullUserProfile.email) { // Check fullUserProfile now
+    if (!user || !fullUserProfile || !fullUserProfile.id) {
       toast({ title: 'Error', description: 'User session or profile data is invalid. Please log in again.', variant: 'destructive' });
-      await logout(); // Log out user if session is bad
-      router.push('/auth/login');
+      await logout();
       return;
     }
     setIsLoadingProfile(true);
     try {
-
       // Construct the updated profile object using existing full profile and form data
        const updatedProfile: UserProfile = {
-         ...fullUserProfile, // Start with the existing full profile
-         name: data.name,    // Update name from form
-         phone: data.phone, // Update phone from form
-         // Keep other fields like email, class, model, expiry, password, createdAt etc. from fullUserProfile
+         ...fullUserProfile,
+         name: data.name,
+         phone: data.phone,
+         // Retain existing password, email, model, etc.
+         password: fullUserProfile.password, // IMPORTANT: Keep the existing password
        };
-
 
       // Save the *entire* updated UserProfile object via Server Action
       const updateResult = await saveUserToJson(updatedProfile);
@@ -120,17 +134,25 @@ export default function SettingsPage() {
         throw new Error(updateResult.message || "Failed to save profile updates locally.");
       }
 
-      // **Crucially, update the Auth Context state** by re-simulating login
-      // This fetches the *updated* full profile from JSON via findUserByCredentials
-      // It assumes the password is correct (or stored/retrieved securely if implemented)
-      // For this simulation, we retrieve the stored password from local storage (INSECURE)
-      await login(fullUserProfile.email, localStorage.getItem('simulatedPassword') || undefined);
+      // **Crucially, update the Auth Context state and local storage**
+      const contextUser: ContextUser = {
+          id: updatedProfile.id,
+          email: updatedProfile.email,
+          displayName: updatedProfile.name,
+          photoURL: null,
+          phone: updatedProfile.phone,
+          className: updatedProfile.class,
+          model: updatedProfile.model,
+          expiry_date: updatedProfile.expiry_date,
+      };
+      localStorage.setItem('loggedInUser', JSON.stringify(contextUser)); // Update local storage
+      await refreshUser(); // Trigger context update
 
       toast({
         title: "Profile Updated",
         description: "Your profile information has been successfully updated.",
       });
-      // Form reset is handled by the useEffect when `user` updates after login simulation
+      // Form reset is handled by the useEffect when `user` updates after refreshUser
 
     } catch (error: any) {
       console.error("Profile update failed:", error);
@@ -139,10 +161,6 @@ export default function SettingsPage() {
         title: "Update Failed",
         description: error.message || "Could not update profile.",
       });
-       if (error.message.includes("Please log in again")) {
-           await logout();
-           router.push('/auth/login');
-       }
     } finally {
       setIsLoadingProfile(false);
     }
@@ -168,7 +186,7 @@ export default function SettingsPage() {
 
 
   // --- Loading State ---
-  if (loading || (!user && !loading)) { // Show skeleton while auth loading or if user is null initially
+  if (loading || (!user && !loading) || (user && !fullUserProfile)) { // Show skeleton if loading auth OR if user exists but full profile hasn't loaded yet
     return (
       <div className="space-y-6 max-w-3xl mx-auto">
         <Skeleton className="h-8 w-1/4 mb-6" />
@@ -215,163 +233,173 @@ export default function SettingsPage() {
     return <div className="text-center p-8">Redirecting to login...</div>;
    }
 
-
-  // --- Logged In View ---
+   // --- Profile data is loaded, render the actual settings ---
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+    <>
+      <div className="space-y-6 max-w-3xl mx-auto">
+        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
 
-      {/* Profile Settings */}
-      <Form {...profileForm}>
-        <form onSubmit={profileForm.handleSubmit(onProfileSubmit)}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile</CardTitle>
-              <CardDescription>Manage your personal information.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                   {/* Use unique ID or email for avatar generation */}
-                   <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
-                   <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={profileForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} disabled={isLoadingProfile} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
+        {/* Profile Settings */}
+        <Form {...profileForm}>
+          <form onSubmit={profileForm.handleSubmit(onProfileSubmit)}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile</CardTitle>
+                <CardDescription>Manage your personal information.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16">
+                     <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                     <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
                     control={profileForm.control}
-                    name="phone"
+                    name="name"
                     render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
+                      <FormItem>
+                        <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                            <Input type="tel" {...field} disabled={isLoadingProfile} />
+                          <Input {...field} disabled={isLoadingProfile} />
                         </FormControl>
                         <FormMessage />
-                        </FormItem>
+                      </FormItem>
                     )}
-                    />
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" value={user.email || ""} disabled />
-                  <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
+                  />
+                  <FormField
+                      control={profileForm.control}
+                      name="phone"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Phone Number</FormLabel>
+                          <FormControl>
+                              <Input type="tel" {...field} disabled={isLoadingProfile} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" value={user.email || ""} disabled />
+                    <p className="text-xs text-muted-foreground">Email cannot be changed.</p>
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="class">Academic Status</Label>
+                     <Input id="class" value={user.className || "N/A"} disabled />
+                     <p className="text-xs text-muted-foreground">Contact support to change.</p>
+                  </div>
                 </div>
-                 <div className="space-y-2">
-                  <Label htmlFor="class">Academic Status</Label>
-                   {/* Display class from the auth context user */}
-                   <Input id="class" value={user.className || "N/A"} disabled />
-                   <p className="text-xs text-muted-foreground">Contact support to change.</p>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isLoadingProfile}>
-                {isLoadingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Profile Changes
-              </Button>
-            </CardFooter>
-          </Card>
-        </form>
-      </Form>
+              </CardContent>
+              <CardFooter>
+                <Button type="submit" disabled={isLoadingProfile}>
+                  {isLoadingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Profile Changes
+                </Button>
+              </CardFooter>
+            </Card>
+          </form>
+        </Form>
 
-      <Separator />
+        <Separator />
 
         {/* Subscription Details */}
-      <Card>
-        <CardHeader>
-            <CardTitle>Subscription</CardTitle>
-            <CardDescription>Your current access plan.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-             <div className="flex items-center gap-2">
-                 <Star className="h-5 w-5 text-primary" />
-                 <span className="font-medium">Current Plan:</span>
-                 <Badge variant="secondary" className="capitalize">{user.model || 'N/A'}</Badge>
-             </div>
-             {user.model !== 'free' && user.expiry_date && (
-                 <div className="flex items-center gap-2 text-muted-foreground">
-                    <CalendarClock className="h-5 w-5" />
-                    <span>Expires on: {formatDate(user.expiry_date)}</span>
-                 </div>
-             )}
-              {user.model === 'free' && (
-                 <p className="text-sm text-muted-foreground">Upgrade to access premium test series.</p>
-             )}
-        </CardContent>
-         {/* Optionally add a footer with an upgrade button */}
-         {/* <CardFooter>
-            <Button variant="outline" disabled>Upgrade Plan (Coming Soon)</Button>
-         </CardFooter> */}
-      </Card>
+        <Card>
+          <CardHeader>
+              <CardTitle>Subscription</CardTitle>
+              <CardDescription>Your current access plan.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+               <div className="flex items-center gap-2">
+                   <Star className="h-5 w-5 text-primary" />
+                   <span className="font-medium">Current Plan:</span>
+                   <Badge variant="secondary" className="capitalize">{user.model || 'N/A'}</Badge>
+               </div>
+               {user.model !== 'free' && user.expiry_date && (
+                   <div className="flex items-center gap-2 text-muted-foreground">
+                      <CalendarClock className="h-5 w-5" />
+                      <span>Expires on: {formatDate(user.expiry_date)}</span>
+                   </div>
+               )}
+                {user.model === 'free' && (
+                   <p className="text-sm text-muted-foreground">Upgrade to access premium test series.</p>
+               )}
+          </CardContent>
+          {/* Optionally add an upgrade button */}
+          {/* <CardFooter>
+             <Button variant="outline" disabled>Upgrade Plan (Coming Soon)</Button>
+          </CardFooter> */}
+        </Card>
 
-       <Separator />
+         <Separator />
 
-      {/* Account Settings (Password) - Disabled */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Password</CardTitle>
-           <CardDescription className="flex items-center gap-2 text-orange-600">
-            <AlertTriangle className="h-4 w-4" />
-            Password changes are disabled in local mode.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-           <p className="text-sm text-muted-foreground">
-             Password management requires a secure authentication provider.
-             This functionality is not available when using local JSON storage.
-           </p>
-        </CardContent>
-        <CardFooter>
-          <Button disabled>Update Password</Button>
-        </CardFooter>
-      </Card>
+        {/* Account Settings (Password) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Password</CardTitle>
+             <CardDescription>
+               Update your account password.
+             </CardDescription>
+          </CardHeader>
+          <CardContent>
+             <p className="text-sm text-muted-foreground">
+               Click the button below to update your password.
+               {/* Note: In a local setup without Firebase Auth, this requires custom logic. */}
+             </p>
+          </CardContent>
+          <CardFooter>
+             {/* Button to open the Reset Password Dialog */}
+             <Button onClick={() => setIsResetPasswordOpen(true)}>
+               <KeyRound className="mr-2 h-4 w-4" /> Update Password
+             </Button>
+          </CardFooter>
+        </Card>
 
-      <Separator />
+        <Separator />
 
-      {/* Notification Settings - Placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Notifications</CardTitle>
-          <CardDescription>Manage how you receive notifications (placeholder).</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
-              <span>Email Notifications</span>
-              <span className="font-normal leading-snug text-muted-foreground">
-                Receive emails about test results and platform updates.
-              </span>
-            </Label>
-            <Switch id="email-notifications" defaultChecked disabled />
-          </div>
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
-              <span>In-App Notifications</span>
-              <span className="font-normal leading-snug text-muted-foreground">
-                Show notifications within the STUDY SPHERE platform.
-              </span>
-            </Label>
-            <Switch id="in-app-notifications" defaultChecked disabled />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button disabled>Save Preferences</Button>
-        </CardFooter>
-      </Card>
+        {/* Notification Settings - Placeholder */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Notifications</CardTitle>
+            <CardDescription>Manage how you receive notifications (placeholder).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
+                <span>Email Notifications</span>
+                <span className="font-normal leading-snug text-muted-foreground">
+                  Receive emails about test results and platform updates.
+                </span>
+              </Label>
+              <Switch id="email-notifications" defaultChecked disabled />
+            </div>
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
+                <span>In-App Notifications</span>
+                <span className="font-normal leading-snug text-muted-foreground">
+                  Show notifications within the STUDY SPHERE platform.
+                </span>
+              </Label>
+              <Switch id="in-app-notifications" defaultChecked disabled />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button disabled>Save Preferences</Button>
+          </CardFooter>
+        </Card>
+      </div>
 
-    </div>
+       {/* Password Reset Dialog */}
+       {fullUserProfile && (
+          <ResetPasswordDialog
+            user={fullUserProfile} // Pass the full user profile
+            isOpen={isResetPasswordOpen}
+            onClose={() => setIsResetPasswordOpen(false)}
+            // No onUserUpdate needed here as password changes are handled internally
+          />
+        )}
+    </>
   );
 }

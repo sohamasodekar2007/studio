@@ -2,10 +2,10 @@
 // src/actions/user-actions.ts
 'use server';
 
-import type { UserProfile, AcademicStatus, UserModel } from '@/types'; // Import UserModel
+import type { UserProfile, AcademicStatus, UserModel } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
+import { v4 as uuidv4 } from 'uuid';
 
 // WARNING: This approach is NOT recommended for production due to security and scalability concerns.
 // Use a proper database like Firestore instead.
@@ -46,14 +46,28 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
 
 /**
  * Reads the users.json file. Ensures the default admin user exists.
- * Assigns UUID to users missing an ID (relevant for non-Firebase users or older data).
- * @returns A promise resolving to an array of UserProfile or an empty array on error.
+ * Assigns UUID to users missing an ID.
+ * Returns user profiles WITHOUT passwords for general use.
+ * @returns A promise resolving to an array of UserProfile (without passwords) or an empty array on error.
  */
-export async function readUsers(): Promise<UserProfile[]> {
+export async function readUsers(): Promise<Omit<UserProfile, 'password'>[]> {
+    const usersWithPasswords = await readAndInitializeUsersInternal();
+    // Return users WITHOUT passwords for general use
+    return usersWithPasswords.map(({ password, ...userWithoutPassword }) => userWithoutPassword);
+}
+
+/**
+ * INTERNAL HELPER: Reads the users.json file, performs initialization (adds admin, assigns IDs),
+ * and returns the full user list *including* passwords.
+ * Used internally by write operations and auth checks.
+ * @returns A promise resolving to the array of UserProfile including passwords.
+ */
+async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
   let users: UserProfile[] = [];
   let writeNeeded = false;
 
   try {
+    await fs.access(usersFilePath); // Check if file exists first
     const fileContent = await fs.readFile(usersFilePath, 'utf-8');
     const parsedUsers = JSON.parse(fileContent);
     if (!Array.isArray(parsedUsers)) {
@@ -76,57 +90,61 @@ export async function readUsers(): Promise<UserProfile[]> {
      users = []; // Ensure users is an empty array if read failed
   }
 
-  // --- Ensure all users have string IDs (preferably Firebase UIDs or UUIDs) ---
+  // --- Ensure all users have string IDs ---
   users.forEach(user => {
-    if (!user.id) {
-        console.warn(`User ${user.email || 'unknown'} missing ID. Assigning UUID.`);
-        user.id = uuidv4(); // Assign UUID if missing (e.g., for manually added users)
-        writeNeeded = true;
-    } else if (typeof user.id !== 'string') {
-        console.warn(`User ${user.email || 'unknown'} has non-string ID ${user.id}. Converting to string.`);
-        user.id = String(user.id); // Convert numeric IDs to strings
+    if (!user.id || typeof user.id !== 'string') {
+        console.warn(`User ${user.email || 'unknown'} missing or has non-string ID. Assigning/Converting to UUID.`);
+        user.id = uuidv4(); // Assign UUID if missing or invalid type
         writeNeeded = true;
     }
   });
 
 
   // --- Ensure Default Admin User Exists ---
-   // NOTE: ID for admin is also a UUID now unless already set by Firebase logic.
    const adminUserIndex = users.findIndex(u => u.email === defaultAdminEmail);
+   const adminId = users[adminUserIndex]?.id || uuidv4(); // Use existing ID or generate new one
    const defaultAdminUserWithId: UserProfile = {
        ...defaultAdminProfileBase,
-       // IMPORTANT: Let Firebase Auth handle the admin's UID if they sign in.
-       // If manually creating, assign a UUID.
-       // This ID might get overwritten if the admin logs in via Firebase later.
-       id: users.find(u => u.email === defaultAdminEmail)?.id || uuidv4(),
+       id: adminId,
        createdAt: new Date().toISOString(),
    };
 
 
   if (adminUserIndex !== -1) {
-    // Admin user exists, check if essential admin fields need setting
+    // Admin user exists, ensure core properties are set correctly
     let adminNeedsUpdate = false;
-    // We don't check password here anymore, as it's only for initial setup. Firebase handles auth.
-     if (users[adminUserIndex].model !== 'combo') {
-          console.warn(`Admin user found but model incorrect in users.json. Setting model to 'combo' for ${defaultAdminEmail}.`);
-         users[adminUserIndex].model = 'combo';
+    const currentAdmin = users[adminUserIndex];
+
+     // Ensure password exists (only for local setup, highly insecure)
+     if (!currentAdmin.password) {
+         console.warn(`Admin user ${defaultAdminEmail} missing password in users.json. Setting default.`);
+         currentAdmin.password = defaultAdminPassword;
          adminNeedsUpdate = true;
      }
-      if (users[adminUserIndex].expiry_date !== defaultAdminProfileBase.expiry_date) {
-         console.warn(`Admin user found but expiry date incorrect in users.json. Setting expiry for ${defaultAdminEmail}.`);
-         users[adminUserIndex].expiry_date = defaultAdminProfileBase.expiry_date;
+     if (currentAdmin.model !== 'combo') {
+          console.warn(`Admin user ${defaultAdminEmail} model incorrect in users.json. Setting model to 'combo'.`);
+         currentAdmin.model = 'combo';
+         adminNeedsUpdate = true;
+     }
+      if (currentAdmin.expiry_date !== defaultAdminProfileBase.expiry_date) {
+         console.warn(`Admin user ${defaultAdminEmail} expiry date incorrect in users.json. Setting default expiry.`);
+         currentAdmin.expiry_date = defaultAdminProfileBase.expiry_date;
          adminNeedsUpdate = true;
       }
+       if (currentAdmin.id !== adminId) { // Ensure ID is correct if regenerated
+           console.warn(`Admin user ${defaultAdminEmail} ID mismatch. Correcting.`);
+           currentAdmin.id = adminId;
+           adminNeedsUpdate = true;
+       }
      if (adminNeedsUpdate) {
+         users[adminUserIndex] = currentAdmin; // Update the user object in the array
          writeNeeded = true;
      }
 
   } else {
     // Admin user does not exist, add them
     console.warn(`Default admin user (${defaultAdminEmail}) not found in users.json. Adding default admin user.`);
-    users.push({
-        ...defaultAdminUserWithId,
-    });
+    users.push(defaultAdminUserWithId);
     writeNeeded = true;
   }
 
@@ -140,18 +158,17 @@ export async function readUsers(): Promise<UserProfile[]> {
       }
   }
 
-  // Return users WITHOUT passwords for general use
-  return users.map(({ password, ...userWithoutPassword }) => userWithoutPassword);
+  // Return the full list including passwords for internal use
+  return users;
 }
 
 
 /**
  * Saves or updates user data in the local users.json file.
  * If a user with the same ID exists, it updates; otherwise, it adds.
- * IMPORTANT: Password field should generally be undefined when calling this,
- * as password management is handled by Firebase Auth.
+ * This function handles the password field internally.
  *
- * @param userProfileData - The full UserProfile object to save or update. ID should be Firebase UID.
+ * @param userProfileData - The full UserProfile object to save or update.
  * @returns A promise that resolves with success status and optional message.
  */
 export async function saveUserToJson(
@@ -164,42 +181,35 @@ export async function saveUserToJson(
         return { success: false, message: 'Invalid user ID provided for saving.' };
     }
 
-    // Prepare user data, ensuring password is NOT saved unless explicitly needed (like initial admin).
-    // For regular updates, password should be undefined here.
+    // Prepare user data for saving
     const userToSave: UserProfile = {
-        id: userProfileData.id,
-        email: userProfileData.email,
-        password: userProfileData.password, // This should usually be undefined
-        name: userProfileData.name ?? null,
-        phone: userProfileData.phone ?? null,
-        referral: userProfileData.referral ?? "",
-        class: userProfileData.class ?? null,
-        model: userProfileData.model ?? 'free',
-        expiry_date: userProfileData.expiry_date ?? null,
-        createdAt: userProfileData.createdAt || new Date().toISOString(), // Keep original or set new
+        ...userProfileData,
+        createdAt: userProfileData.createdAt || new Date().toISOString(), // Ensure createdAt exists
     };
 
     try {
         // Read full user list including passwords internally for writing
-        let users = await readUsersWithPasswords();
+        let users = await readAndInitializeUsersInternal();
 
         const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
         if (existingUserIndex !== -1) {
-            // Update existing user: Merge safely, preserving password if not explicitly provided
-             userToSave.password = userToSave.password !== undefined ? userToSave.password : users[existingUserIndex].password;
-             // Preserve original creation date but update everything else
+            // Update existing user: Merge safely
+            // Ensure the password from the existing record is kept unless explicitly provided in userToSave
+            userToSave.password = userToSave.password !== undefined ? userToSave.password : users[existingUserIndex].password;
+            // Preserve original creation date
             userToSave.createdAt = users[existingUserIndex].createdAt || userToSave.createdAt;
             users[existingUserIndex] = userToSave;
             console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated in users.json`);
         } else {
-            // Add new user (ensure password is set if needed, e.g., initial admin)
+            // Add new user
+            // Password should already be set in userToSave if needed (e.g., during signup)
             users.push(userToSave);
             console.log(`New user data for ${userToSave.email} (ID: ${userToSave.id}) added to users.json`);
         }
 
         // Write the updated users array back to the file
-        const writeSuccess = await writeUsers(users); // writeUsers handles the actual writing
+        const writeSuccess = await writeUsers(users);
         if (!writeSuccess) {
              return { success: false, message: 'Failed to write user data to local file.' };
         }
@@ -215,35 +225,47 @@ export async function saveUserToJson(
 
 /**
  * Adds a new user to the users.json file. Checks for existing email first.
- * Assigns a Firebase UID or UUID if ID is missing.
- * IMPORTANT: Password should be undefined for regular users created via Firebase Auth.
- * Only set password here for initial admin setup or specific non-Firebase scenarios.
- * @param newUser The user profile object to add. Password should generally be undefined.
+ * Assigns a UUID if ID is missing. Sets default 'free' model if none provided.
+ * Stores password as provided (plain text - INSECURE).
+ * @param newUser The user profile object to add. Password should be included.
  * @returns A promise resolving with success status and optional message.
  */
 export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
 
-     // Ensure ID is a string (Firebase UID or UUID)
+     // Ensure ID is a string (generate if missing) and other defaults
     const userToAdd: UserProfile = {
          ...newUser,
          id: String(newUser.id || uuidv4()), // Ensure ID is string
          createdAt: newUser.createdAt || new Date().toISOString(),
-         // Password should only be included if explicitly provided (e.g., initial admin setup)
-         // Otherwise, it should be undefined as Firebase handles auth.
-         password: newUser.password,
+         password: newUser.password, // Expecting plain text password here for local storage
+         model: newUser.model || 'free', // Default to free if not specified
+         expiry_date: newUser.model === 'free' ? null : newUser.expiry_date, // Nullify expiry if free
+         class: newUser.class || null, // Ensure class is null if not provided
+         phone: newUser.phone || null,
+         name: newUser.name || null,
+         referral: newUser.referral || '',
     };
 
+    // Basic validation
+    if (!userToAdd.email) return { success: false, message: "User email is required." };
+    if (!userToAdd.password) return { success: false, message: "User password is required." };
+
+
     try {
-        let users = await readUsersWithPasswords(); // Reads the raw list including passwords
+        let users = await readAndInitializeUsersInternal(); // Reads the raw list including passwords
 
         // Check if email already exists
-        if (userToAdd.email && users.some(u => u.email === userToAdd.email)) {
+        if (users.some(u => u.email === userToAdd.email)) {
             return { success: false, message: 'User with this email already exists.' };
         }
-         // Check if ID already exists (important to prevent overwriting users)
+         // Check if ID already exists (should be rare with UUIDs)
          if (users.some(u => u.id === userToAdd.id)) {
-             console.warn(`User with ID ${userToAdd.id} conflict during add operation. This might indicate a logic error.`);
-             return { success: false, message: `User with ID ${userToAdd.id} already exists.`};
+             console.warn(`User with ID ${userToAdd.id} conflict during add operation. Regenerating ID.`);
+             userToAdd.id = uuidv4(); // Regenerate ID on conflict
+             // Recheck after regeneration (extremely unlikely to collide again)
+             if (users.some(u => u.id === userToAdd.id)) {
+                return { success: false, message: `User ID conflict even after regeneration.`};
+             }
          }
 
         users.push(userToAdd);
@@ -258,30 +280,38 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
 
 /**
  * Updates an existing user in the users.json file by ID.
- * IMPORTANT: Do not use this to update passwords. Password updates should
- * be handled via Firebase Auth password reset flows.
- * @param userId The ID of the user to update (should be string, typically Firebase UID).
- * @param updatedData Partial user profile data to update (e.g., `model`, `expiry_date`, `name`, `phone`, `class`).
+ * Allows updating specific fields like name, phone, model, expiry_date.
+ * Does NOT update email or password via this function.
+ * @param userId The ID of the user to update (string).
+ * @param updatedData Partial user profile data to update (excluding id, email, password, createdAt).
  * @returns A promise resolving with success status and optional message.
  */
-export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt'>>): Promise<{ success: boolean; message?: string }> {
+export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'email' | 'password' | 'createdAt'>>): Promise<{ success: boolean; message?: string }> {
     try {
-        let users = await readUsersWithPasswords(); // Read raw data including passwords
+        let users = await readAndInitializeUsersInternal(); // Read raw data
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
             return { success: false, message: `User with ID ${userId} not found.` };
         }
 
-        // Merge existing data with updated data, ensuring ID, password, and original createdAt are preserved
+        // Merge existing data with updated data, ensuring read-only fields are preserved
         const existingUser = users[userIndex];
-        users[userIndex] = {
+        const userWithUpdatesApplied: UserProfile = {
             ...existingUser, // Start with existing data
             ...updatedData,   // Apply the allowed updates (name, phone, model, expiry, class, etc.)
             id: userId,       // Ensure ID remains the same
+            email: existingUser.email, // Ensure email remains the same
             password: existingUser.password, // Explicitly keep the existing password field
             createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date
         };
+         // If model changed to 'free', nullify expiry date
+         if (updatedData.model === 'free') {
+             userWithUpdatesApplied.expiry_date = null;
+         }
+
+         users[userIndex] = userWithUpdatesApplied; // Update the user in the array
+
          console.log(`Updating user ${userId}. New data merged:`, { ...users[userIndex], password: '***' }); // Log without password
 
         const success = await writeUsers(users);
@@ -299,12 +329,12 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
 
 /**
  * Deletes a user from the users.json file by ID. Prevents deletion of the default admin user.
- * @param userId The ID of the user to delete (should be string, typically Firebase UID).
+ * @param userId The ID of the user to delete (string).
  * @returns A promise resolving with success status and optional message.
  */
 export async function deleteUserFromJson(userId: string): Promise<{ success: boolean; message?: string }> {
     try {
-        let users = await readUsersWithPasswords(); // Read raw data
+        let users = await readAndInitializeUsersInternal(); // Read raw data
         const userToDelete = users.find(u => u.id === userId);
 
         if (!userToDelete) {
@@ -321,8 +351,7 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
         users = users.filter(u => u.id !== userId);
 
         if (users.length === initialLength) {
-             // This implies user was not found, though findUserById should have caught this.
-            return { success: false, message: `User with ID ${userId} not found during filter (consistency check).` };
+            return { success: false, message: `User with ID ${userId} not found during filter.` };
         }
 
         const success = await writeUsers(users);
@@ -335,22 +364,19 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
 
 /**
  * Updates the password for a user in the users.json file.
- * WARNING: Highly insecure. Use ONLY for the initial default admin setup.
- * DO NOT USE for regular password resets. Firebase Auth should handle those.
- * @param userId The ID of the user whose password needs updating (should be string).
+ * WARNING: Highly insecure as it stores plain text. Use ONLY for local demo/admin setup.
+ * @param userId The ID of the user whose password needs updating (string).
  * @param newPassword The new plain text password.
  * @returns A promise resolving with success status and optional message.
  */
 export async function updateUserPasswordInJson(userId: string, newPassword: string): Promise<{ success: boolean; message?: string }> {
-    console.warn("WARNING: Updating plain text password in users.json is highly insecure. Use only for initial admin setup.");
-    // Add extra check to prevent misuse? E.g., only allow if userId corresponds to admin email?
-    // const userToUpdate = await getUserById(userId);
-    // if (!userToUpdate || userToUpdate.email !== defaultAdminEmail) {
-    //      return { success: false, message: "Password update via this method is only allowed for the default admin." };
-    // }
+    console.warn("WARNING: Updating plain text password in users.json is highly insecure.");
+    if (!newPassword || newPassword.length < 6) { // Basic password length validation
+        return { success: false, message: 'Password must be at least 6 characters long.'};
+    }
 
     try {
-        let users = await readUsersWithPasswords(); // Read raw data including passwords
+        let users = await readAndInitializeUsersInternal(); // Read raw data including passwords
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
@@ -371,7 +397,7 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
 /**
  * Retrieves a single user by their ID from users.json.
  * Returns the profile WITHOUT the password field.
- * @param userId The ID of the user to retrieve (string, typically Firebase UID).
+ * @param userId The ID of the user to retrieve (string).
  * @returns A promise resolving to the UserProfile (without password) if found, otherwise null.
  */
 export async function getUserById(userId: string): Promise<Omit<UserProfile, 'password'> | null> {
@@ -379,41 +405,16 @@ export async function getUserById(userId: string): Promise<Omit<UserProfile, 'pa
     return null;
   }
   try {
-    // Use the main readUsers function which already excludes passwords
-    const users = await readUsers();
-    // Ensure IDs are compared as strings
-    const foundUser = users.find(u => String(u.id) === String(userId));
-    return foundUser || null;
+    // Use the helper that reads and initializes (important for consistency)
+    const usersWithPasswords = await readAndInitializeUsersInternal();
+    const foundUser = usersWithPasswords.find(u => String(u.id) === String(userId));
+    if (!foundUser) return null;
+    // Remove password before returning
+    const { password, ...userWithoutPassword } = foundUser;
+    return userWithoutPassword;
   } catch (error) {
     console.error(`Error finding user by ID ${userId}:`, error);
     return null;
   }
 }
-
-/**
- * INTERNAL HELPER: Reads the raw users.json file including passwords.
- * Used internally by functions that need to write the file back (like save/add/update/delete).
- * Should not be exported or used directly for displaying user data.
- * @returns A promise resolving to the full array of UserProfile including passwords.
- */
-async function readUsersWithPasswords(): Promise<UserProfile[]> {
-  try {
-    await fs.access(usersFilePath); // Check if file exists
-    const fileContent = await fs.readFile(usersFilePath, 'utf-8');
-    const parsedUsers = JSON.parse(fileContent);
-    if (!Array.isArray(parsedUsers)) {
-      console.error('users.json does not contain a valid array.');
-      return []; // Return empty array or handle error appropriately
-    }
-    return parsedUsers as UserProfile[];
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      // File doesn't exist, return empty array (it will be created by writeUsers if needed)
-      return [];
-    }
-    console.error('Error reading users.json (raw):', error);
-    throw error; // Re-throw other errors
-  }
-}
-
 

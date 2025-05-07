@@ -9,14 +9,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone, Mail, Chrome } from "lucide-react"; // Added Mail, Chrome icons
+import { GraduationCap, Loader2, Phone, Mail } from "lucide-react"; // Removed Chrome icon
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
-import { Separator } from '@/components/ui/separator'; // Import Separator
+// import { Separator } from '@/components/ui/separator'; // No longer needed
 
-// Updated schema with phone number
+// Schema remains the same
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -33,9 +33,10 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const { toast } = useToast();
-  const { signUpLocally, signInWithGoogle, loading: authLoading, initializationError } = useAuth(); // Use real Firebase functions
+  // Use local signup function from AuthContext
+  const { signUpLocally, loading: authLoading, initializationError } = useAuth();
   const [isLoadingEmail, setIsLoadingEmail] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Google loading state
+  // Removed Google loading state
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -51,7 +52,7 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupFormValues) => {
      if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
+        toast({ variant: 'destructive', title: 'Configuration Error', description: "Authentication system not ready.", duration: 7000 });
         return;
     }
     setIsLoadingEmail(true);
@@ -65,33 +66,18 @@ export default function SignupPage() {
         };
 
         await signUpLocally(userDataForContext, data.password);
-        // Success toast and redirection handled by onAuthStateChanged in context
+        // Success toast and redirection handled by signUpLocally
     } catch (error: any) {
         // Error toast handled by signUpLocally in context
-        console.error("Signup failed:", error.message); // Keep console log
+        console.error("Signup failed:", error.message);
     } finally {
       setIsLoadingEmail(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-     if (initializationError) {
-        toast({ variant: 'destructive', title: 'Configuration Error', description: "Firebase Auth not ready.", duration: 7000 });
-        return;
-    }
-    setIsGoogleLoading(true);
-    try {
-      await signInWithGoogle();
-      // Redirection and success toast handled within onAuthStateChanged
-    } catch (error: any) {
-      // Error toast handled within signInWithGoogle in context
-      console.error("Google Sign-in failed:", error.message); // Keep console log
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
+  // Removed handleGoogleSignIn
 
-  const isLoading = isLoadingEmail || isGoogleLoading || authLoading; // Combined loading state
+  const isLoading = isLoadingEmail || authLoading; // Combined loading state
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -132,7 +118,6 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-               {/* Phone Number Field */}
                <FormField
                 control={form.control}
                 name="phoneNumber"
@@ -149,7 +134,6 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-               {/* Academic Status Select */}
               <FormField
                 control={form.control}
                 name="academicStatus"
@@ -207,23 +191,7 @@ export default function SignupPage() {
                  Sign Up
                </Button>
 
-                {/* OR Separator */}
-              <div className="flex items-center w-full my-1">
-                <Separator className="flex-1" />
-                <span className="mx-2 text-xs text-muted-foreground">OR</span>
-                <Separator className="flex-1" />
-              </div>
-
-               {/* Google Sign In Button */}
-              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading}>
-                 {isGoogleLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                 ) : (
-                    <Chrome className="mr-2 h-4 w-4" />
-                 )}
-                 Sign up with Google
-              </Button>
-
+                {/* Removed OR Separator and Google Sign In Button */}
 
               <p className="px-8 text-center text-sm text-muted-foreground">
                 By clicking continue, you agree to our{" "}

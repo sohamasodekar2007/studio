@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 
 export function AppHeader() {
-  const { user, loading, logout } = useAuth(); // Get user, loading, and simulated logout
+  const { user, loading, logout } = useAuth(); // Get user, loading, and local logout
   const router = useRouter();
   const { toast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -20,12 +20,12 @@ export function AppHeader() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await logout(); // Call the Firebase logout function from context
+      await logout(); // Call the local logout function from context
        toast({
          title: "Logged Out",
          description: "You have been successfully logged out.",
        });
-      // Redirection is handled by onAuthStateChanged in context
+      // Redirect handled by AuthContext
     } catch (error: any) {
       console.error("Logout failed:", error);
       toast({
@@ -58,8 +58,8 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
               <Avatar>
-                 {/* Use Firebase photoURL if available, otherwise fallback */}
-                <AvatarImage src={user.photoURL || `https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
+                 {/* Use generic avatar or generate one based on email/ID */}
+                <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt={user.displayName || user.email || 'User Avatar'} />
                 <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
               </Avatar>
             </Button>
