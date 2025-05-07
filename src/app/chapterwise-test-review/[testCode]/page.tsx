@@ -51,16 +51,15 @@ export default function TestReviewPage() {
 
    const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
-           (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error:", err));
+           (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error in review page:", err));
        }
    }, []);
 
    useEffect(() => {
-       if (isOpen) { // Assuming isOpen is a state variable passed to a dialog or similar
-        typesetMathJax();
-       }
+       // Typeset MathJax when the relevant data changes
+       typesetMathJax();
    // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]); // isOpen should be added if used
+   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]);
 
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptId) {
@@ -182,7 +181,10 @@ export default function TestReviewPage() {
 
   const totalQuestions = allQuestions.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
-  const correctOptionKey = currentReviewQuestion.answer?.replace('Option ', '').trim() ?? currentReviewQuestion.answer;
+  // Handle cases where answer might not start with "Option "
+  const correctOptionKey = currentReviewQuestion.answer?.startsWith('Option ') 
+                           ? currentReviewQuestion.answer.replace('Option ', '').trim() 
+                           : currentReviewQuestion.answer;
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
@@ -214,7 +216,7 @@ export default function TestReviewPage() {
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page');
-            typesetMathJax();
+            typesetMathJax(); // Typeset MathJax once the script is loaded
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -302,3 +304,4 @@ export default function TestReviewPage() {
     </>
   );
 }
+
