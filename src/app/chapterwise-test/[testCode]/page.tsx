@@ -4,7 +4,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
+import { saveTestReport } from '@/actions/test-report-actions'; // Import the action to save report
+import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession, TestResultSummary } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Make sure enum is imported
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -69,6 +70,7 @@ export default function ChapterwiseTestPage() {
       return;
     }
     setIsLoading(true);
+    setError(null); // Reset error on new load attempt
     try {
       const data = await getGeneratedTestByCode(testCode);
        // Ensure it's chapterwise and has questions
@@ -90,6 +92,7 @@ export default function ChapterwiseTestPage() {
         console.log("Test loaded, start time set:", Date.now());
       }
     } catch (err: any) {
+      console.error("Error loading test data:", err);
       setError(err.message || "Failed to load test data.");
       setTestData(null);
     } finally {
@@ -103,20 +106,26 @@ export default function ChapterwiseTestPage() {
       router.push(`/auth/login?redirect=/take-test/${testCode}`); // Use take-test for redirect consistency
       return;
     }
-    // Add check for userId mismatch if needed, though take-test might handle this better
-    // if (!authLoading && user && userId && user.id !== userId) { ... }
+
+    // Ensure userId matches logged-in user
+    if (!authLoading && user && userId && user.id !== userId) {
+        toast({ variant: 'destructive', title: 'Forbidden', description: 'You cannot take a test for another user.' });
+        router.push('/'); // Redirect to dashboard or tests page
+        return;
+    }
 
     // If userId is missing but user is logged in, add it
      if (!authLoading && user && !userId) {
          router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
-         return;
+         return; // Wait for redirect to happen before loading
      }
 
-    if (userId) {
+    // Only load if userId is present and matches (or auth is loading)
+    if (userId || authLoading) {
         loadTest();
     }
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testCode, userId, authLoading, user, router, toast]); // Removed loadTest from dependency array to prevent re-triggering
+  }, [testCode, userId, authLoading, user, router, toast]); // Removed loadTest from dependency array
 
   useEffect(() => {
     if (timeLeft <= 0 || showInstructions || !testData || isSubmitting || !startTime) return; // Added startTime check
@@ -174,10 +183,11 @@ export default function ChapterwiseTestPage() {
     if (currentStatus === QuestionStatusEnum.Answered) {
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
     } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
+        // If unmarking an answered marked question, revert to just Answered
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-        // If unmarking a marked question, revert to Unanswered or Answered based on whether an answer exists
-         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
+        // If unmarking a marked question, revert to Unanswered (since it wasn't answered)
+         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
     }
     else { // Unanswered or NotVisited
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
@@ -196,17 +206,18 @@ export default function ChapterwiseTestPage() {
   };
 
    const handleSubmitTest = useCallback(async (autoSubmit = false) => {
-    if (!testData || !user || !userId || isSubmitting || !startTime) return;
+    if (!testData || !user || !userId || isSubmitting || !startTime) {
+        console.warn("Submit prevented: Missing data, user, already submitting, or no start time.");
+        return;
+    }
      console.log(`Submitting test (Auto: ${autoSubmit})...`);
     setIsSubmitting(true);
 
     const endTime = Date.now();
     const attemptTimestamp = startTime; // Use the initial start time for the attempt ID
-    const attemptId = `${testCode}-${userId}-${attemptTimestamp}`;
 
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
       // Use index as a simple identifier within this attempt if question IDs aren't stable/available
-      // Ideally, `TestQuestion` should have a unique `id` from the question bank.
       questionId: `q-${index}`, // Example: use index if no stable ID
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
@@ -221,19 +232,27 @@ export default function ChapterwiseTestPage() {
     };
 
     try {
-      // Store result in local storage
-      localStorage.setItem(`testResult-${attemptId}`, JSON.stringify(sessionData));
-      console.log(`Test result saved to local storage with key: testResult-${attemptId}`);
-      toast({ title: "Test Submitted!", description: "Your responses have been recorded." });
+        console.log("Calling saveTestReport action with session data and test definition...");
+        // Call the server action to calculate results and save the report
+        const result = await saveTestReport(sessionData, testData);
 
-      // Redirect to results page, passing the unique attemptId
-      router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`);
+         if (result.success && result.results) {
+             console.log(`Test report saved successfully. File path: ${result.filePath}`);
+             toast({ title: "Test Submitted!", description: "Your responses have been saved." });
+
+             // Redirect to results page, passing the unique attemptTimestamp
+              router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestamp}`);
+         } else {
+             // Throw error if saving failed on the server
+             throw new Error(result.message || "Failed to save test report on the server.");
+         }
+
     } catch (e: any) {
        console.error("Submission failed:", e);
-       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results locally." });
-       setIsSubmitting(false); // Allow retry if submission fails locally
+       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results." });
+       setIsSubmitting(false); // Allow retry if submission fails
     }
-    // Note: No finally block needed here as navigation happens on success
+    // Removed finally block as navigation happens on success / error handling sets loading state
   }, [testData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router]);
 
 
@@ -257,14 +276,25 @@ export default function ChapterwiseTestPage() {
     );
   }
 
-  if (!testData || !testData.questions || testData.questions.length === 0 || !currentQuestion) {
+  if (!testData || !testData.questions || testData.questions.length === 0) { // Simplified check
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-        <p className="text-muted-foreground">Test data is unavailable or current question is missing.</p>
+        <p className="text-muted-foreground">Test data is unavailable or has no questions.</p>
         <Button onClick={() => router.push('/tests')}>Back to Test Series</Button>
       </div>
     );
+  }
+
+  // Added check for currentQuestion after confirming questions array exists
+  if (!currentQuestion) {
+     return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
+        <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
+        <p className="text-muted-foreground">Could not load current question data.</p>
+         <Button onClick={() => navigateQuestion(0)}>Go to First Question</Button>
+      </div>
+     );
   }
 
   if (showInstructions) {
@@ -276,15 +306,16 @@ export default function ChapterwiseTestPage() {
    // Function to render question content (text or image)
    const renderQuestionContent = (question: TestQuestion) => {
      // Check if image_url exists and prioritize it
-     if (question.image_url) {
+     if (question.question_image_url) {
        return (
          <Image
-           src={question.image_url} // Use the direct URL
+           src={question.question_image_url} // Use the direct URL
            alt={`Question ${currentQuestionIndex + 1}`}
            width={600} // Adjust as needed
            height={400} // Adjust as needed
            className="rounded-md border max-w-full h-auto mx-auto my-4" // Added margin
            data-ai-hint="question diagram" // Keep hint if useful
+           priority={currentQuestionIndex < 3} // Prioritize loading initial images
          />
        );
      }
@@ -292,7 +323,7 @@ export default function ChapterwiseTestPage() {
      else if (question.question_text) {
        return (
          <div
-           className="prose dark:prose-invert max-w-none prose-sm md:prose-base"
+           className="prose dark:prose-invert max-w-none prose-sm md:prose-base mathjax-content"
            dangerouslySetInnerHTML={{
              __html: question.question_text
                        .replace(/\$(.*?)\$/g, '\\($1\\)')
@@ -305,10 +336,29 @@ export default function ChapterwiseTestPage() {
      return <p className="text-muted-foreground">Question content not available.</p>;
    };
 
+   // Function to render option content
+    const renderOptionContent = (optionText: string | null | undefined) => {
+        if (!optionText) return null; // Return null or placeholder if option text is missing
+
+        // Check if optionText might contain MathJax
+        const containsMathJax = (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')));
+
+        if (containsMathJax) {
+            return (
+                <div className="prose-sm dark:prose-invert max-w-none flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
+            );
+        } else {
+            return (
+                <span className="flex-1">{optionText}</span>
+            );
+        }
+    };
+
 
   return (
     <>
     <Script
+        id="mathjax-script-test" // Unique ID for the script tag
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
@@ -322,7 +372,7 @@ export default function ChapterwiseTestPage() {
         <div className="flex items-center gap-4">
             {user && (
                 <div className="text-xs text-muted-foreground hidden sm:block">
-                    {user.displayName} ({user.model})
+                    {user.name} ({user.model}) {/* Changed from displayName */}
                 </div>
             )}
             <div className="flex items-center gap-1 text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-md">
@@ -364,12 +414,7 @@ export default function ChapterwiseTestPage() {
                 >
                   <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary mt-1"/>
                   <span className="font-medium">{optionKey}.</span>
-                   {/* Check if optionText might contain MathJax */}
-                   {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
-                     <div className="prose-sm dark:prose-invert max-w-none flex-1" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-                  ) : (
-                    <span className="flex-1">{optionText || `Option ${optionKey}`}</span> // Display Option Key if text is empty
-                  )}
+                   {renderOptionContent(optionText)}
                 </Label>
               );
             })}
