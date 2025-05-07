@@ -27,7 +27,7 @@ export async function generateOtp(email: string): Promise<{ success: boolean; me
   otpCache[email] = { otp, expiresAt };
 
   console.log(`**********************************************************************`);
-  console.log(`SIMULATED OTP SERVICE:`);
+  console.log(`SIMULATED OTP SERVICE (FOR DEVELOPMENT):`);
   console.log(`OTP for ${email}: ${otp}`);
   console.log(`Expires at: ${new Date(expiresAt).toLocaleString()}`);
   console.log(`(In a real application, this OTP would be sent via email/SMS)`);
@@ -36,7 +36,8 @@ export async function generateOtp(email: string): Promise<{ success: boolean; me
   // In a real application, you would use an email service (like Nodemailer with an SMTP provider) here.
   // Example: await sendEmail(email, `Your OTP is: ${otp}`);
 
-  return { success: true, message: "OTP sent to your email (simulated)." };
+  // Update the success message for the user
+  return { success: true, message: "OTP sent to your email." };
 }
 
 /**

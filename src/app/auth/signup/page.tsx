@@ -1,7 +1,7 @@
 // src/app/auth/signup/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -13,11 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GraduationCap, Loader2, Phone, ShieldCheck, MailIcon } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
+import { academicStatuses, type AcademicStatus } from '@/types';
 import { useAuth } from '@/context/auth-context';
 import { generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
 
-// Update schema to include OTP field
+// Updated schema with phone number and academic status
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -35,7 +35,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const { toast } = useToast();
-  const { signUp, loading: authLoading, initializationError } = useAuth(); // Use local signUp
+  const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   // Add state variables for OTP flow
   const [isSendingOtp, setIsSendingOtp] = useState(false);
@@ -75,22 +75,23 @@ export default function SignupPage() {
 
 
   // Function to handle sending OTP
-  const handleSendOtp = async () => {
-    if (!emailValue) {
+  const handleSendOtp = useCallback(async () => {
+    const email = form.getValues("email");
+    if (!email) {
       form.setError("email", { type: "manual", message: "Email is required to send OTP." });
       return;
     }
     // Basic email format validation before sending request
-    if (!z.string().email().safeParse(emailValue).success) {
+    if (!z.string().email().safeParse(email).success) {
         form.setError("email", { type: "manual", message: "Please enter a valid email address." });
         return;
     }
 
     setIsSendingOtp(true);
     try {
-      const result = await generateOtp(emailValue); // Call server action
+      const result = await generateOtp(email); // Call server action
       if (result.success) {
-        toast({ title: "OTP Sent", description: result.message });
+        toast({ title: "OTP Sent", description: result.message }); // Use message from action
         setOtpSent(true);
         setResendTimer(60); // Start 60-second cooldown
       } else {
@@ -101,10 +102,12 @@ export default function SignupPage() {
     } finally {
       setIsSendingOtp(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, toast]); // Include form and toast in dependencies
 
   // Function to handle verifying OTP
-   const handleVerifyOtp = async () => {
+   const handleVerifyOtp = useCallback(async () => {
+    const email = form.getValues("email");
     const otpValue = form.getValues("otp");
     if (!otpValue || otpValue.length !== 6) {
         form.setError("otp", {type: "manual", message: "Please enter a valid 6-digit OTP."});
@@ -112,7 +115,7 @@ export default function SignupPage() {
     }
     setIsVerifyingOtp(true);
     try {
-      const result = await verifyOtp(emailValue, otpValue); // Call server action
+      const result = await verifyOtp(email, otpValue); // Call server action
       if (result.success) {
         toast({ title: "OTP Verified", description: result.message });
         setOtpVerified(true); // Set OTP as verified
@@ -128,7 +131,8 @@ export default function SignupPage() {
     } finally {
       setIsVerifyingOtp(false);
     }
-  };
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [form, toast]);
 
 
   // Function to handle final form submission
@@ -140,6 +144,7 @@ export default function SignupPage() {
     // Ensure OTP is verified before proceeding
     if (!otpVerified) {
       toast({ variant: 'destructive', title: 'OTP Not Verified', description: 'Please verify your OTP before signing up.' });
+      form.setError("otp", {type: "manual", message: "Please verify your email first."});
       return;
     }
 
@@ -212,7 +217,7 @@ export default function SignupPage() {
                              <Button
                                 type="button"
                                 onClick={handleSendOtp}
-                                disabled={isSendingOtp || resendDisabled || otpSent}
+                                disabled={isSendingOtp || resendDisabled} // Only disable if sending or in cooldown
                                 variant="outline"
                                 size="sm"
                               >
