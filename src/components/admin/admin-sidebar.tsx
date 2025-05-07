@@ -16,6 +16,7 @@ import {
   Edit,
   PlusCircle, // Added icon for Create Test
   List, // Added icon for Manage Tests
+  Globe, // Icon for redirecting to main website
 } from 'lucide-react';
 import {
   Sidebar,
@@ -43,12 +44,13 @@ const adminNavItems = [
 ];
 
 const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
+const homeNavItem = { href: '/', label: 'Main Website', icon: Globe }; // New item for main website
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const { user } = useAuth(); // Could be used to conditionally show items
 
-  const isActive = (href: string) => pathname === href || (href !== '/admin' && pathname.startsWith(href));
+  const isActive = (href: string) => pathname === href || (href !== '/admin' && href !== '/' && pathname.startsWith(href));
 
   // Check if the current user is the designated admin
   const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -76,6 +78,15 @@ export function AdminSidebar() {
 
       <SidebarContent className="flex-1 mt-4">
         <SidebarMenu>
+           {/* Add Home button to redirect to main website */}
+           <SidebarMenuItem>
+              <Link href={homeNavItem.href} legacyBehavior passHref>
+                <SidebarMenuButton as="a" isActive={isActive(homeNavItem.href)} tooltip={homeNavItem.label}>
+                  <homeNavItem.icon />
+                  <span>{homeNavItem.label}</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
           {adminNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <Link href={item.href} legacyBehavior passHref>
@@ -104,4 +115,3 @@ export function AdminSidebar() {
     </Sidebar>
   );
 }
-
