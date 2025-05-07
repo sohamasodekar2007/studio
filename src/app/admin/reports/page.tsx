@@ -1,81 +1,29 @@
 // src/app/admin/reports/page.tsx
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, Printer, BarChartBig, Users, Info, Loader2, Search } from "lucide-react";
+import { Eye, Printer, BarChartBig, Users, Info, Loader2, Search, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GeneratedTest, TestSession, TestResultSummary, UserProfile } from '@/types';
-import { getAllGeneratedTests, getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import { readUsers, getUserById } from '@/actions/user-actions'; 
+import { getAllGeneratedTests } from '@/actions/generated-test-actions'; // Keep this
+import { getAllReportsForTest } from '@/actions/test-report-actions'; // Use this action to get reports with user data
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import TestHistoryDialog from '@/components/admin/test-history-dialog';
 import TestRankingDialog from '@/components/admin/test-ranking-dialog';
 import TestReportPrintPreview from '@/components/admin/test-report-print-preview';
 
-// Helper function to calculate results (simplified version, adapt as needed)
-function calculateBasicSummary(session: TestSession, testDef: GeneratedTest | null): Partial<TestResultSummary> & { score: number; percentage: number; correct: number; attempted: number, totalMarks: number } {
-    if (!testDef) {
-      return { testName: 'Unknown Test', submittedAt: new Date(session.startTime).toISOString(), totalQuestions: 0, score: 0, percentage: 0, correct: 0, attempted: 0, totalMarks: 0 };
-    }
-    
-    let allQuestions = [];
-    if (testDef.testType === 'chapterwise' && testDef.questions) {
-        allQuestions = testDef.questions;
-    } else if (testDef.testType === 'full_length') {
-        allQuestions = [
-            ...(testDef.physics || []),
-            ...(testDef.chemistry || []),
-            ...(testDef.maths || []),
-            ...(testDef.biology || []),
-        ].filter(q => q);
-    }
-
-
-    let correctCount = 0;
-    let attemptedCount = 0;
-    let totalMarksPossible = 0;
-    let score = 0;
-
-    session.answers.forEach((userAns, index) => {
-        const questionDef = allQuestions[index];
-        if (!questionDef) return;
-
-        totalMarksPossible += questionDef.marks;
-        if (userAns.selectedOption) {
-            attemptedCount++;
-            const correctAnswerKey = questionDef.answer.replace('Option ', '').trim();
-            if (userAns.selectedOption === correctAnswerKey) {
-                correctCount++;
-                score += questionDef.marks;
-            }
-        }
-    });
-    const percentage = totalMarksPossible > 0 ? (score / totalMarksPossible) * 100 : 0;
-
-    return {
-        testName: testDef.name,
-        submittedAt: new Date(session.endTime || session.startTime).toISOString(),
-        totalQuestions: allQuestions.length,
-        correct: correctCount,
-        attempted: attemptedCount,
-        score,
-        percentage,
-        totalMarks: totalMarksPossible,
-    };
-}
-
-
 export default function AdminReportsPage() {
   const { toast } = useToast();
   const [allTests, setAllTests] = useState<GeneratedTest[]>([]);
   const [filteredTests, setFilteredTests] = useState<GeneratedTest[]>([]);
   const [selectedTestType, setSelectedTestType] = useState<'all' | 'chapterwise' | 'full_length'>('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingTests, setIsLoadingTests] = useState(true); // Renamed for clarity
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false); // For loading attempts/ranking/print
   const [searchTerm, setSearchTerm] = useState('');
 
   const [selectedTestForHistory, setSelectedTestForHistory] = useState<GeneratedTest | null>(null);
@@ -88,12 +36,12 @@ export default function AdminReportsPage() {
   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [printReportData, setPrintReportData] = useState<{
     test: GeneratedTest;
-    attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; rank?: number; totalMarks?: number }>;
+    attempts: Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null; rank?: number }>; // Include user and rank
   } | null>(null);
 
 
   const fetchTests = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoadingTests(true);
     try {
       const testsData = await getAllGeneratedTests();
       setAllTests(testsData);
@@ -101,7 +49,7 @@ export default function AdminReportsPage() {
       toast({ variant: "destructive", title: "Error", description: "Could not load tests." });
       setAllTests([]);
     } finally {
-      setIsLoading(false);
+      setIsLoadingTests(false);
     }
   }, [toast]);
 
@@ -123,67 +71,40 @@ export default function AdminReportsPage() {
     setFilteredTests(currentTests);
   }, [allTests, selectedTestType, searchTerm]);
 
-  const fetchTestAttempts = useCallback(async (testCode: string): Promise<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; totalMarks?: number }>> => {
-    const attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; totalMarks?: number }> = [];
-    if (typeof window === 'undefined') return attempts; 
-
-    const testDef = await getGeneratedTestByCode(testCode); 
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      // Key format: testResult-testCode-userId-timestamp
-      if (key && key.startsWith(`testResult-${testCode}-`)) { 
-        const sessionJson = localStorage.getItem(key);
-        if (sessionJson) {
-          try {
-            const sessionData: TestSession = JSON.parse(sessionJson);
-            const summary = calculateBasicSummary(sessionData, testDef);
-            const userProfile = await getUserById(sessionData.userId);
-
-            attempts.push({
-              ...summary,
-              attemptId: key.replace('testResult-', ''), // Store the full unique key part
-              testCode: sessionData.testId,
-              userId: sessionData.userId,
-              user: userProfile || undefined,
-            });
-          } catch (e) {
-            console.error(`Failed to parse or process attempt ${key}:`, e);
-          }
-        }
-      }
-    }
-    attempts.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    return attempts;
-  }, []);
-
 
   const handleViewHistory = async (test: GeneratedTest) => {
     setSelectedTestForHistory(test);
-    setIsHistoryDialogOpen(true);
+    setIsHistoryDialogOpen(true); // Dialog will handle fetching its own data
   };
 
   const handleViewRanking = async (test: GeneratedTest) => {
      setSelectedTestForRanking(test);
-     setIsRankingDialogOpen(true);
+     setIsRankingDialogOpen(true); // Dialog will handle fetching its own data
   };
 
   const handlePrintReport = async (test: GeneratedTest) => {
-    setIsLoading(true); // Indicate loading while preparing print data
+    setIsLoadingDetails(true); // Indicate loading while preparing print data
+    setSelectedTestForPrint(test); // Keep track of which test is being printed
     try {
-        const attemptsData = await fetchTestAttempts(test.test_code);
+        // Fetch attempts WITH user details directly using the correct action
+        const attemptsData = await getAllReportsForTest(test.test_code);
+
         // Sort attempts by score for ranking in print preview
         const rankedAttempts = attemptsData
-            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .sort((a, b) => {
+                const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
+                if (scoreDiff !== 0) return scoreDiff;
+                return (a.timeTakenMinutes ?? Infinity) - (b.timeTakenMinutes ?? Infinity); // Use time taken for tie-breaking
+             })
             .map((att, index) => ({ ...att, rank: index + 1 }));
 
         setPrintReportData({ test, attempts: rankedAttempts });
-        setSelectedTestForPrint(test); // Keep track of which test is being printed
         setIsPrintPreviewOpen(true);
     } catch (e) {
+        console.error("Error preparing report for printing:", e);
         toast({ variant: "destructive", title: "Error", description: "Could not prepare report for printing." });
     } finally {
-        setIsLoading(false);
+        setIsLoadingDetails(false);
     }
   };
 
@@ -234,7 +155,7 @@ export default function AdminReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoadingTests ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <TableRow key={`skel-${index}`}>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
@@ -260,8 +181,8 @@ export default function AdminReportsPage() {
                       <Button variant="outline" size="sm" onClick={() => handleViewRanking(test)}>
                         <BarChartBig className="mr-1.5 h-3.5 w-3.5" /> Rank
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoading && selectedTestForPrint?.test_code === test.test_code}>
-                        {isLoading && selectedTestForPrint?.test_code === test.test_code ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Print
+                      <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoadingDetails && selectedTestForPrint?.test_code === test.test_code}>
+                        {isLoadingDetails && selectedTestForPrint?.test_code === test.test_code ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Print
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -283,12 +204,14 @@ export default function AdminReportsPage() {
         </CardFooter>
       </Card>
 
+       {/* Dialogs */}
       {selectedTestForHistory && (
         <TestHistoryDialog
           isOpen={isHistoryDialogOpen}
           onClose={() => { setIsHistoryDialogOpen(false); setSelectedTestForHistory(null);}}
           test={selectedTestForHistory}
-          fetchTestAttempts={fetchTestAttempts}
+          // Pass the correct action to fetch attempts with user details
+          fetchTestAttempts={getAllReportsForTest}
         />
       )}
       {selectedTestForRanking && (
@@ -296,7 +219,8 @@ export default function AdminReportsPage() {
           isOpen={isRankingDialogOpen}
           onClose={() => { setIsRankingDialogOpen(false); setSelectedTestForRanking(null);}}
           test={selectedTestForRanking}
-          fetchTestAttempts={fetchTestAttempts}
+          // Pass the correct action to fetch attempts with user details
+          fetchTestAttempts={getAllReportsForTest}
         />
       )}
       {isPrintPreviewOpen && printReportData && (

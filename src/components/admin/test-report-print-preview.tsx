@@ -1,8 +1,7 @@
 // src/components/admin/test-report-print-preview.tsx
 'use client';
 
-import { useEffect, useRef }
-from 'react';
+import { useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { GeneratedTest, TestResultSummary, UserProfile } from '@/types';
@@ -11,7 +10,8 @@ import { Printer, X } from 'lucide-react';
 interface TestReportPrintPreviewProps {
   reportData: {
     test: GeneratedTest;
-    attempts: Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>;
+    // Update attempts type to match the data structure passed from the parent
+    attempts: Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null; rank?: number }>;
   } | null;
   onClose: () => void;
 }
@@ -35,7 +35,7 @@ export default function TestReportPrintPreview({ reportData, onClose }: TestRepo
     if (printContent) {
       const originalContents = document.body.innerHTML;
       const printSection = printContent.innerHTML;
-      
+
       // Create a new window or iframe for printing to isolate styles
       const printWindow = window.open('', '_blank', 'height=600,width=800');
       if (printWindow) {
@@ -45,7 +45,7 @@ export default function TestReportPrintPreview({ reportData, onClose }: TestRepo
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; } /* Smaller font */
             th { background-color: #f2f2f2; }
             h1, h2, h3 { color: #333; }
             .print-header { text-align: center; margin-bottom: 20px; }
@@ -63,7 +63,8 @@ export default function TestReportPrintPreview({ reportData, onClose }: TestRepo
         printWindow.document.close(); // Necessary for IE >= 10
         printWindow.focus(); // Necessary for IE >= 10
         printWindow.print();
-        // printWindow.close(); // Closing automatically might be too fast for some browsers
+        // Closing automatically might be too fast for some browsers
+        // printWindow.close();
       } else {
         alert("Could not open print window. Please check your browser's pop-up settings.");
       }
@@ -76,18 +77,18 @@ export default function TestReportPrintPreview({ reportData, onClose }: TestRepo
 
   return (
     <Dialog open={!!reportData} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col"> {/* Wider dialog */}
         <DialogHeader>
           <DialogTitle>Print Preview: {test.name}</DialogTitle>
           <DialogDescription>
             Review the report for Test Code: {test.test_code}. Click "Print Report" to print.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div ref={printAreaRef} className="flex-grow overflow-y-auto p-1 pr-2">
           <div className="print-header">
             <h1>Test Report: {test.name}</h1>
-            <p><strong>Test Code:</strong> {test.test_code} | <strong>Duration:</strong> {test.duration} mins | <strong>Total Questions:</strong> {test.total_questions}</p>
+            <p><strong>Test Code:</strong> {test.test_code} | <strong>Duration:</strong> {test.duration} mins | <strong>Total Marks:</strong> {attempts[0]?.totalMarks ?? test.total_questions}</p>
           </div>
 
           <h2 style={{ marginTop: '20px', marginBottom: '10px', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>User Rankings & Scores</h2>
@@ -104,12 +105,14 @@ export default function TestReportPrintPreview({ reportData, onClose }: TestRepo
                 </tr>
               </thead>
               <tbody>
-                {attempts.map((attempt, index) => (
-                  <tr key={attempt.attemptId}>
-                    <td>{index + 1}</td>
+                 {/* Display only top 40 ranks in print */}
+                {attempts.slice(0, 40).map((attempt) => (
+                  <tr key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
+                    <td>{attempt.rank}</td>
                     <td>{attempt.user?.name || 'N/A'}</td>
                     <td>{attempt.user?.email || 'N/A'}</td>
-                    <td>{attempt.score ?? 'N/A'} / {attempt.totalQuestions ?? 'N/A'}</td>
+                    {/* Display total marks if available */}
+                    <td>{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</td>
                     <td>{attempt.percentage?.toFixed(2) ?? 'N/A'}%</td>
                     <td>{new Date(attempt.submittedAt!).toLocaleString()}</td>
                   </tr>

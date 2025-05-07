@@ -12,6 +12,7 @@ import type { TestSession, GeneratedTest, QuestionStatus, TestQuestion, Question
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
+import { getTestReport } from '@/actions/test-report-actions'; // Import action to get specific report
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -44,9 +45,9 @@ export default function TestReviewPage() {
 
   const testCode = params.testCode as string;
   const userId = searchParams.get('userId');
-  const attemptId = searchParams.get('attemptId');
+  const attemptTimestampStr = searchParams.get('attemptTimestamp'); // Get timestamp as string
 
-  const [testSession, setTestSession] = useState<TestSession | null>(null);
+  const [testReport, setTestReport] = useState<TestResultSummary | null>(null); // Store the full report
   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,54 +62,42 @@ export default function TestReviewPage() {
 
    // Typeset whenever the current question index changes, or when data loads initially
    useEffect(() => {
-       if (testDefinition && testSession) {
+       if (testDefinition && testReport) {
            typesetMathJax();
        }
-   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]);
+   }, [currentQuestionReviewIndex, testDefinition, testReport, typesetMathJax]);
 
   const fetchReviewData = useCallback(async () => {
-    if (!testCode || !userId || !attemptId) {
+    if (!testCode || !userId || !attemptTimestampStr) {
       setError("Missing information to load test review.");
       setIsLoading(false);
       return;
+    }
+    const attemptTimestamp = parseInt(attemptTimestampStr, 10);
+    if (isNaN(attemptTimestamp)) {
+        setError("Invalid attempt identifier.");
+        setIsLoading(false);
+        return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      const testDefData = await getGeneratedTestByCode(testCode);
-      if (!testDefData) {
-          throw new Error("Original test definition not found.");
-      }
+        // Fetch both concurrently
+        const [reportData, testDefData] = await Promise.all([
+            getTestReport(userId, testCode, attemptTimestamp),
+            getGeneratedTestByCode(testCode).catch(err => {
+                console.error("Failed to fetch test definition for review:", err);
+                return null; // Allow review even if definition fetch fails (use report data)
+            })
+        ]);
 
-      // Helper function to get all questions
-      const getAllQuestions = (testDef: GeneratedTest): TestQuestion[] => {
-          if (testDef.testType === 'chapterwise' && testDef.questions) return testDef.questions;
-          if (testDef.testType === 'full_length') return [...(testDef.physics ?? []), ...(testDef.chemistry ?? []), ...(testDef.maths ?? []), ...(testDef.biology ?? [])];
-          return [];
-      };
-
-      const allQuestions = getAllQuestions(testDefData);
-      if (!allQuestions || allQuestions.length === 0) {
-           throw new Error("Test definition is invalid or has no questions.");
-       }
-
-      setTestDefinition(testDefData);
-
-       const storageKey = `testResult-${attemptId}`;
-       const storedSessionJson = localStorage.getItem(storageKey);
-      if (!storedSessionJson) {
-        throw new Error(`Test attempt data not found for attempt ID: ${attemptId}.`);
-      }
-      const sessionData: TestSession = JSON.parse(storedSessionJson);
-
-       // Validate session answers length against definition
-       if (sessionData.answers.length !== allQuestions.length) {
-            console.warn(`Mismatch in question count: Definition (${allQuestions.length}), Session (${sessionData.answers.length})`);
-            // Potentially handle this mismatch, e.g., by truncating session answers or showing an error
+        if (!reportData) {
+            throw new Error(`Test attempt data not found for this attempt.`);
         }
 
-      setTestSession(sessionData);
+        setTestDefinition(testDefData); // Can be null if fetch failed
+        setTestReport(reportData);
 
     } catch (err: any) {
       console.error("Error fetching review data:", err);
@@ -116,12 +105,12 @@ export default function TestReviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, userId, attemptId]);
+  }, [testCode, userId, attemptTimestampStr]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-        router.push(`/auth/login?redirect=/chapterwise-test-review/${testCode}?userId=${userId}&attemptId=${attemptId}`);
+        router.push(`/auth/login?redirect=/chapterwise-test-review/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`);
         return;
     }
      if (user && userId && user.id !== userId) {
@@ -130,29 +119,12 @@ export default function TestReviewPage() {
         return;
     }
     fetchReviewData();
-  }, [testCode, userId, attemptId, authLoading, user, router, fetchReviewData]);
+  }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchReviewData]);
 
 
-    const allQuestions = useMemo(() => {
-        if (!testDefinition) return [];
-        if (testDefinition.testType === 'chapterwise' && testDefinition.questions) {
-            return testDefinition.questions;
-        } else if (testDefinition.testType === 'full_length') {
-             const questions = [
-                ...(testDefinition.physics || []),
-                ...(testDefinition.chemistry || []),
-                ...(testDefinition.maths || []),
-                ...(testDefinition.biology || []),
-            ].filter(q => q); // filter out undefined subject arrays if any
-            return questions;
-        }
-        return [];
-    }, [testDefinition]);
+    const allQuestionsFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
 
-
-  const currentReviewQuestion: TestQuestion | undefined = allQuestions?.[currentQuestionReviewIndex];
-  const currentUserAnswerDetailed = testSession?.answers?.[currentQuestionReviewIndex];
-
+  const currentReviewAnswer = allQuestionsFromReport?.[currentQuestionReviewIndex];
 
   if (isLoading || authLoading) {
     return (
@@ -184,82 +156,63 @@ export default function TestReviewPage() {
     );
   }
 
-  if (!testDefinition || !testSession || !currentReviewQuestion || !currentUserAnswerDetailed) {
+  // Check if report and the specific answer detail exist
+  if (!testReport || !currentReviewAnswer) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Review Data Not Available</h1>
         <p className="text-muted-foreground mb-6">We could not load the necessary data for this test review.</p>
          <Button asChild>
-          <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`}>Back to Results</Link>
+          <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>Back to Results</Link>
         </Button>
       </div>
     );
   }
 
-  const totalQuestions = allQuestions.length || 0;
+  const totalQuestions = allQuestionsFromReport.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
+  const correctOptionKey = currentReviewAnswer?.correctAnswer; // Already stored as key "A", "B", etc.
+  const userSelectedOptionKey = currentReviewAnswer?.userAnswer;
+  const isUserCorrect = currentReviewAnswer?.isCorrect;
+  const questionStatus = currentReviewAnswer?.status || QuestionStatusEnum.NotVisited;
 
-   // Safely get the correct answer key, handling potential missing "Option " prefix
-   const correctOptionKey = useMemo(() => {
-     const ans = currentReviewQuestion?.answer;
-     if (!ans) return null; // No answer defined
-     return ans.startsWith('Option ') ? ans.replace('Option ', '').trim() : ans.trim();
-   }, [currentReviewQuestion]);
+  // Get options from the test definition if available, otherwise use placeholder
+  const currentQuestionDefinition = testDefinition ? getAllQuestionsFromTest(testDefinition)[currentQuestionReviewIndex] : null;
+  const optionsToDisplay = currentQuestionDefinition?.options || ["A", "B", "C", "D"]; // Fallback if definition fails
 
-  const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
-  const isUserCorrect = userSelectedOptionKey === correctOptionKey;
-  const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
     // Function to render content, handling both text and image, and applying MathJax transformation
     const renderContentWithMathJax = (
         textContent: string | undefined | null,
-        imageUrl: string | undefined | null, // This is the relative path/filename from JSON
+        imageUrl: string | undefined | null, // This is the RELATIVE public URL from report/definition
         context: 'question' | 'explanation'
     ) => {
         let contentToRender: React.ReactNode = null;
 
-        // Determine if it's an image question/explanation
-        const isImageContent = (context === 'question' && currentReviewQuestion?.type === 'image' && imageUrl) || (context === 'explanation' && imageUrl);
+        // Determine if it's an image content
+        const isImageContent = !!imageUrl;
 
-        if (isImageContent && imageUrl && testDefinition) {
-            // Construct the full public image path
-            let imagePath = imageUrl; // Default fallback
-             if (testDefinition.testType === 'chapterwise' && testDefinition.lesson) {
-                 const subject = testDefinition.test_subject[0]; // Assuming single subject for chapterwise
-                 imagePath = `/question_bank_images/${subject}/${testDefinition.lesson}/images/${imageUrl}`;
-             } else if (testDefinition.testType === 'full_length') {
-                // Need logic to determine subject/lesson for full length if images are stored that way
-                // For now, assume imageUrl might be a direct path or needs different logic
-                // Placeholder: Use imageUrl directly or adapt based on your full_length storage
-                 console.warn("Image path construction for full_length tests needs specific logic based on storage structure.");
-             }
-
+        if (isImageContent && imageUrl) {
             contentToRender = (
                  <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
                     <Image
-                        src={imagePath}
+                        src={imageUrl} // Use the URL directly
                         alt={context === 'question' ? "Question Image" : "Explanation Image"}
                         layout="fill"
                         objectFit="contain"
                         className="rounded-md border"
                         data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                        onError={(e) => console.error(`Error loading image: ${imagePath}`, e)} // Add error handling for images
+                        onError={(e) => console.error(`Error loading image: ${imageUrl}`, e)} // Add error handling for images
                     />
                  </div>
              );
         } else if (textContent) {
-            // Prepare text for MathJax rendering
-            const mathJaxProcessedText = textContent
-                .replace(/\\\( /g, '\\(') // Fix potential space after \(
-                .replace(/ \\\)/g, '\\)') // Fix potential space before \)
-                .replace(/\\\[ /g, '\\[') // Fix potential space after \[
-                .replace(/ \\\]/g, '\\]'); // Fix potential space before \]
-             // Render using dangerouslySetInnerHTML for MathJax to process
+            // Render using dangerouslySetInnerHTML for MathJax to process
             contentToRender = (
                 <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground"
-                    dangerouslySetInnerHTML={{ __html: mathJaxProcessedText }}
+                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" // Added class for targeting
+                    dangerouslySetInnerHTML={{ __html: textContent }} // Assume textContent already has MathJax delimiters if needed
                  />
             );
         } else {
@@ -286,11 +239,11 @@ export default function TestReviewPage() {
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
       <div className="flex justify-between items-center">
         <Button variant="outline" asChild>
-            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`}>
+            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Results
             </Link>
         </Button>
-         <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">{testDefinition.name}</h1>
+         <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">{testReport.testName || 'Test Review'}</h1>
          {/* Placeholder for potential navigation buttons or info */}
          <div className="w-24"></div>
       </div>
@@ -299,9 +252,10 @@ export default function TestReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-            <Badge variant="outline">Marks: {currentReviewQuestion.marks}</Badge>
+             {/* Use total marks from report if available */}
+             <Badge variant="outline">Marks: {currentQuestionDefinition?.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
           </div>
-           {currentUserAnswerDetailed?.status && (
+           {currentReviewAnswer?.status && (
                 <Badge
                     variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
                     className={cn("text-xs w-fit mt-2", {
@@ -319,13 +273,13 @@ export default function TestReviewPage() {
         <CardContent className="space-y-4">
             {/* Render Question */}
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContentWithMathJax(currentReviewQuestion?.question_text, currentReviewQuestion?.question_image_url, 'question')}
+                 {renderContentWithMathJax(currentReviewAnswer?.questionText, currentReviewAnswer?.questionImageUrl, 'question')}
             </div>
 
           {/* Render Options */}
           <div className="space-y-2 pt-4">
             <p className="font-semibold text-card-foreground">Options:</p>
-            {currentReviewQuestion?.options.map((optionText, idx) => {
+            {optionsToDisplay.map((optionText, idx) => {
               const optionKey = optionKeys[idx];
               const isSelected = userSelectedOptionKey === optionKey;
               const isCorrect = correctOptionKey === optionKey;
@@ -351,13 +305,13 @@ export default function TestReviewPage() {
           </div>
 
           {/* Render Explanation */}
-           {(currentReviewQuestion.explanation_text || currentReviewQuestion.explanation_image_url) && (
+           {(currentReviewAnswer.explanationText || currentReviewAnswer.explanationImageUrl) && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
-                 {renderContentWithMathJax(currentReviewQuestion.explanation_text, currentReviewQuestion.explanation_image_url, 'explanation')}
+                 {renderContentWithMathJax(currentReviewAnswer.explanationText, currentReviewAnswer.explanationImageUrl, 'explanation')}
               </div>
             </div>
           )}
@@ -366,7 +320,7 @@ export default function TestReviewPage() {
           <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
-          <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionReviewIndex === totalQuestions - 1}>
+          <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
             Next <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </CardFooter>

@@ -9,153 +9,47 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, History, Eye, Loader2 } from 'lucide-react'; // Added Loader2
-import type { TestSession, TestResultSummary, GeneratedTest, UserProfile } from '@/types';
-import { getGeneratedTestByCode } from '@/actions/generated-test-actions'; // Action to get test definition
-
-// Helper to calculate results (reuse from results page)
-function calculateBasicSummary(session: TestSession, testDef: GeneratedTest | null): Partial<TestResultSummary> & { totalMarks: number } {
-    if (!testDef || !session.answers) {
-      return { testName: testDef?.name || 'Unknown Test', submittedAt: new Date(session.endTime || session.startTime).toISOString(), totalQuestions: 0, score: 0, percentage: 0, totalMarks: 0 };
-    }
-
-    const allQuestions = (testDef.testType === 'chapterwise' && testDef.questions)
-                         ? testDef.questions
-                         : (testDef.testType === 'full_length')
-                           ? [...(testDef.physics ?? []), ...(testDef.chemistry ?? []), ...(testDef.maths ?? []), ...(testDef.biology ?? [])]
-                           : [];
-
-    if (allQuestions.length === 0 || allQuestions.length !== session.answers.length) {
-         console.warn("Mismatch calculating summary for history:", session.testId);
-         return { testName: testDef.name, submittedAt: new Date(session.endTime || session.startTime).toISOString(), totalQuestions: allQuestions.length, score: undefined, percentage: undefined, totalMarks: 0 };
-     }
-
-
-    let correct = 0;
-    let score = 0;
-    let totalMarksPossible = 0;
-
-    session.answers.forEach((ans, index) => {
-        const qDef = allQuestions[index];
-        if (qDef) {
-             const currentMarks = qDef.marks || 1;
-             totalMarksPossible += currentMarks;
-             const correctAnswerKey = qDef.answer?.replace('Option ', '').trim();
-             if (ans.selectedOption === correctAnswerKey) {
-                 correct++;
-                 score += currentMarks;
-             }
-        }
-    });
-
-    const percentage = totalMarksPossible > 0 ? (score / totalMarksPossible) * 100 : 0;
-
-    return {
-        testName: testDef.name,
-        submittedAt: new Date(session.endTime || session.startTime).toISOString(),
-        totalQuestions: allQuestions.length,
-        correct: correct,
-        score: score,
-        percentage: percentage,
-        totalMarks: totalMarksPossible, // Include total possible marks
-    };
-}
-
+import { AlertTriangle, History, Eye, Loader2, RefreshCw } from 'lucide-react'; // Added Loader2, RefreshCw
+import type { TestResultSummary } from '@/types';
+import { getAllTestReportsForUser } from '@/actions/test-report-actions'; // Import the new action
 
 export default function ProgressPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [testHistory, setTestHistory] = useState<Array<Partial<TestResultSummary> & { attemptId: string; testCode: string; totalMarks?: number }>>([]);
+  // State holds partial summaries as some data might be missing if parsing failed on backend
+  const [testHistory, setTestHistory] = useState<Array<Partial<TestResultSummary> & { attemptTimestamp: number }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // useCallback to memoize the fetch function
   const fetchTestHistory = useCallback(async () => {
-    if (!user || !user.id || typeof window === 'undefined') {
+    if (!user || !user.id) {
         if (!authLoading) setIsLoading(false); // Stop loading if auth is done and no user
         return;
     };
 
     setIsLoading(true);
     setError(null);
-    console.log("Fetching test history for user:", user.id);
+    console.log("ProgressPage: Fetching test history for user:", user.id);
 
     try {
-      const history: Array<Partial<TestResultSummary> & { attemptId: string; testCode: string; totalMarks?: number }> = [];
-      const keysToFetchDefs: string[] = [];
-      const sessions: { [key: string]: TestSession } = {};
+        // Fetch history using the server action
+        const history = await getAllTestReportsForUser(user.id);
 
-      // 1. Iterate localStorage to find relevant session keys
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        // Key format: testResult-testCode-userId-timestamp
-        if (key && key.startsWith(`testResult-`) && key.includes(`-${user.id}-`)) {
-           const sessionJson = localStorage.getItem(key);
-           if (sessionJson) {
-                try {
-                    const sessionData: TestSession = JSON.parse(sessionJson);
-                     const attemptId = key.replace('testResult-', '');
-                     sessions[attemptId] = sessionData;
-                     if (!keysToFetchDefs.includes(sessionData.testId)) {
-                        keysToFetchDefs.push(sessionData.testId);
-                     }
-                } catch (e) {
-                    console.warn(`Failed to parse session data for key ${key}:`, e);
-                }
-           }
-        }
-      }
-      console.log(`Found ${Object.keys(sessions).length} session(s) in localStorage.`);
+        // Ensure attemptTimestamp is present for key generation (should be, as it's startTime)
+        const validatedHistory = history.filter(h => h.attemptTimestamp !== undefined) as Array<Partial<TestResultSummary> & { attemptTimestamp: number }>;
 
-       // 2. Fetch Test Definitions concurrently
-       const testDefsMap = new Map<string, GeneratedTest | null>();
-       if (keysToFetchDefs.length > 0) {
-           console.log("Fetching definitions for test codes:", keysToFetchDefs);
-           const definitionPromises = keysToFetchDefs.map(code =>
-                getGeneratedTestByCode(code).catch(err => {
-                    console.error(`Failed to fetch definition for ${code}:`, err);
-                    return null; // Return null on error for specific test
-                })
-           );
-           const definitions = await Promise.all(definitionPromises);
-           keysToFetchDefs.forEach((code, index) => {
-                testDefsMap.set(code, definitions[index]);
-           });
-       }
-
-
-      // 3. Calculate summary for each session using fetched definitions
-      for (const attemptId in sessions) {
-          const sessionData = sessions[attemptId];
-          const testDef = testDefsMap.get(sessionData.testId) || null; // Get definition or null
-          const summary = calculateBasicSummary(sessionData, testDef);
-          history.push({
-            ...summary,
-            attemptId: attemptId,
-            testCode: sessionData.testId,
-            userId: sessionData.userId,
-          });
-      }
-
-      // Sort history by submission date, newest first
-      history.sort((a, b) => {
-          const dateA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
-          const dateB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
-          return dateB - dateA;
-      });
-
-      setTestHistory(history);
-      console.log("Processed test history:", history);
+        setTestHistory(validatedHistory);
+        console.log("ProgressPage: Processed test history:", validatedHistory);
 
     } catch (err: any) {
       console.error("Error fetching test history:", err);
       setError(err.message || "Failed to load your test history.");
-       setTestHistory([]); // Clear history on error
+      setTestHistory([]); // Clear history on error
     } finally {
       setIsLoading(false);
     }
   }, [user, authLoading]); // Add authLoading dependency
-
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -217,7 +111,7 @@ export default function ProgressPage() {
         <Card>
           <CardHeader>
             <CardTitle>Test History</CardTitle>
-            <CardDescription>A log of all your completed tests stored locally.</CardDescription>
+            <CardDescription>A log of all your completed tests.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -232,22 +126,21 @@ export default function ProgressPage() {
               </TableHeader>
               <TableBody>
                 {testHistory.map((attempt) => (
-                  <TableRow key={attempt.attemptId}>
+                  <TableRow key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
                     <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell>
                      <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell> {/* Show total marks if available */}
                     <TableCell className="text-center hidden sm:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
                     <TableCell className="hidden md:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell>
                     <TableCell className="text-right space-x-2">
-                       {/* Link to Results Page */}
+                       {/* Link to Results Page - Pass attemptTimestamp */}
                        <Button variant="secondary" size="sm" asChild>
-                            <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptId=${attempt.attemptId}`}>
+                            <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
                                 View Result
                             </Link>
                        </Button>
-                       {/* Link to Review Page */}
+                       {/* Link to Review Page - Pass attemptTimestamp */}
                       <Button variant="outline" size="sm" asChild>
-                        {/* Ensure the link points to the correct review page structure */}
-                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${user?.id}&attemptId=${attempt.attemptId}`}>
+                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
                           <Eye className="mr-1.5 h-4 w-4" /> Review
                         </Link>
                       </Button>
@@ -262,4 +155,3 @@ export default function ProgressPage() {
     </div>
   );
 }
-

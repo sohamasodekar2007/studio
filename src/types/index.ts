@@ -27,7 +27,7 @@ export interface UserProfile {
   password?: string; // Store hashed password
   name: string | null;
   phone: string | null;
-  avatarUrl?: string | null; // Filename (e.g., avatar-userid-timestamp.png)
+  avatarUrl?: string | null; // Filename (e.g., avatar-userid-timestamp.png) stored relative to public/avatars
   referral?: string; // Optional referral code
   class: AcademicStatus | null; // Academic status
   model: UserModel; // User's subscription model
@@ -64,7 +64,7 @@ export interface QuestionBankItem {
   type: QuestionType;
   question: {
     text?: string | null;
-    image?: string | null; // Filename
+    image?: string | null; // Filename relative to public/question_bank_images/{subject}/{lesson}/images/
   };
   options: {
     A: string;
@@ -75,7 +75,7 @@ export interface QuestionBankItem {
   correct: "A" | "B" | "C" | "D";
   explanation: {
     text?: string | null;
-    image?: string | null; // Filename
+    image?: string | null; // Filename relative to public/question_bank_images/{subject}/{lesson}/images/
   };
   isPyq?: boolean; // Flag to indicate if it's a PYQ
   pyqDetails?: {
@@ -90,8 +90,7 @@ export interface QuestionBankItem {
 
 // ---- Generated Test Definition Types ----
 
-// Define Audience Types (reusing Academic Status)
-// export const audienceTypes = academicStatuses; // Replaced by academicStatuses
+// Reusing Academic Status for Audience
 export type AudienceType = AcademicStatus; // Type remains the same
 
 // Define Test Streams
@@ -103,13 +102,13 @@ export type TestStream = typeof testStreams[number];
 export interface TestQuestion {
     id?: string; // Original question ID from bank, if applicable
     type?: QuestionType; // 'text' or 'image', from original question
-    question_text?: string | null;        // Textual content of the question
-    question_image_url?: string | null;   // Public URL to the question image
-    options: string[];                    // Array of 4 option strings
+    question_text?: string | null;        // Textual content of the question (MathJax)
+    question_image_url?: string | null;   // Public URL to the question image (relative to /)
+    options: string[];                    // Array of 4 option strings (may contain MathJax)
     answer: string;                       // Correct option key e.g., "A", "B" (NOT "Option A")
     marks: number;
-    explanation_text?: string | null;     // Textual explanation
-    explanation_image_url?: string | null;// Public URL to the explanation image
+    explanation_text?: string | null;     // Textual explanation (MathJax)
+    explanation_image_url?: string | null;// Public URL to the explanation image (relative to /)
     explanation?: string | null; // Fallback for older data or text-only explanations
     question?: string | null; // Fallback for older question text storage
 }
@@ -188,45 +187,47 @@ export interface UserAnswer {
   timeTaken?: number; // Optional: time spent on this question
 }
 
+// Data structure for the actual test taking session BEFORE saving the report
 export interface TestSession {
   testId: string; // Corresponds to test_code
   userId: string;
-  startTime: number; // Timestamp
+  startTime: number; // Timestamp (used as attemptTimestamp)
   endTime?: number; // Timestamp, set on submit
-  answers: UserAnswer[]; // Array of user's answers
-  // score?: number; // Score might be calculated on results page
+  answers: UserAnswer[]; // Array of user's answers during the session
 }
 
-// For displaying results summary
+// For displaying results summary or storing in the report JSON
+// This is the structure saved to src/data/chapterwise-test-report/{userId}/{testCode}-{userId}-{startTime}.json
 export interface TestResultSummary {
     testCode: string;
     userId: string;
-    user?: UserProfile; // Add user profile for displaying name
+    user?: Omit<UserProfile, 'password'>; // Add user profile for displaying name (Optional, may need fetching)
     testName: string;
-    attemptId: string; // Unique ID for this attempt (e.g., testCode-userId-startTime)
-    submittedAt: string; // ISO timestamp
+    attemptTimestamp: number; // Unique ID for this attempt (startTime from TestSession)
+    submittedAt: number; // endTime from TestSession
+    duration: number; // Test duration in minutes (from definition)
     totalQuestions: number;
     attempted: number;
     correct: number;
     incorrect: number;
     unanswered: number;
-    score?: number; // Make score optional as it might not be available if def missing
-    percentage?: number; // Make percentage optional
+    score: number;
+    totalMarks: number; // Add total marks possible for the test
+    percentage: number;
     timeTakenMinutes: number; // Total time taken for the test
     detailedAnswers: Array<{
         questionIndex: number;
         // Question content representation (one of these will be populated)
-        questionText?: string | null;
-        questionImageUrl?: string | null;
+        questionText?: string | null; // MathJax format
+        questionImageUrl?: string | null; // Relative URL
         userAnswer: string | null; // e.g. "A"
         correctAnswer: string; // e.g. "C"
         isCorrect: boolean;
         status: QuestionStatus;
         // Explanation content (one of these might be populated)
-        explanationText?: string | null;
-        explanationImageUrl?: string | null;
+        explanationText?: string | null; // MathJax format
+        explanationImageUrl?: string | null; // Relative URL
     }>;
-    totalMarks?: number; // Add total marks possible
 }
 
 // ---- Short Notes Types ----
@@ -237,7 +238,7 @@ export interface ShortNote {
     subject: string;
     examType: ExamOption;
     contentType: 'pdf' | 'html'; // Type of content
-    filePath: string; // Path relative to short_notes/ (e.g., "pdf_pages/physics_kinematics.pdf" or "html_pages/chem_thermo.php")
+    filePath: string; // Path relative to public/short_notes/{pdf_pages|html_pages}/
     createdAt: string; // ISO timestamp
     modifiedAt: string; // ISO timestamp
 }

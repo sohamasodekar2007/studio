@@ -8,15 +8,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { GeneratedTest, TestResultSummary, UserProfile } from '@/types';
 import { Award } from 'lucide-react';
 
+// Define the expected signature for the fetch function
+type FetchAttemptsFunction = (testCode: string) => Promise<Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null }>>;
+
 interface TestRankingDialogProps {
   isOpen: boolean;
   onClose: () => void;
   test: GeneratedTest;
-  fetchTestAttempts: (testCode: string) => Promise<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>>;
+  // Update the type hint for the fetch function
+  fetchTestAttempts: FetchAttemptsFunction;
 }
 
 export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAttempts }: TestRankingDialogProps) {
-  const [rankedAttempts, setRankedAttempts] = useState<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile; rank?: number }>>([]);
+  // Update state type to match the expected return type of the fetch function
+  const [rankedAttempts, setRankedAttempts] = useState<Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null; rank?: number }>>([]);
   const [isLoadingAttempts, setIsLoadingAttempts] = useState(false);
 
   useEffect(() => {
@@ -28,6 +33,7 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
           const sorted = data.sort((a, b) => {
             const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
             if (scoreDiff !== 0) return scoreDiff;
+            // Use timeTakenMinutes for tie-breaking
             return (a.timeTakenMinutes ?? Infinity) - (b.timeTakenMinutes ?? Infinity);
           });
           // Assign ranks
@@ -45,7 +51,7 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
         <DialogHeader>
           <DialogTitle>Ranking: {test?.name}</DialogTitle>
           <DialogDescription>
-            Users ranked by score for test code: {test?.test_code}.
+            Users ranked by score for test code: {test?.test_code}. Rankings based on locally stored data.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto">
@@ -66,8 +72,8 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rankedAttempts.map((attempt) => (
-                  <TableRow key={attempt.attemptId}>
+                {rankedAttempts.slice(0, 40).map((attempt) => ( // Show top 40
+                  <TableRow key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
                     <TableCell className="font-medium text-center">
                       {attempt.rank === 1 && <Award className="h-4 w-4 inline text-yellow-500 mr-1" />}
                       {attempt.rank === 2 && <Award className="h-4 w-4 inline text-gray-400 mr-1" />}
@@ -75,7 +81,8 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
                       {attempt.rank}
                     </TableCell>
                     <TableCell>{attempt.user?.name || 'N/A'} ({attempt.user?.email || 'N/A'})</TableCell>
-                    <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalQuestions ?? 'N/A'}</TableCell>
+                     {/* Display total marks if available */}
+                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
                     <TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
                   </TableRow>
                 ))}

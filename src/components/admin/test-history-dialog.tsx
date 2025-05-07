@@ -10,15 +10,20 @@ import Link from 'next/link';
 import type { GeneratedTest, TestResultSummary, UserProfile } from '@/types';
 import { Eye, Loader2 } from 'lucide-react';
 
+// Define the expected signature for the fetch function
+type FetchAttemptsFunction = (testCode: string) => Promise<Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null }>>;
+
 interface TestHistoryDialogProps {
   isOpen: boolean;
   onClose: () => void;
   test: GeneratedTest;
-  fetchTestAttempts: (testCode: string) => Promise<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>>;
+  // Update the type hint for the fetch function
+  fetchTestAttempts: FetchAttemptsFunction;
 }
 
 export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAttempts }: TestHistoryDialogProps) {
-  const [attempts, setAttempts] = useState<Array<Partial<TestResultSummary> & { attemptId: string; user?: UserProfile }>>([]);
+  // Update state type to match the expected return type of the fetch function
+  const [attempts, setAttempts] = useState<Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null }>>([]);
   const [isLoadingAttempts, setIsLoadingAttempts] = useState(false);
 
   useEffect(() => {
@@ -33,11 +38,11 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl"> {/* Wider dialog */}
         <DialogHeader>
           <DialogTitle>Attempt History: {test?.name}</DialogTitle>
           <DialogDescription>
-            Showing all recorded attempts for test code: {test?.test_code}.
+            Showing all recorded attempts for test code: {test?.test_code}. Results are based on locally stored data.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto">
@@ -51,8 +56,8 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>User Name</TableHead>
+                  <TableHead>Email</TableHead> {/* Added Email column */}
                   <TableHead className="text-center">Score</TableHead>
                   <TableHead className="text-center">Percentage</TableHead>
                   <TableHead>Submitted On</TableHead>
@@ -61,15 +66,18 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
               </TableHeader>
               <TableBody>
                 {attempts.map((attempt) => (
-                  <TableRow key={attempt.attemptId}>
+                  // Use attemptTimestamp for the key as it's guaranteed unique per attempt
+                  <TableRow key={attempt.attemptTimestamp}>
                     <TableCell>{attempt.user?.name || 'N/A'}</TableCell>
-                    <TableCell>{attempt.user?.email || 'N/A'}</TableCell>
-                    <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalQuestions ?? 'N/A'}</TableCell>
+                    <TableCell>{attempt.user?.email || 'N/A'}</TableCell> {/* Display Email */}
+                    {/* Display total marks if available */}
+                    <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
                     <TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
                     <TableCell>{new Date(attempt.submittedAt!).toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${attempt.userId}&attemptId=${attempt.attemptId}`} target="_blank">
+                        {/* Pass attemptTimestamp to review link */}
+                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${attempt.userId}&attemptTimestamp=${attempt.attemptTimestamp}`} target="_blank">
                           <Eye className="mr-1.5 h-3.5 w-3.5" /> View
                         </Link>
                       </Button>

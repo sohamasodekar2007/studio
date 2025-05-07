@@ -7,119 +7,15 @@ import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info } from 'lucide-react';
+import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, TestQuestion, UserProfile } from '@/types';
+import type { TestResultSummary, GeneratedTest, UserProfile } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
+import { getTestReport, getAllReportsForTest } from '@/actions/test-report-actions'; // Import report actions
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import TestRankingDialog from '@/components/admin/test-ranking-dialog'; // Re-use ranking dialog
 import Script from 'next/script'; // Added Script for MathJax
-
-// Helper to get all questions from a test definition, regardless of type
-function getAllQuestionsFromTest(testDef: GeneratedTest | null): TestQuestion[] {
-    if (!testDef) return [];
-    if (testDef.testType === 'chapterwise' && testDef.questions) {
-        return testDef.questions;
-    } else if (testDef.testType === 'full_length') {
-        // Ensure we handle potentially undefined subject arrays
-        const physics = testDef.physics || [];
-        const chemistry = testDef.chemistry || [];
-        const maths = testDef.maths || [];
-        const biology = testDef.biology || [];
-        return [...physics, ...chemistry, ...maths, ...biology].filter(q => q); // filter out undefined/null
-    }
-    return [];
-}
-
-// Helper to calculate results
-function calculateResults(session: TestSession, testDef: GeneratedTest | null): TestResultSummary | null {
-    if (!testDef) return null;
-    const allQuestions = getAllQuestionsFromTest(testDef);
-    if (allQuestions.length === 0 || !session.answers) {
-         console.error("Test definition has no questions or session answers are missing.");
-         return null; // Cannot calculate results
-    }
-     if (allQuestions.length !== session.answers.length) {
-         console.warn("Mismatch between questions in definition and session answers. Calculation might be inaccurate.");
-         // Decide how to handle: return null, or proceed with caution?
-         // For now, proceed but log the warning.
-     }
-
-    let correctCount = 0;
-    let incorrectCount = 0;
-    let attemptedCount = 0;
-    let totalMarksPossible = 0;
-    let score = 0;
-
-    const detailedAnswers = session.answers.map((userAns, index) => {
-        const questionDef = allQuestions[index];
-        if (!questionDef) {
-             console.error(`Definition missing for question index ${index}`);
-             return {
-                questionIndex: index,
-                questionText: 'Error: Question definition missing',
-                questionImageUrl: null,
-                userAnswer: userAns.selectedOption,
-                correctAnswer: 'Error',
-                isCorrect: false,
-                status: userAns.status,
-                explanationText: null,
-                explanationImageUrl: null,
-             };
-        }
-
-        const currentMarks = questionDef.marks || 1; // Default to 1 mark if missing
-        totalMarksPossible += currentMarks;
-        let isCorrect = false;
-        const correctAnswerKey = questionDef.answer?.replace('Option ', '').trim();
-
-        if (userAns.selectedOption) {
-            attemptedCount++;
-            if (userAns.selectedOption === correctAnswerKey) {
-                isCorrect = true;
-                correctCount++;
-                score += currentMarks;
-            } else {
-                incorrectCount++;
-                // Handle negative marking if applicable (assuming no negative marking for now)
-            }
-        }
-        return {
-            questionIndex: index,
-            questionText: questionDef.question_text || questionDef.question, // Use either field
-            questionImageUrl: questionDef.question_image_url, // Prefer specific field
-            userAnswer: userAns.selectedOption,
-            correctAnswer: correctAnswerKey || 'N/A',
-            isCorrect,
-            status: userAns.status,
-            explanationText: questionDef.explanation_text, // Prefer specific field
-            explanationImageUrl: questionDef.explanation_image_url, // Prefer specific field
-        };
-    });
-
-    const unansweredCount = Math.max(0, allQuestions.length - attemptedCount); // Ensure non-negative
-    const percentage = totalMarksPossible > 0 ? (score / totalMarksPossible) * 100 : 0;
-    const timeTakenSeconds = session.endTime && session.startTime ? Math.max(0, (session.endTime - session.startTime) / 1000) : 0; // Ensure non-negative
-    const timeTakenMinutes = Math.round(timeTakenSeconds / 60);
-
-
-    return {
-        testCode: session.testId,
-        userId: session.userId,
-        testName: testDef.name,
-        attemptId: `${session.testId}-${session.userId}-${session.startTime}`,
-        submittedAt: session.endTime ? new Date(session.endTime).toISOString() : new Date().toISOString(),
-        totalQuestions: allQuestions.length,
-        attempted: attemptedCount,
-        correct: correctCount,
-        incorrect: incorrectCount,
-        unanswered: unansweredCount,
-        score,
-        percentage,
-        timeTakenMinutes,
-        detailedAnswers,
-    };
-}
 
 
 export default function TestResultsPage() {
@@ -130,12 +26,14 @@ export default function TestResultsPage() {
 
   const testCode = params.testCode as string;
   const userId = searchParams.get('userId');
-  const attemptId = searchParams.get('attemptId');
+  const attemptTimestampStr = searchParams.get('attemptTimestamp'); // Get timestamp as string
 
   const [results, setResults] = useState<TestResultSummary | null>(null);
   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRankingDialogOpen, setIsRankingDialogOpen] = useState(false); // State for ranking dialog
+
 
    const typesetMathJax = useCallback(() => {
       if (typeof window !== 'undefined' && (window as any).MathJax) {
@@ -151,10 +49,62 @@ export default function TestResultsPage() {
      }
    }, [results, typesetMathJax]);
 
+  const fetchTestAndResults = useCallback(async () => {
+      if (!testCode || !userId || !attemptTimestampStr) {
+        setError("Missing test information to load results.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Convert timestamp string to number for action
+      const attemptTimestamp = parseInt(attemptTimestampStr, 10);
+       if (isNaN(attemptTimestamp)) {
+          setError("Invalid attempt identifier.");
+          setIsLoading(false);
+          return;
+       }
+
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Fetch both concurrently
+        const [reportData, testDefData] = await Promise.all([
+          getTestReport(userId, testCode, attemptTimestamp),
+          getGeneratedTestByCode(testCode).catch(err => {
+              console.error("Failed to fetch test definition for results:", err);
+              // Don't throw, allow results page to show basic info if report exists
+              return null;
+          })
+        ]);
+
+         if (!reportData) {
+             console.error(`Report data not found for user ${userId}, test ${testCode}, attempt ${attemptTimestamp}`);
+             throw new Error(`Could not find the results for this specific test attempt.`);
+         }
+
+         // If definition fetch failed, reportData might still be valid but missing some context
+          if (!testDefData) {
+              console.warn(`Test definition for ${testCode} not found. Results might lack some context (e.g., total marks if not stored in report).`);
+          }
+
+        setTestDefinition(testDefData);
+        setResults(reportData); // Set the fetched report data
+
+      } catch (err: any) {
+        console.error("Error fetching results/definition:", err);
+        setError(err.message || "Failed to load test results.");
+        setResults(null); // Clear results on error
+        setTestDefinition(null);
+      } finally {
+        setIsLoading(false);
+      }
+  }, [testCode, userId, attemptTimestampStr]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-        router.push(`/auth/login?redirect=/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`);
+        router.push(`/auth/login?redirect=/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`);
         return;
     }
      // Ensure the logged-in user matches the userId in the URL
@@ -164,72 +114,17 @@ export default function TestResultsPage() {
          return;
      }
 
-    async function fetchResults() {
-      if (!testCode || !userId || !attemptId) {
-        setError("Missing test information to load results.");
-        setIsLoading(false);
-        return;
-      }
-       // Ensure this runs only on the client
-       if (typeof window === 'undefined') {
-           setError("Cannot load results on the server.");
-           setIsLoading(false);
-           return;
-       }
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        // 1. Fetch the test definition (This should ideally come from a source available on the client or passed props, but using action for now)
-        // Note: Actions might run on the server even in client components if not explicitly prevented.
-        // For a pure local storage approach, the test definition might need to be stored alongside the result,
-        // or fetched via a client-side mechanism if not too large.
-        let testDefData: GeneratedTest | null = null;
-        try {
-             testDefData = await getGeneratedTestByCode(testCode);
-              if (!testDefData) {
-                  throw new Error("Original test definition could not be fetched.");
-              }
-             setTestDefinition(testDefData);
-        } catch (fetchError: any) {
-             console.error("Failed to fetch test definition:", fetchError);
-             // Try to load definition from localStorage if stored there? (Less common)
-             // For now, we'll proceed without it, results will be basic.
-             // setError("Could not load test details needed for full results analysis.");
-        }
-
-
-        // 2. Retrieve the specific test session from local storage using the attemptId
-        const storageKey = `testResult-${attemptId}`;
-        const storedSessionJson = localStorage.getItem(storageKey);
-        if (!storedSessionJson) {
-           console.error(`Attempt data not found in localStorage for key: ${storageKey}`);
-          throw new Error(`Test attempt data not found. Results might be missing or cleared.`);
-        }
-
-        const sessionData: TestSession = JSON.parse(storedSessionJson);
-
-        // 3. Calculate results (pass potentially null testDefData)
-        const calculated = calculateResults(sessionData, testDefData);
-        if (!calculated && testDefData) { // Only error if definition was fetched but calculation failed
-            throw new Error("Could not process test results. Mismatch in data structure.");
-        }
-        // If testDefData is null, calculated might still have basic info
-        setResults(calculated);
-
-      } catch (err: any) {
-        console.error("Error fetching results:", err);
-        setError(err.message || "Failed to load test results.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
      if (user) {
-       fetchResults();
+         fetchTestAndResults();
      }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testCode, userId, attemptId, authLoading, user, router]); // Add dependencies
+  }, [testCode, userId, attemptTimestampStr, authLoading, user, router]); // removed fetchTestAndResults
+
+  // Function to open ranking dialog
+   const handleViewRanking = () => {
+       setIsRankingDialogOpen(true);
+   };
+
 
   if (isLoading || authLoading) {
     return (
@@ -261,7 +156,7 @@ export default function TestResultsPage() {
     );
   }
 
-  // Check if results are partially loaded (due to missing definition) or fully loaded
+  // Check if results are loaded
   if (!results) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
@@ -278,12 +173,9 @@ export default function TestResultsPage() {
 
   // Use testDefinition data if available, otherwise use results data
   const testName = results.testName || testDefinition?.name || 'Unknown Test';
-  const duration = testDefinition?.duration || 0;
-  const totalQs = results.totalQuestions || testDefinition?.total_questions || 0;
-
-  // Calculate total marks based on the definition if possible
-   const allQuestionsInTest = testDefinition ? getAllQuestionsFromTest(testDefinition) : [];
-   const totalPossibleMarks = allQuestionsInTest.reduce((sum, q) => sum + (q.marks || 1), 0);
+  const duration = results.duration || testDefinition?.duration || 0; // Prefer duration from results if stored
+  const totalQs = results.totalQuestions; // Always use totalQuestions from results
+  const totalPossibleMarks = results.totalMarks || totalQs; // Use totalMarks from results, fallback to totalQs
 
    // AI Analysis (remains the same logic)
   const aiAnalysis = `Based on your performance in ${testName}:
@@ -310,14 +202,14 @@ Keep practicing! Consistency is key.`;
         <CardHeader className="bg-primary/10 dark:bg-primary/20 p-6">
           <CardTitle className="text-3xl font-bold text-primary text-center">{testName} - Results</CardTitle>
            <CardDescription className="text-center text-muted-foreground">
-                Attempt ID: <span className="font-mono text-xs">{results.attemptId}</span> | Submitted: {new Date(results.submittedAt).toLocaleString()}
+                Attempt Timestamp: <span className="font-mono text-xs">{results.attemptTimestamp}</span> | Submitted: {new Date(results.submittedAt).toLocaleString()}
            </CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <Card className="p-4 bg-muted dark:bg-muted/50">
               <CardTitle className="text-4xl font-bold text-green-600 dark:text-green-400">{results.score ?? 'N/A'}</CardTitle>
-              <CardDescription>Score / {totalPossibleMarks || totalQs}</CardDescription>
+              <CardDescription>Score / {totalPossibleMarks}</CardDescription>
             </Card>
             <Card className="p-4 bg-muted dark:bg-muted/50">
               <CardTitle className="text-4xl font-bold text-blue-600 dark:text-blue-400">{results.percentage?.toFixed(2) ?? 'N/A'}%</CardTitle>
@@ -366,7 +258,7 @@ Keep practicing! Consistency is key.`;
                <Info className="h-4 w-4 !text-blue-600 dark:!text-blue-400" />
                <AlertTitle>Local Storage Note</AlertTitle>
                <AlertDescription>
-                 Results and history are stored in your browser's local storage. Clearing browser data will remove this history. Rankings across users require a server backend.
+                 Results and history are stored locally. Clearing browser data may remove this history. Rankings require fetching data for all users.
                </AlertDescription>
            </Alert>
 
@@ -386,11 +278,15 @@ Keep practicing! Consistency is key.`;
 
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 p-6 border-t border-border">
-            {/* Link to review page remains the same */}
+            {/* Link to review page, pass attemptTimestamp */}
             <Button variant="outline" asChild>
-                <Link href={`/chapterwise-test-review/${testCode}?userId=${userId}&attemptId=${attemptId}`}>
+                <Link href={`/chapterwise-test-review/${testCode}?userId=${userId}&attemptTimestamp=${results.attemptTimestamp}`}>
                     <BarChart2 className="mr-2 h-4 w-4" /> Review Answers
                 </Link>
+            </Button>
+            {/* Ranking Button */}
+            <Button variant="outline" onClick={handleViewRanking}>
+                <BarChartBig className="mr-2 h-4 w-4" /> View Ranking
             </Button>
             <Button asChild>
                 <Link href="/tests"><RefreshCw className="mr-2 h-4 w-4" /> Take Another Test</Link>
@@ -401,8 +297,17 @@ Keep practicing! Consistency is key.`;
             </Button>
         </CardFooter>
       </Card>
+
+       {/* Ranking Dialog */}
+       {testDefinition && ( // Only enable ranking if test definition is loaded
+           <TestRankingDialog
+             isOpen={isRankingDialogOpen}
+             onClose={() => setIsRankingDialogOpen(false)}
+             test={testDefinition}
+             fetchTestAttempts={() => getAllReportsForTest(testCode)} // Pass the correct fetch function
+           />
+        )}
     </div>
     </>
   );
 }
-
