@@ -6,12 +6,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { UserProfile, UserModel, AcademicStatus } from '@/types'; // Use our UserProfile type
 import { Skeleton } from '@/components/ui/skeleton';
 import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions'; // Import actions to find user locally
-import { saveUserToJson } from '@/actions/user-actions'; // Import action to save user
+import { saveUserToJson, addUserToJson } from '@/actions/user-actions'; // Import actions to save/add user
 import { useRouter } from 'next/navigation'; // Import useRouter for redirection
 import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 
 // Define simulated User type based on UserProfile, omitting sensitive/unused fields for context
-// This provides components with necessary display/logic info without exposing password.
 type SimulatedUser = {
   id: string; // User ID is now always a string (UUID or existing string ID)
   email: string | null;
@@ -28,7 +27,8 @@ interface AuthContextProps {
   initializationError: string | null; // Keep for potential non-Firebase errors
   login: (email: string, password?: string) => Promise<void>;
   logout: () => Promise<void>;
-  signUpLocally: (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => Promise<void>; // Adapt signature
+  signUpLocally: (userData: Omit<UserProfile, 'id' | 'createdAt'>, password?: string) => Promise<void>; // Signature remains the same
+  signInWithGoogleLocally: () => Promise<void>; // Add simulated Google sign-in
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -38,6 +38,7 @@ const AuthContext = createContext<AuthContextProps>({
   login: async () => { console.warn('Login function not implemented'); },
   logout: async () => { console.warn('Logout function not implemented'); },
   signUpLocally: async () => { console.warn('signUpLocally function not implemented'); },
+  signInWithGoogleLocally: async () => { console.warn('signInWithGoogleLocally function not implemented'); }, // Add default impl
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -53,9 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedUserJson = localStorage.getItem('loggedInUser');
       if (storedUserJson) {
         const parsedUserProfile: UserProfile = JSON.parse(storedUserJson);
-        // Convert UserProfile to SimulatedUser shape for the context
         setUser({
-            id: String(parsedUserProfile.id), // Ensure ID is a string
+            id: String(parsedUserProfile.id),
             email: parsedUserProfile.email,
             displayName: parsedUserProfile.name,
             phone: parsedUserProfile.phone,
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error reading user from local storage:', error);
       setUser(null);
       localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword'); // Also clear potentially stored password
+      localStorage.removeItem('simulatedPassword');
     } finally {
       setLoading(false);
       setLocalError(null);
@@ -82,13 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setLocalError(null);
     try {
-      // Use the server action to find the user in users.json AND check password
       const foundUserProfile = await findUserByCredentials(email, password);
 
       if (foundUserProfile) {
-        // Convert UserProfile to SimulatedUser shape for the context
         const loggedInUser: SimulatedUser = {
-          id: String(foundUserProfile.id), // Ensure ID is a string
+          id: String(foundUserProfile.id),
           email: foundUserProfile.email,
           displayName: foundUserProfile.name,
           phone: foundUserProfile.phone,
@@ -97,9 +95,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           expiry_date: foundUserProfile.expiry_date,
         };
         setUser(loggedInUser);
-        // Store the *full* UserProfile (excluding potentially sensitive parts if needed)
-        localStorage.setItem('loggedInUser', JSON.stringify(foundUserProfile));
-        // Store password in local storage only for the simulation flow - INSECURE
+        // Store full profile *excluding* password in local storage
+        const { password: _, ...profileToStore } = foundUserProfile;
+        localStorage.setItem('loggedInUser', JSON.stringify(profileToStore));
+        // Store password separately only for simulation - INSECURE
         if (password) {
             localStorage.setItem('simulatedPassword', password);
         }
@@ -114,10 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('Regular user detected, redirecting to /');
           router.push('/'); // Redirect regular users to home dashboard
         }
-        // --- END REDIRECT LOGIC ---
 
       } else {
-        // Throw a more specific error if user not found or password mismatch
         throw new Error('Login failed: Invalid email or password for local authentication.');
       }
     } catch (error: any) {
@@ -126,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       localStorage.removeItem('loggedInUser');
       localStorage.removeItem('simulatedPassword');
-      throw error; // Re-throw error so login page can catch it
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -139,20 +136,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(null);
       localStorage.removeItem('loggedInUser');
-      localStorage.removeItem('simulatedPassword'); // Clear simulated password on logout
+      localStorage.removeItem('simulatedPassword');
       console.log("User logged out (simulated).");
-       // Redirect to login page after logout
        router.push('/auth/login');
     } catch (error: any) {
       console.error("Simulated logout failed:", error);
       setLocalError(error.message || 'Logout failed.');
-      throw error; // Re-throw error if needed
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  // Simulated Sign Up (now takes form data, saves via action, then updates context)
+  // Simulated Sign Up (OTP verification happens in the component)
    const signUpLocally = async (userData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null }, password?: string) => {
     setLoading(true);
     setLocalError(null);
@@ -161,74 +157,110 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          throw new Error("Email and password are required for signup.");
        }
 
-       // Check if user already exists (optional, good practice)
        const existingUser = await findUserByEmail(userData.email);
        if (existingUser) {
             throw new Error("An account with this email already exists.");
        }
 
-      // Generate a unique UUID for the new user
       const userId = uuidv4();
-
-      // Prepare the full UserProfile object to be saved
       const newUserProfile: UserProfile = {
-        id: userId, // Use UUID
+        id: userId,
         email: userData.email,
-        password: password, // Include the password to be stored in JSON
+        password: password,
         name: userData.name || null,
         phone: userData.phone || null,
-        referral: "", // Default referral
+        referral: "",
         class: userData.class || null,
-        model: 'free', // Default model for new signups
-        expiry_date: null, // Default expiry date
-        createdAt: new Date().toISOString(), // Add creation timestamp
+        model: 'free',
+        expiry_date: null,
+        createdAt: new Date().toISOString(),
       };
 
-
-      // Save the user data (including plain text password) via the Server Action
-      const saveResult = await saveUserToJson(newUserProfile);
+      // Use addUserToJson which internally handles existing email checks again
+      const saveResult = await addUserToJson(newUserProfile);
 
       if (!saveResult.success) {
         throw new Error(saveResult.message || "Could not save user details locally.");
       }
 
-       console.log(`User data for ${userData.email} saved to users.json`);
+      console.log(`User data for ${userData.email} saved to users.json`);
 
-      // Update context state with the new user (SimulatedUser shape)
-      const newUserContextState: SimulatedUser = {
-        id: newUserProfile.id, // This will be the UUID string
-        email: newUserProfile.email,
-        displayName: newUserProfile.name,
-        phone: newUserProfile.phone,
-        className: newUserProfile.class,
-        model: newUserProfile.model,
-        expiry_date: newUserProfile.expiry_date,
-      };
-      setUser(newUserContextState);
-      // Store the full profile (excluding password for slightly better security theater)
-      const { password: _, ...profileToStore } = newUserProfile;
-      localStorage.setItem('loggedInUser', JSON.stringify(profileToStore));
-        // Store password in local storage only for the simulation flow - INSECURE
-      if (password) {
-          localStorage.setItem('simulatedPassword', password);
-      }
+      // Automatically log in the new user
+      await login(newUserProfile.email, newUserProfile.password); // Will set context and local storage
 
       console.log(`User ${userData.email} signed up and logged in (simulated).`);
 
-      // Redirect after signup
-       router.push('/'); // Redirect to home dashboard after signup
+      // Redirection handled by the login function called above
 
     } catch (error: any) {
       console.error("Simulated local signup failed:", error);
       setLocalError(error.message || 'Local signup failed.');
-      setUser(null); // Clear user state on failure
-      localStorage.removeItem('loggedInUser'); // Clear local storage on failure
-       localStorage.removeItem('simulatedPassword');
-      throw error; // Re-throw error for the signup page
+      setUser(null);
+      localStorage.removeItem('loggedInUser');
+      localStorage.removeItem('simulatedPassword');
+      throw error;
     } finally {
       setLoading(false);
     }
   };
+
+   // Simulated Sign In with Google
+   const signInWithGoogleLocally = async () => {
+        setLoading(true);
+        setLocalError(null);
+        const googleEmail = 'google.user@example.com'; // Predefined email
+        const googleName = 'Google User';
+        const simulatedPassword = 'googlePassword123'; // Use a dummy password for local credential check
+
+        try {
+            let userProfile = await findUserByEmail(googleEmail);
+
+            if (!userProfile) {
+                console.log("Simulated Google user not found, creating...");
+                const newUserProfile: UserProfile = {
+                    id: uuidv4(),
+                    email: googleEmail,
+                    name: googleName,
+                    password: simulatedPassword, // Store dummy password
+                    phone: '1234567890', // Placeholder
+                    referral: "",
+                    class: '12th Class', // Example class
+                    model: 'free',
+                    expiry_date: null,
+                    createdAt: new Date().toISOString(),
+                };
+                const addResult = await addUserToJson(newUserProfile);
+                if (!addResult.success) {
+                     throw new Error(addResult.message || "Could not create simulated Google user.");
+                }
+                userProfile = newUserProfile; // Use the newly created profile
+                console.log("Simulated Google user created.");
+             } else {
+                 // Ensure the existing Google user has the dummy password for login simulation
+                 if (userProfile.password !== simulatedPassword) {
+                     console.warn(`Updating dummy password for simulated Google user ${googleEmail}`);
+                     userProfile.password = simulatedPassword;
+                     await saveUserToJson(userProfile);
+                 }
+             }
+
+            // Now attempt to log in using the (potentially created) user's details
+            await login(googleEmail, simulatedPassword);
+            console.log("Simulated Google Sign-in successful.");
+             // Redirect handled within login
+
+        } catch (error: any) {
+            console.error("Simulated Google Sign-in failed:", error);
+            setLocalError(error.message || 'Google Sign-in simulation failed.');
+            setUser(null);
+            localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('simulatedPassword');
+            throw error; // Re-throw for the component
+        } finally {
+            setLoading(false);
+        }
+   };
+
 
   // Loading State UI
   if (loading) {
@@ -249,8 +281,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-    // Error State UI
-  if (localError && !window.location.pathname.startsWith('/auth')) { // Only show error if not on auth pages
+    // Error State UI (Only shown if NOT on an auth page)
+  if (localError && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
          <div className="max-w-md text-center bg-destructive text-white p-6 rounded-lg shadow-lg">
@@ -269,11 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, loading, initializationError: localError, login, logout, signUpLocally }}>
+    <AuthContext.Provider value={{ user, loading, initializationError: localError, login, logout, signUpLocally, signInWithGoogleLocally }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
-

@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,22 +9,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone } from "lucide-react";
+import { GraduationCap, Loader2, Phone, Mail, Chrome } from "lucide-react"; // Added Mail, Chrome icons
 import Link from "next/link";
-// Remove useRouter import as redirection is handled in AuthContext
-// import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
-// Updated schema with phone number
+// Zod schema with OTP field
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
-  phoneNumber: z.string().min(10, { message: "Please enter a valid phone number." }).max(15, { message: "Phone number seems too long." }),
+  phoneNumber: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(10, { message: "Phone number must be 10 digits." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
+  otp: z.string().length(4, { message: "OTP must be 4 digits." }).regex(/^\d{4}$/, "OTP must be numeric."), // Added OTP field
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -34,11 +33,13 @@ const signupSchema = z.object({
 type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
-  // Removed router initialization
-  // const router = useRouter();
   const { toast } = useToast();
-  const { signUpLocally } = useAuth(); // Get simulated signup function from context
+  const { signUpLocally, signInWithGoogleLocally } = useAuth(); // Get signup and Google sign-in functions
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Google loading state
+  const [isOtpSending, setIsOtpSending] = useState(false);
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null); // Store simulated OTP
+  const [isOtpSent, setIsOtpSent] = useState(false); // Track if OTP UI should be shown
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -49,32 +50,60 @@ export default function SignupPage() {
       confirmPassword: "",
       academicStatus: undefined,
       phoneNumber: "",
+      otp: "", // Default OTP
     },
   });
 
+  // Watch email field to enable/disable OTP button
+  const emailValue = form.watch('email');
+  const isEmailValid = z.string().email().safeParse(emailValue).success;
+
+  // Simulate sending OTP
+  const handleSendOtp = useCallback(async () => {
+    if (!isEmailValid) {
+      toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email address first." });
+      return;
+    }
+    setIsOtpSending(true);
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+    const otp = Math.floor(1000 + Math.random() * 9000).toString(); // Generate 4-digit OTP
+    setGeneratedOtp(otp);
+    setIsOtpSent(true); // Show OTP input field
+    setIsOtpSending(false);
+    toast({
+      title: "OTP Sent (Simulated)",
+      description: `For testing, your OTP is: ${otp}`,
+      duration: 10000, // Show OTP longer for testing
+    });
+  }, [isEmailValid, toast]);
+
   const onSubmit = async (data: SignupFormValues) => {
+    if (!generatedOtp) {
+        toast({ variant: "destructive", title: "OTP Required", description: "Please generate and enter the OTP." });
+        return;
+    }
+    if (data.otp !== generatedOtp) {
+        toast({ variant: "destructive", title: "Invalid OTP", description: "The entered OTP is incorrect." });
+        form.setError("otp", { message: "Incorrect OTP" });
+        return;
+    }
+
     setIsLoading(true);
     try {
-        // Prepare the user data object from the form values
-        // Note: We don't include `id` or `createdAt` here, those are handled by the action/context.
-        // We also don't need `referral` or `model`/`expiry_date` initially, they default or are set later.
         const newUserFormData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'model' | 'expiry_date' | 'referral'> & { class: AcademicStatus | null; phone: string | null } = {
             name: data.name,
             email: data.email,
-            class: data.academicStatus, // Map form field to UserProfile field
+            class: data.academicStatus,
             phone: data.phoneNumber,
         };
 
-        // Call the simulated signup function from context, passing the prepared data and password
-        // Redirection will be handled within the signUpLocally function in AuthContext
         await signUpLocally(newUserFormData, data.password);
 
         toast({
             title: "Account Created (Locally)",
             description: "You have successfully signed up!",
         });
-        // Removed redirection from here
-        // router.push('/'); // Redirect to dashboard after successful signup
+        // Redirection is handled within signUpLocally
 
     } catch (error: any) {
         console.error("Signup failed (local simulation):", error);
@@ -85,6 +114,27 @@ export default function SignupPage() {
         });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogleLocally();
+      // Redirection handled within context
+       toast({
+        title: "Google Sign-In Successful (Simulated)",
+        description: "Welcome!",
+      });
+    } catch (error: any) {
+      console.error("Google Sign-in failed (simulated):", error);
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In Failed",
+        description: error.message || "Could not sign in with Google (Simulated).",
+      });
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -108,7 +158,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Full Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your Name" {...field} disabled={isLoading} />
+                      <Input placeholder="Your Name" {...field} disabled={isLoading || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -120,9 +170,22 @@ export default function SignupPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading} />
-                    </FormControl>
+                    <div className="flex items-center gap-2">
+                      <FormControl className="flex-1">
+                         <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading || isGoogleLoading} />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSendOtp}
+                        disabled={!isEmailValid || isOtpSending || isLoading || isGoogleLoading}
+                        className="flex-shrink-0"
+                      >
+                        {isOtpSending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Mail className="h-4 w-4"/>}
+                        <span className="ml-1 hidden sm:inline">{isOtpSent ? 'Resend OTP' : 'Send OTP'}</span>
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -137,7 +200,7 @@ export default function SignupPage() {
                     <FormControl>
                      <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={isLoading} className="pl-10" />
+                        <Input type="tel" placeholder="e.g., 9876543210" {...field} disabled={isLoading || isGoogleLoading} className="pl-10" />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -151,7 +214,7 @@ export default function SignupPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Current Academic Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading || isGoogleLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your status" />
@@ -176,7 +239,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={isLoading || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -189,19 +252,54 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Confirm Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={isLoading || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+                {/* OTP Input Field (Conditional) */}
+              {isOtpSent && (
+                <FormField
+                    control={form.control}
+                    name="otp"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Enter OTP</FormLabel>
+                        <FormControl>
+                        <Input type="text" placeholder="4-digit OTP" {...field} maxLength={4} disabled={isLoading || isGoogleLoading} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                )}
 
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-               <Button type="submit" className="w-full" disabled={isLoading}>
+               <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading || !isOtpSent}>
                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                  Sign Up
                </Button>
+
+                {/* OR Separator */}
+              <div className="flex items-center w-full my-1">
+                <Separator className="flex-1" />
+                <span className="mx-2 text-xs text-muted-foreground">OR</span>
+                <Separator className="flex-1" />
+              </div>
+
+               {/* Google Sign In Button */}
+              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading}>
+                 {isGoogleLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                 ) : (
+                    <Chrome className="mr-2 h-4 w-4" />
+                 )}
+                 Sign up with Google (Simulated)
+              </Button>
+
+
               <p className="px-8 text-center text-sm text-muted-foreground">
                 By clicking continue, you agree to our{" "}
                 <Link

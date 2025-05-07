@@ -8,26 +8,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { GraduationCap, Loader2, Chrome } from "lucide-react"; // Added Chrome for Google icon
 import Link from "next/link";
-// Removed useRouter import as redirection is now handled in AuthContext
-// import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { useAuth } from '@/context/auth-context';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
-  password: z.string().min(1, { message: "Password is required." }), // Simplified password validation for local check
+  password: z.string().min(1, { message: "Password is required." }),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  // Removed router initialization
-  // const router = useRouter();
   const { toast } = useToast();
-  const { login } = useAuth(); // Get the login function from context
+  const { login, signInWithGoogleLocally } = useAuth(); // Get login and simulated Google sign-in
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false); // Separate loading state for Google
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -40,27 +38,45 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
-      // Call the simulated login function from context
-      // Redirection will be handled within the login function in AuthContext
       await login(data.email, data.password);
+      // Redirection is handled within the login function in AuthContext
       toast({
         title: "Login Successful",
         description: "Welcome back!",
       });
-      // Removed redirection from here
-      // router.push('/'); // Redirect to dashboard after successful login
     } catch (error: any) {
       console.error("Login failed (simulated):", error);
       toast({
         variant: "destructive",
         title: "Login Failed",
-        // Use the error message from the context/action if available
         description: error.message || "Invalid credentials or local error.",
       });
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogleLocally(); // Call the simulated Google sign-in function
+      // Redirection is handled within the signInWithGoogleLocally/login function
+       toast({
+        title: "Google Sign-In Successful (Simulated)",
+        description: "Welcome!",
+      });
+    } catch (error: any) {
+      console.error("Google Sign-in failed (simulated):", error);
+      toast({
+        variant: "destructive",
+        title: "Google Sign-In Failed",
+        description: error.message || "Could not sign in with Google (Simulated).",
+      });
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -82,7 +98,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading} />
+                      <Input type="email" placeholder="m@example.com" {...field} disabled={isLoading || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -95,13 +111,12 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center">
                       <FormLabel>Password</FormLabel>
-                      {/* Link for forgot password can be kept, but functionality needs separate implementation */}
                       <Link href="#" className="ml-auto inline-block text-sm underline">
                         Forgot your password?
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={isLoading || isGoogleLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -109,11 +124,30 @@ export default function LoginPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || isGoogleLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Log in
               </Button>
-              <div className="text-center text-sm">
+
+              {/* OR Separator */}
+              <div className="flex items-center w-full my-1">
+                <Separator className="flex-1" />
+                <span className="mx-2 text-xs text-muted-foreground">OR</span>
+                <Separator className="flex-1" />
+              </div>
+
+              {/* Google Sign In Button */}
+              <Button variant="outline" type="button" className="w-full" onClick={handleGoogleSignIn} disabled={isLoading || isGoogleLoading}>
+                 {isGoogleLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                 ) : (
+                    <Chrome className="mr-2 h-4 w-4" /> // Using Chrome icon for Google
+                 )}
+                 Sign in with Google (Simulated)
+              </Button>
+
+
+              <div className="text-center text-sm mt-2"> {/* Added margin-top */}
                 Don&apos;t have an account?{" "}
                 <Link href="/auth/signup" className="underline">
                   Sign up
