@@ -1,8 +1,14 @@
+'use client'; // Make this a client component to fetch client-side data
+
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, LineChart, ListChecks, Wand2, MessageSquare, Activity, ArrowRight, Sparkles, Trophy } from "lucide-react"; // Added new icons
 import Link from "next/link";
 import Image from 'next/image';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { Skeleton } from '@/components/ui/skeleton';
+import type { TestSession, TestResultSummary } from '@/types'; // Import necessary types
 
 // Placeholder Data - Replace with dynamic data later
 const recentActivity = [
@@ -11,13 +17,45 @@ const recentActivity = [
     { id: 3, type: 'tip_generated', text: 'Generated study tips for Calculus', time: '3d ago' },
 ];
 
-const performanceStats = {
-    testsTaken: 5, // Example
-    averageScore: 65, // Example %
-    highestScore: 85, // Example %
+// Initial performance stats (will be updated by useEffect)
+const initialPerformanceStats = {
+    testsTaken: 0, // Will be calculated
+    averageScore: 65, // Example - Calculation complex for local storage
+    highestScore: 85, // Example - Calculation complex for local storage
 };
 
 export default function DashboardPage() {
+    const { user, loading: authLoading } = useAuth();
+    const [performanceStats, setPerformanceStats] = useState(initialPerformanceStats);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && user && user.id) {
+            setIsLoadingHistory(true);
+            try {
+                let testsTakenCount = 0;
+                // Iterate through local storage to count relevant test results
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith(`testResult-`) && key.includes(`-${user.id}-`)) {
+                        testsTakenCount++;
+                    }
+                }
+                setPerformanceStats(prev => ({ ...prev, testsTaken: testsTakenCount }));
+            } catch (error) {
+                console.error("Error fetching test history count:", error);
+            } finally {
+                 setIsLoadingHistory(false);
+            }
+        } else {
+             // Reset stats if no user or not in browser
+             setPerformanceStats(initialPerformanceStats);
+             setIsLoadingHistory(false); // Ensure loading stops if no user
+        }
+    }, [user]); // Rerun when user state changes
+
+    const totalLoading = authLoading || isLoadingHistory;
+
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -125,18 +163,30 @@ export default function DashboardPage() {
                    <CardDescription>Your overall progress at a glance.</CardDescription>
                </CardHeader>
                <CardContent className="space-y-4">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Tests Taken:</span>
-                        <span className="font-medium">{performanceStats.testsTaken}</span>
-                    </div>
-                     <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Average Score:</span>
-                        <span className="font-medium">{performanceStats.averageScore}%</span>
-                    </div>
-                     <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Highest Score:</span>
-                        <span className="font-medium">{performanceStats.highestScore}%</span>
-                    </div>
+                   {totalLoading ? (
+                       <>
+                         <div className="flex justify-between"><Skeleton className="h-5 w-24" /><Skeleton className="h-5 w-8" /></div>
+                         <div className="flex justify-between"><Skeleton className="h-5 w-32" /><Skeleton className="h-5 w-12" /></div>
+                         <div className="flex justify-between"><Skeleton className="h-5 w-28" /><Skeleton className="h-5 w-12" /></div>
+                       </>
+                   ) : (
+                        <>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Tests Taken:</span>
+                                <span className="font-medium">{performanceStats.testsTaken}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Average Score:</span>
+                                <span className="font-medium">{performanceStats.averageScore}%</span>
+                                <span className="text-xs text-muted-foreground/70">(Example)</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Highest Score:</span>
+                                <span className="font-medium">{performanceStats.highestScore}%</span>
+                                 <span className="text-xs text-muted-foreground/70">(Example)</span>
+                            </div>
+                        </>
+                   )}
                     <Button variant="link" className="p-0 h-auto text-primary" asChild>
                         <Link href="/progress">View Detailed Progress</Link>
                     </Button>
@@ -147,7 +197,7 @@ export default function DashboardPage() {
            <Card className="lg:col-span-3 hover:shadow-md transition-shadow duration-200">
                <CardHeader>
                    <CardTitle>Recent Activity</CardTitle>
-                   <CardDescription>Your latest interactions on the platform.</CardDescription>
+                   <CardDescription>Your latest interactions on the platform (Placeholder).</CardDescription>
                </CardHeader>
                <CardContent>
                    <ul className="space-y-4">
@@ -169,9 +219,6 @@ export default function DashboardPage() {
                </CardContent>
            </Card>
        </div>
-
     </div>
   );
 }
-
-    
