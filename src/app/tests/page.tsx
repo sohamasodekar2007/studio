@@ -95,15 +95,15 @@ export default function TestsPage() {
             // Determine if the test is chapterwise or full_length based on subjects/structure (heuristic)
             // This logic might need refinement based on how tests are truly categorized.
             // Simple assumption: if only one subject, it *might* be chapterwise.
-            const isPotentiallyChapterwise = item.test_subject.length === 1 && (!item.maths && !item.biology); // Example heuristic
-            const isPotentiallyFullLength = item.test_subject.length > 1 || item.maths || item.biology; // Example heuristic
+            const isPotentiallyChapterwise = item.testType === 'chapterwise';
+            const isPotentiallyFullLength = item.testType === 'full_length';
 
             switch (userModel) {
               case 'chapterwise':
-                // Chapterwise premium users see PAID chapterwise tests (based on heuristic)
+                // Chapterwise premium users see PAID chapterwise tests
                  return isPotentiallyChapterwise;
               case 'full_length':
-                // Full_length premium users see PAID full_length tests (based on heuristic)
+                // Full_length premium users see PAID full_length tests
                 return isPotentiallyFullLength;
               case 'combo':
                 // Combo users see all PAID tests
@@ -253,7 +253,7 @@ export default function TestsPage() {
        )}
 
       {/* Test Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:col-span-4">
          {totalLoading ? (
              renderSkeletons(8) // Show skeletons while loading tests or auth state
          ) : filteredTestItems.length > 0 ? (
@@ -276,9 +276,7 @@ export default function TestsPage() {
                     </div>
 
                     <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                    {/* <CardDescription className="text-sm text-muted-foreground line-clamp-2 pt-1">
-                       {item.total_questions} Questions | {item.duration} Mins
-                    </CardDescription> */}
+                    
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
                          <div className="flex items-center gap-1.5">
                             <HelpCircle className="h-4 w-4 text-primary" />
@@ -290,30 +288,42 @@ export default function TestsPage() {
                          </div>
                            <div className="flex items-center gap-1.5 col-span-2">
                             <CheckSquare className="h-4 w-4 text-primary" />
-                            <span>{item.count} selected ({item.test_subject.join(', ')})</span>
+                            {/* Display audience or stream depending on test type */}
+                            <span>For: {item.testType === 'chapterwise' ? item.audience : item.stream}</span>
                            </div>
                     </div>
 
 
                     <div className="pt-2 mt-auto">
-                        {/* Link to a future test taking page, using test_code */}
-                        <Link href={`/take-test/${item.test_code}`} passHref className="mt-auto block">
-                            <Button variant="secondary" className="w-full" disabled={item.type === 'PAID' && (!user || user.model === 'free')}> {/* Disable paid for free users */}
-                                {item.type === 'PAID' && (!user || user.model === 'free') ? 'Upgrade to Access' : 'Start Test'}
-                                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                            </Button>
-                        </Link>
+                       
+                        <Button 
+                          variant="secondary" 
+                          className="w-full" 
+                          disabled={(item.type === 'PAID' || item.type === 'FREE_PREMIUM') && (!user || user.model === 'free')}
+                          onClick={() => {
+                            if (user && user.id) {
+                                const testUrl = item.testType === 'chapterwise' ? `/chapterwise-test/${item.test_code}?userId=${user.id}` : `/full-length-test/${item.test_code}?userId=${user.id}`; // Placeholder for full-length
+                                window.open(testUrl, '_blank');
+                            } else if (!user && !authLoading) {
+                                // Optionally prompt login or handle differently
+                                alert("Please log in to start the test.");
+                            }
+                          }}
+                        >
+                          {(item.type === 'PAID' || item.type === 'FREE_PREMIUM') && (!user || user.model === 'free') ? 'Upgrade to Access' : 'Start Test'}
+                          <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        </Button>
                     </div>
                 </CardContent>
                 </Card>
             ))
-            ) : !error ? ( // Only show "No tests found" if there wasn't an error
+            ) : !error ? ( 
             <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                 <CardContent className="p-6 text-center text-muted-foreground">
                     No tests found matching your criteria and plan. Try adjusting the filters or check the admin panel to create tests.
                 </CardContent>
             </Card>
-         ) : null /* Don't show anything if there was an error and no tests */ }
+         ) : null }
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 import type { UserProfile, AcademicStatus, UserModel } from '@/types'; // Import UserModel
 import fs from 'fs/promises';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 
 // WARNING: This approach is NOT recommended for production due to security and scalability concerns.
 // Use a proper database like Firestore instead.
@@ -42,6 +43,7 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
 
 /**
  * Reads the users.json file. Ensures the default admin user exists with the correct password.
+ * Assigns UUID to users missing an ID.
  * @returns A promise resolving to an array of UserProfile or an empty array on error.
  */
 export async function readUsers(): Promise<UserProfile[]> {
@@ -71,11 +73,25 @@ export async function readUsers(): Promise<UserProfile[]> {
      users = []; // Ensure users is an empty array if read failed
   }
 
+  // --- Ensure all users have string IDs (preferably UUIDs) ---
+  users.forEach(user => {
+    if (!user.id) {
+        console.warn(`User ${user.email || 'unknown'} missing ID. Assigning UUID.`);
+        user.id = uuidv4();
+        writeNeeded = true;
+    } else if (typeof user.id !== 'string') {
+        console.warn(`User ${user.email || 'unknown'} has non-string ID ${user.id}. Converting to string.`);
+        user.id = String(user.id); // Convert numeric IDs to strings
+        writeNeeded = true;
+    }
+  });
+
+
   // --- Ensure Admin User Exists and is Correct ---
    const adminUserIndex = users.findIndex(u => u.email === defaultAdminEmail);
    const defaultAdminUserWithId: UserProfile = {
        ...defaultAdminProfileBase,
-       id: `local_${defaultAdminEmail.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`, // Generate ID if needed
+       id: users.find(u => u.email === defaultAdminEmail)?.id || uuidv4(), // Reuse existing ID or generate UUID
        createdAt: new Date().toISOString(),
    };
 
@@ -106,22 +122,18 @@ export async function readUsers(): Promise<UserProfile[]> {
     // Admin user does not exist, add them
     console.warn(`Default admin user (${defaultAdminEmail}) not found in users.json. Adding default admin user.`);
     users.push({
-        ...defaultAdminUserWithId, // Use the one with generated ID/createdAt
-        id: users.length > 0 ? `local_admin_${Date.now()}` : defaultAdminUserWithId.id // Ensure unique ID if others exist
+        ...defaultAdminUserWithId,
     });
     writeNeeded = true;
   }
 
-  // Write back to file if it was missing, malformed, or admin was added/updated
+  // Write back to file if it was missing, malformed, or admin was added/updated, or users needed ID backfill
   if (writeNeeded) {
       const writeSuccess = await writeUsers(users);
       if (writeSuccess) {
-          console.log("users.json created or updated with default admin user details.");
+          console.log("users.json created or updated with default admin user details and user ID checks.");
       } else {
           console.error("Failed to write updated users.json file.");
-          // Depending on severity, you might want to throw an error here
-          // or return the potentially incorrect 'users' array read initially.
-          // For simulation, we'll return the in-memory corrected version.
       }
   }
 
@@ -147,7 +159,7 @@ export async function saveUserToJson(
 
     // Ensure all required fields are present, providing defaults if necessary
     const userToSave: UserProfile = {
-        id: userProfileData.id, // Use the provided ID
+        id: userProfileData.id || uuidv4(), // Ensure ID is a string (UUID if new)
         email: userProfileData.email,
         password: userProfileData.password, // Ensure password is included
         name: userProfileData.name ?? null,
@@ -160,13 +172,12 @@ export async function saveUserToJson(
     };
 
     try {
-        let users = await readUsers(); // Read users (which ensures admin exists)
+        let users = await readUsers(); // Read users (which ensures admin exists & IDs are checked)
 
         const existingUserIndex = users.findIndex(u => u.id === userToSave.id);
 
         if (existingUserIndex !== -1) {
             // Update existing user: replace the existing entry completely
-             // Preserve the original createdAt timestamp if it exists, otherwise use the one from userToSave
             userToSave.createdAt = users[existingUserIndex].createdAt || userToSave.createdAt;
             users[existingUserIndex] = userToSave;
             console.log(`User data for ${userToSave.email} (ID: ${userToSave.id}) updated in users.json`);
@@ -192,35 +203,32 @@ export async function saveUserToJson(
 
 
 /**
- * Adds a new user to the users.json file. Checks for existing email/ID first.
+ * Adds a new user to the users.json file. Checks for existing email first.
+ * Assigns a UUID if ID is missing.
  * WARNING: Insecure. Stores plain text passwords.
- * @param newUser The user profile object to add. Should have a unique ID already assigned.
+ * @param newUser The user profile object to add.
  * @returns A promise resolving with success status and optional message.
  */
 export async function addUserToJson(newUser: UserProfile): Promise<{ success: boolean; message?: string }> {
     console.warn("WARNING: Adding user with plain text password to users.json is insecure.");
-    if (!newUser.id) {
-        return { success: false, message: 'New user must have an ID assigned before adding.' };
-    }
+    
+    const userToAdd: UserProfile = {
+         ...newUser,
+         id: newUser.id || uuidv4(), // Ensure ID is a string (UUID if new)
+         createdAt: newUser.createdAt || new Date().toISOString(),
+    };
+
     try {
-        let users = await readUsers(); // Ensures admin is present
+        let users = await readUsers(); // Ensures admin is present and existing users have IDs
 
         // Check if email already exists
-        if (users.some(u => u.email === newUser.email)) {
+        if (users.some(u => u.email === userToAdd.email)) {
             return { success: false, message: 'User with this email already exists.' };
         }
-         // Check if ID already exists
-         if (users.some(u => u.id === newUser.id)) {
-             // This might happen if ID generation isn't robust enough, but check anyway
-             return { success: false, message: `User with ID ${newUser.id} already exists.` };
+         // Check if ID already exists (less likely with UUIDs but good for safety)
+         if (users.some(u => u.id === userToAdd.id && u.id !== newUser.id /* Only fail if it's a *different* user with same generated ID */)) {
+             return { success: false, message: `User with ID ${userToAdd.id} conflict.` };
          }
-
-
-        // Add creation timestamp if not present
-        const userToAdd: UserProfile = {
-             ...newUser,
-             createdAt: newUser.createdAt || new Date().toISOString(),
-        };
 
         users.push(userToAdd);
 
@@ -235,11 +243,11 @@ export async function addUserToJson(newUser: UserProfile): Promise<{ success: bo
 /**
  * Updates an existing user in the users.json file by ID.
  * WARNING: Insecure. Updates potentially include plain text password.
- * @param userId The ID of the user to update.
+ * @param userId The ID of the user to update (should be string).
  * @param updatedData Partial user profile data to update. Can include `model`, `expiry_date`, etc.
  * @returns A promise resolving with success status and optional message.
  */
-export async function updateUserInJson(userId: string | number, updatedData: Partial<Omit<UserProfile, 'id'>>): Promise<{ success: boolean; message?: string }> {
+export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id'>>): Promise<{ success: boolean; message?: string }> {
      console.warn("WARNING: Updating user data (potentially including password or model) in users.json is insecure.");
     try {
         let users = await readUsers(); // Ensures admin is present
@@ -254,7 +262,7 @@ export async function updateUserInJson(userId: string | number, updatedData: Par
         users[userIndex] = {
             ...existingUser, // Start with existing data
             ...updatedData,   // Apply the updates (e.g., model, expiry_date)
-            id: userId,       // Ensure ID remains the same
+            id: userId,       // Ensure ID remains the same (it's a string)
             createdAt: existingUser.createdAt || new Date().toISOString(), // Preserve original creation date or set if missing
         };
          console.log(`Updating user ${userId}. New data merged:`, users[userIndex]);
@@ -274,10 +282,10 @@ export async function updateUserInJson(userId: string | number, updatedData: Par
 
 /**
  * Deletes a user from the users.json file by ID. Prevents deletion of the default admin user.
- * @param userId The ID of the user to delete.
+ * @param userId The ID of the user to delete (should be string).
  * @returns A promise resolving with success status and optional message.
  */
-export async function deleteUserFromJson(userId: string | number): Promise<{ success: boolean; message?: string }> {
+export async function deleteUserFromJson(userId: string): Promise<{ success: boolean; message?: string }> {
     try {
         let users = await readUsers(); // Ensures admin is present
         const userToDelete = users.find(u => u.id === userId);
@@ -295,9 +303,9 @@ export async function deleteUserFromJson(userId: string | number): Promise<{ suc
         const initialLength = users.length;
         users = users.filter(u => u.id !== userId);
 
-        // This check is redundant if find worked, but safe to keep
         if (users.length === initialLength) {
-            return { success: false, message: `User with ID ${userId} not found (consistency check).` };
+             // This implies user was not found, though findUserById should have caught this.
+            return { success: false, message: `User with ID ${userId} not found during filter (consistency check).` };
         }
 
         const success = await writeUsers(users);
@@ -311,11 +319,11 @@ export async function deleteUserFromJson(userId: string | number): Promise<{ suc
 /**
  * Updates the password for a user in the users.json file.
  * WARNING: Highly insecure. Stores and updates plain text passwords.
- * @param userId The ID of the user whose password needs updating.
+ * @param userId The ID of the user whose password needs updating (should be string).
  * @param newPassword The new plain text password.
  * @returns A promise resolving with success status and optional message.
  */
-export async function updateUserPasswordInJson(userId: string | number, newPassword: string): Promise<{ success: boolean; message?: string }> {
+export async function updateUserPasswordInJson(userId: string, newPassword: string): Promise<{ success: boolean; message?: string }> {
     console.warn("WARNING: Updating plain text password in users.json is highly insecure.");
     try {
         let users = await readUsers(); // Ensures admin is present

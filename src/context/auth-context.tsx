@@ -8,11 +8,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { findUserByCredentials, findUserByEmail } from '@/actions/auth-actions'; // Import actions to find user locally
 import { saveUserToJson } from '@/actions/user-actions'; // Import action to save user
 import { useRouter } from 'next/navigation'; // Import useRouter for redirection
+import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 
 // Define simulated User type based on UserProfile, omitting sensitive/unused fields for context
 // This provides components with necessary display/logic info without exposing password.
 type SimulatedUser = {
-  id: string | number; // Use 'id' instead of 'uid'
+  id: string; // User ID is now always a string (UUID or existing string ID)
   email: string | null;
   displayName: string | null;
   phone: string | null;
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsedUserProfile: UserProfile = JSON.parse(storedUserJson);
         // Convert UserProfile to SimulatedUser shape for the context
         setUser({
-            id: parsedUserProfile.id,
+            id: String(parsedUserProfile.id), // Ensure ID is a string
             email: parsedUserProfile.email,
             displayName: parsedUserProfile.name,
             phone: parsedUserProfile.phone,
@@ -87,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (foundUserProfile) {
         // Convert UserProfile to SimulatedUser shape for the context
         const loggedInUser: SimulatedUser = {
-          id: foundUserProfile.id,
+          id: String(foundUserProfile.id), // Ensure ID is a string
           email: foundUserProfile.email,
           displayName: foundUserProfile.name,
           phone: foundUserProfile.phone,
@@ -166,12 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error("An account with this email already exists.");
        }
 
-      // Generate a simple local ID (NOT secure or globally unique)
-      const localId = `local_${userData.email.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+      // Generate a unique UUID for the new user
+      const userId = uuidv4();
 
       // Prepare the full UserProfile object to be saved
       const newUserProfile: UserProfile = {
-        id: localId,
+        id: userId, // Use UUID
         email: userData.email,
         password: password, // Include the password to be stored in JSON
         name: userData.name || null,
@@ -195,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Update context state with the new user (SimulatedUser shape)
       const newUserContextState: SimulatedUser = {
-        id: newUserProfile.id,
+        id: newUserProfile.id, // This will be the UUID string
         email: newUserProfile.email,
         displayName: newUserProfile.name,
         phone: newUserProfile.phone,
@@ -275,3 +276,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
