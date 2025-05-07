@@ -28,18 +28,18 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
 4.  **Set up Google AI:**
     *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 5.  **Configure Environment Variables:**
-    *   Rename `.env.example` to `.env` in the project root if it doesn't exist.
-    *   **CRITICAL: Fill in ALL Firebase configuration values** copied in step 3 into the corresponding `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file.
-    *   **DOUBLE-CHECK `NEXT_PUBLIC_FIREBASE_API_KEY`**. It must be correct and start with `AIza`.
-    *   **Ensure ALL `NEXT_PUBLIC_FIREBASE_*` variables are filled.** Missing or incorrect keys are the **most common cause of setup problems** and will likely result in `auth/invalid-api-key` or `auth/configuration-not-found` errors, preventing login/signup and potentially breaking the app.
+    *   **CRITICAL:** Create a file named `.env` in the project root (if it doesn't exist). Do NOT use `.env.example`.
+    *   **CRITICAL: Fill in ALL Firebase configuration values** copied in step 3 into the corresponding `NEXT_PUBLIC_FIREBASE_*` variables in the `.env` file. **Replace the placeholder values (like "YOUR_API_KEY_HERE") with your actual Firebase credentials.**
+    *   **DOUBLE-CHECK `NEXT_PUBLIC_FIREBASE_API_KEY`**. It must be correct and start with `AIza`. An incorrect key is a very common cause of errors.
+    *   **Ensure ALL `NEXT_PUBLIC_FIREBASE_*` variables are filled.** Missing or empty keys *will* cause the application to fail, often with `auth/invalid-api-key` or `auth/configuration-not-found` errors, preventing login/signup and other features.
     *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in.
-    *   Set `ADMIN_PASSWORD` to a secure password for the default admin user (e.g., `Soham@1234`).
+    *   Set `ADMIN_PASSWORD` to a secure password for the default admin user (e.g., `Soham@1234`). This is used for the initial local admin setup if Firebase Auth fails or isn't used immediately.
 6.  **Restart the development server:**
     ```bash
     npm run dev
     ```
-    **IMPORTANT:** You **MUST** restart the server after creating or modifying the `.env` file for the changes to take effect. The application will be available at `http://localhost:9002`.
+    **IMPORTANT:** You **MUST** restart the server after creating or modifying the `.env` file for the changes to take effect. If you see errors about missing Firebase variables, this is the most likely solution after verifying the `.env` file content.
 7.  **(Optional) Run Genkit locally for AI development:**
     ```bash
     npm run genkit:watch
@@ -52,10 +52,10 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
 *   **`FirebaseError: Firebase: Error (auth/invalid-api-key).`** or **`FirebaseError: Firebase: Error (auth/configuration-not-found).`**: This is the **most frequent error** during setup. It means the Firebase SDK could not authenticate with your Firebase project.
     *   **Solution:**
         1.  **Verify `.env`**: Ensure the `.env` file exists in the project root (NOT `.env.example`).
-        2.  **Check ALL Keys**: Double-check that **ALL** `NEXT_PUBLIC_FIREBASE_*` variables in `.env` exactly match the values from your Firebase project settings (Project Settings > General > Your Apps > Web App > Firebase SDK snippet > Config). Pay special attention to `NEXT_PUBLIC_FIREBASE_API_KEY`. Ensure there are no typos or extra spaces.
+        2.  **Check ALL Keys**: Double-check that **ALL** `NEXT_PUBLIC_FIREBASE_*` variables in `.env` exactly match the values from your Firebase project settings (Project Settings > General > Your Apps > Web App > Firebase SDK snippet > Config). Pay special attention to `NEXT_PUBLIC_FIREBASE_API_KEY` (it should start with `AIza`). Ensure there are no typos or extra spaces. **Make sure you replaced the placeholder values.**
         3.  **Enable Auth Methods**: Go to your Firebase project > Build > Authentication > Sign-in method and ensure **Email/Password** and **Google** providers are **ENABLED**.
         4.  **Restart Server**: **CRITICAL** - Stop your development server (Ctrl+C in the terminal) and restart it using `npm run dev`. Environment variables are only loaded when the server starts.
-*   **Login/Signup not working**: Often related to the errors above. Follow the `auth/invalid-api-key` troubleshooting steps.
+*   **Login/Signup not working**: Often related to the errors above. Follow the `auth/invalid-api-key` or `auth/configuration-not-found` troubleshooting steps.
 *   **Application shows console errors about missing variables:** This confirms the `.env` file is not correctly configured or wasn't loaded. Follow the troubleshooting steps above, especially checking all keys and **restarting the server**.
 *   **Admin panel link missing:** Ensure you are logged in with the email specified in `NEXT_PUBLIC_ADMIN_EMAIL` in your `.env` file and that you **restarted the server** after setting it.
 
@@ -87,4 +87,3 @@ This is a Next.js application built with Firebase Studio, designed as a test pre
 *   `npm run typecheck`: Runs TypeScript type checking.
 *   `npm run genkit:dev`: Starts the Genkit development server.
 *   `npm run genkit:watch`: Starts the Genkit development server with file watching.
-```

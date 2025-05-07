@@ -25,20 +25,18 @@ const requiredEnvVars = [
 ];
 
 let firebaseInitializationError: string | null = null;
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-// Check for missing *or empty* required variables
-const emptyEnvVars = requiredEnvVars.filter(envVar => process.env[envVar] === '');
-const allMissingOrEmpty = [...new Set([...missingEnvVars, ...emptyEnvVars])]; // Combine and remove duplicates
+// Check for missing *or empty* required variables first
+const missingOrEmptyVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
-if (allMissingOrEmpty.length > 0) {
-    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following environment variables are missing or empty in your .env file: ${allMissingOrEmpty.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions.`;
+if (missingOrEmptyVars.length > 0) {
+    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The following required environment variables are missing or empty in your .env file: ${missingOrEmptyVars.join(', ')}. Please ensure you have a valid .env file with the correct Firebase configuration. Firebase features (including authentication) WILL FAIL until this is corrected. See README.md for setup instructions. Remember to restart the server after editing .env.`;
     console.error("**********************************************************************************");
     console.error(firebaseInitializationError);
     console.error("**********************************************************************************");
 } else if (!firebaseConfig.apiKey || typeof firebaseConfig.apiKey !== 'string' || !firebaseConfig.apiKey.startsWith("AIza")) {
-    // Explicitly check the API key format *after* confirming it exists
-    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY ("${firebaseConfig.apiKey?.substring(0,10)}...") in your .env file appears invalid (it should start with 'AIza'). Please verify it against your Firebase project settings.`;
+    // If all vars are present, specifically check the API key format
+    firebaseInitializationError = `CRITICAL FIREBASE CONFIG ERROR: The NEXT_PUBLIC_FIREBASE_API_KEY (starting with "${firebaseConfig.apiKey?.substring(0, 4)}...") in your .env file appears invalid. It should start with 'AIza'. Please verify it against your Firebase project settings. Remember to restart the server after editing .env.`;
     console.error("**********************************************************************************");
     console.error(firebaseInitializationError);
     console.error("**********************************************************************************");
@@ -67,7 +65,7 @@ if (!firebaseInitializationError) {
 
     } catch (error: any) {
         let specificHint = "";
-        // Common initialization errors
+        // Add hints based on common Firebase initialization errors
         if (error.code === 'auth/invalid-api-key' || error.message.includes('API key not valid')) {
              specificHint = " The API key (NEXT_PUBLIC_FIREBASE_API_KEY) in your .env file seems incorrect. Please double-check it against your Firebase project settings.";
         } else if (error.code === 'auth/missing-api-key') {
@@ -88,9 +86,11 @@ if (!firebaseInitializationError) {
         authInstance = null;
     }
 } else {
-     console.warn("Firebase initialization skipped due to configuration errors. Please check your .env file and restart the server.");
+     // This log will now run if the initial check found missing/empty variables
+     console.warn("Firebase initialization skipped due to critical configuration errors found in the .env file. Please check the error messages above, correct the .env file, and restart the server.");
 }
 
 const auth = authInstance;
 
+// Export the error message so AuthProvider can potentially display it
 export { app, auth, firebaseInitializationError };
