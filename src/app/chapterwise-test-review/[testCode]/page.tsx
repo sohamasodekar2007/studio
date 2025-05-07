@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus } from '@/types';
+import type { TestSession, TestResultSummary, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
@@ -19,8 +19,8 @@ import { cn } from '@/lib/utils';
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
     [QuestionStatusEnum.Unanswered]: "destructive",
-    [QuestionStatusEnum.MarkedForReview]: "secondary", 
-    [QuestionStatusEnum.AnsweredAndMarked]: "default", 
+    [QuestionStatusEnum.MarkedForReview]: "secondary",
+    [QuestionStatusEnum.AnsweredAndMarked]: "default",
     [QuestionStatusEnum.NotVisited]: "outline",
 };
 
@@ -48,11 +48,16 @@ export default function TestReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-      (window as any).MathJax.typesetPromise?.().catch((err:any) => console.error("MathJax typeset error on review page:", err));
-    }
-  }, [currentQuestionReviewIndex, testDefinition, testSession]);
+   // MathJax typesetting logic
+   const typesetMathJax = useCallback(() => {
+       if (typeof window !== 'undefined' && (window as any).MathJax) {
+           (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error:", err));
+       }
+   }, []);
+
+   useEffect(() => {
+       typesetMathJax();
+   }, [currentQuestionReviewIndex, testDefinition, testSession, typesetMathJax]); // Rerun when index or data changes
 
   useEffect(() => {
     if (authLoading) return;
@@ -77,9 +82,23 @@ export default function TestReviewPage() {
       setError(null);
       try {
         const testDefData = await getGeneratedTestByCode(testCode);
-        if (!testDefData || !testDefData.questions) { 
-          throw new Error("Original test definition not found or invalid (no questions).");
+        // Basic validation for test definition structure
+        if (!testDefData) {
+            throw new Error("Original test definition not found.");
         }
+        // Check if questions array exists based on test type
+         if (testDefData.testType === 'chapterwise' && (!testDefData.questions || testDefData.questions.length === 0)) {
+            throw new Error("Test definition is invalid or has no questions.");
+         }
+         // Add similar check for full_length if needed, combining subject arrays
+         // For now, assuming chapterwise or a structure where questions are directly accessible
+         const hasQuestions = (testDefData.testType === 'chapterwise' && testDefData.questions?.length) ||
+                              (testDefData.testType === 'full_length' && (testDefData.physics?.length || testDefData.chemistry?.length || testDefData.maths?.length || testDefData.biology?.length));
+
+         if (!hasQuestions) {
+            throw new Error("Test definition has no questions.");
+         }
+
         setTestDefinition(testDefData);
 
         const storedSessionJson = localStorage.getItem(`testResult-${attemptId}`);
@@ -99,8 +118,27 @@ export default function TestReviewPage() {
     fetchReviewData();
   }, [testCode, userId, attemptId, authLoading, user, router]);
 
-  const currentReviewQuestion = testDefinition?.questions?.[currentQuestionReviewIndex];
+
+   // Consolidate questions from different subjects if it's a full_length test
+    const allQuestions = useMemo(() => {
+        if (!testDefinition) return [];
+        if (testDefinition.testType === 'chapterwise') {
+            return testDefinition.questions || [];
+        } else if (testDefinition.testType === 'full_length') {
+            return [
+                ...(testDefinition.physics || []),
+                ...(testDefinition.chemistry || []),
+                ...(testDefinition.maths || []),
+                ...(testDefinition.biology || []),
+            ];
+        }
+        return [];
+    }, [testDefinition]);
+
+
+  const currentReviewQuestion: TestQuestion | undefined = allQuestions?.[currentQuestionReviewIndex];
   const currentUserAnswerDetailed = testSession?.answers?.[currentQuestionReviewIndex];
+
 
   if (isLoading || authLoading) {
     return (
@@ -144,19 +182,42 @@ export default function TestReviewPage() {
       </div>
     );
   }
-  const totalQuestions = testDefinition.questions?.length || 0;
-  const optionKeys = ["A", "B", "C", "D"]; 
-  const correctOptionKey = currentReviewQuestion.answer.replace('Option ', '').trim();
+
+  const totalQuestions = allQuestions.length || 0;
+  const optionKeys = ["A", "B", "C", "D"];
+  // Handle cases where answer might not start with "Option "
+  const correctOptionKey = currentReviewQuestion.answer?.startsWith('Option ')
+                           ? currentReviewQuestion.answer.replace('Option ', '').trim()
+                           : currentReviewQuestion.answer; // Assume it's just the key if format differs
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
-  const isExplanationImage = (explanation: string | null | undefined): boolean => {
-    if (!explanation || typeof explanation !== 'string') return false;
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
-    // Check if the explanation is an image URL (starts with /)
-    return explanation.startsWith('/') && imageExtensions.some(ext => explanation.toLowerCase().endsWith(ext));
-  };
+   const isExplanationImage = (explanation: string | null | undefined): boolean => {
+     if (!explanation || typeof explanation !== 'string') return false;
+     // Basic check: does it look like a file path or URL?
+     // More robust check could involve regex or specific patterns.
+     return explanation.includes('/') || explanation.includes('.');
+   };
+
+    // Helper function to render content (handles text, image, MathJax)
+    const renderContent = (content: string | undefined | null, imageUrl: string | undefined | null) => {
+        if (imageUrl) {
+            return (
+                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
+                    <Image src={imageUrl} alt="Question/Explanation Image" layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="question explanation"/>
+                 </div>
+             );
+        } else if (content) {
+             return (
+                 <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-foreground"
+                    dangerouslySetInnerHTML={{ __html: content.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                 />
+             );
+        }
+        return <p className="text-muted-foreground text-sm">[Content not available]</p>;
+    };
 
 
   return (
@@ -191,32 +252,14 @@ export default function TestReviewPage() {
                 </Badge>
             )}
         </CardHeader>
-        <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base space-y-4 text-card-foreground">
-          {(() => {
-            if (currentReviewQuestion.type === 'image') {
-              if (currentReviewQuestion.image_url) {
-                return (
-                  <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96">
-                    <Image src={currentReviewQuestion.image_url} alt={`Question ${currentQuestionReviewIndex + 1}`} layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="question diagram"/>
-                  </div>
-                );
-              } else {
-                 return <p className="text-destructive font-semibold">Error: Image question is missing the image URL.</p>;
-              }
-            } else if (currentReviewQuestion.type === 'text') {
-              if (currentReviewQuestion.question) {
-                return (
-                  <div dangerouslySetInnerHTML={{ __html: currentReviewQuestion.question.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-                );
-              } else {
-                return <p className="text-muted-foreground">Text for this question is not available.</p>;
-              }
-            } else {
-              return <p className="text-muted-foreground">Question content not available or type is unrecognized (Type: {currentReviewQuestion.type || 'N/A'}).</p>;
-            }
-          })()}
+        <CardContent className="space-y-4">
+            {/* Render Question Content */}
+            <div className="mb-4 pb-4 border-b border-border">
+                 {renderContent(currentReviewQuestion.question, currentReviewQuestion.image_url)}
+            </div>
 
-          <div className="space-y-2 pt-4 border-t mt-4 border-border">
+
+          <div className="space-y-2 pt-4">
             <p className="font-semibold text-card-foreground">Options:</p>
             {currentReviewQuestion.options.map((optionText, idx) => {
               const optionKey = optionKeys[idx];
@@ -229,12 +272,12 @@ export default function TestReviewPage() {
 
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
-                  <span className="font-medium mt-0.5">{optionKey}.</span> {/* Added mt-0.5 for better alignment with MathJax */}
-                  {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
-                     <div className="prose-sm dark:prose-invert max-w-none flex-1" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-                  ) : (
-                    <span className="flex-1">{optionText}</span>
-                  )}
+                  <span className="font-medium mt-0.5">{optionKey}.</span>
+                   {/* Render Option Content (Handles MathJax) */}
+                   <div className="flex-1">
+                        {renderContent(optionText, null)}
+                   </div>
+                  {/* Status Icons */}
                   {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                   {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
@@ -248,17 +291,13 @@ export default function TestReviewPage() {
               <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
-              {isExplanationImage(currentReviewQuestion.explanation) ? (
-                 <div className="relative w-full max-w-md h-56 mx-auto md:h-72 lg:h-80 my-2">
-                    {/* Ensure explanation image path is correct. Assuming it's directly under public if it's an absolute path */}
-                    <Image src={currentReviewQuestion.explanation!} alt="Explanation Image" layout="fill" objectFit="contain" className="rounded-md border" data-ai-hint="explanation solution"/>
-                </div>
-              ) : currentReviewQuestion.explanation ? (
-                  <div className="prose-sm dark:prose-invert max-w-none bg-muted/50 dark:bg-muted/20 p-3 rounded-md"
-                       dangerouslySetInnerHTML={{ __html: currentReviewQuestion.explanation.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
-              ) : (
-                 <p className="text-sm text-muted-foreground">No detailed explanation provided for this question.</p>
-              )}
+               {/* Render Explanation Content */}
+              <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
+                 {renderContent(
+                      isExplanationImage(currentReviewQuestion.explanation) ? null : currentReviewQuestion.explanation,
+                      isExplanationImage(currentReviewQuestion.explanation) ? currentReviewQuestion.explanation : null
+                 )}
+              </div>
             </div>
           )}
         </CardContent>
@@ -274,6 +313,3 @@ export default function TestReviewPage() {
     </div>
   );
 }
-
-
-    
