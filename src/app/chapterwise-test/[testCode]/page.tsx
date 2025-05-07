@@ -56,7 +56,7 @@ export default function ChapterwiseTestPage() {
     if (typeof window !== 'undefined' && (window as any).MathJax) {
       (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
     }
-  }, [currentQuestionIndex, testData, generatedAnswer]); // Added generatedAnswer if MathJax applies to AI responses elsewhere
+  }, [currentQuestionIndex, testData]); // Removed generatedAnswer
 
 
   const loadTest = useCallback(async () => {
