@@ -5,12 +5,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
-import { QuestionStatus as QuestionStatusEnum } from '@/types';
+import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Make sure enum is imported
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, Clock } from 'lucide-react'; // Removed Sparkles
+import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, Clock } from 'lucide-react';
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
 // import { Progress } from '@/components/ui/progress'; // Not used currently
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -47,6 +47,7 @@ export default function ChapterwiseTestPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string | null>>({});
   const [questionStatuses, setQuestionStatuses] = useState<Record<number, QuestionStatus>>({});
+  const [startTime, setStartTime] = useState<number | null>(null); // Track start time
   const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -70,8 +71,9 @@ export default function ChapterwiseTestPage() {
     setIsLoading(true);
     try {
       const data = await getGeneratedTestByCode(testCode);
-      if (!data || data.testType !== 'chapterwise' || !data.questions || data.questions.length === 0) {
-        setError("Test not found, invalid, or has no questions.");
+       // Ensure it's chapterwise and has questions
+       if (!data || data.testType !== 'chapterwise' || !data.questions || data.questions.length === 0) {
+        setError("Chapterwise test not found, invalid, or has no questions.");
         setTestData(null);
       } else {
         setTestData(data);
@@ -84,6 +86,8 @@ export default function ChapterwiseTestPage() {
              initialStatuses[0] = QuestionStatusEnum.Unanswered; // Mark first question as unanswered
         }
         setQuestionStatuses(initialStatuses);
+        setStartTime(Date.now()); // Set start time when test data is loaded
+        console.log("Test loaded, start time set:", Date.now());
       }
     } catch (err: any) {
       setError(err.message || "Failed to load test data.");
@@ -96,31 +100,32 @@ export default function ChapterwiseTestPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ variant: 'destructive', title: 'Unauthorized', description: 'Please log in to take the test.' });
-      router.push(`/auth/login?redirect=/chapterwise-test/${testCode}${userId ? `?userId=${userId}` : ''}`);
+      router.push(`/auth/login?redirect=/take-test/${testCode}`); // Use take-test for redirect consistency
       return;
     }
-    if (!authLoading && user && userId && user.id !== userId) { // Ensure user ID is string for comparison
-        toast({ variant: 'destructive', title: 'Access Denied', description: 'You are trying to access a test for another user.'});
-        router.push('/');
-        return;
-    }
-    if (!authLoading && user && !userId) {
-        router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
-        return;
-    }
+    // Add check for userId mismatch if needed, though take-test might handle this better
+    // if (!authLoading && user && userId && user.id !== userId) { ... }
+
+    // If userId is missing but user is logged in, add it
+     if (!authLoading && user && !userId) {
+         router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
+         return;
+     }
 
     if (userId) {
         loadTest();
     }
-  }, [testCode, userId, authLoading, user, router, toast, loadTest]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testCode, userId, authLoading, user, router, toast]); // Removed loadTest from dependency array to prevent re-triggering
 
   useEffect(() => {
-    if (timeLeft <= 0 || showInstructions || !testData || isSubmitting) return; // Added isSubmitting check
+    if (timeLeft <= 0 || showInstructions || !testData || isSubmitting || !startTime) return; // Added startTime check
     const timerId = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-          if (!isSubmitting) handleSubmitTest(); // Prevent double submission
+           console.log("Time up, auto-submitting...");
+           if (!isSubmitting) handleSubmitTest(true); // Indicate auto-submit
           return 0;
         }
         return prevTime - 1;
@@ -128,7 +133,7 @@ export default function ChapterwiseTestPage() {
     }, 1000);
     return () => clearInterval(timerId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, showInstructions, testData, isSubmitting]);
+  }, [timeLeft, showInstructions, testData, isSubmitting, startTime]); // Add startTime to dependencies
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -150,10 +155,14 @@ export default function ChapterwiseTestPage() {
 
   const navigateQuestion = (index: number) => {
     if (index >= 0 && testData && testData.questions && index < testData.questions.length) {
-      if (questionStatuses[currentQuestionIndex] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
-           setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
-      }
+       // Update status of the question being left *before* changing index
+       const currentStatus = questionStatuses[currentQuestionIndex];
+       if (currentStatus === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
+         setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
+       }
+
       setCurrentQuestionIndex(index);
+      // Update status of the new question being visited
        if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
            setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
        }
@@ -167,9 +176,10 @@ export default function ChapterwiseTestPage() {
     } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
+        // If unmarking a marked question, revert to Unanswered or Answered based on whether an answer exists
+         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: userAnswers[currentQuestionIndex] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
     }
-    else {
+    else { // Unanswered or NotVisited
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
@@ -177,6 +187,7 @@ export default function ChapterwiseTestPage() {
   const handleClearResponse = () => {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
     const currentStatus = questionStatuses[currentQuestionIndex];
+    // If it was Answered & Marked, it becomes just Marked. Otherwise, it becomes Unanswered.
     if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     } else {
@@ -184,13 +195,19 @@ export default function ChapterwiseTestPage() {
     }
   };
 
-  const handleSubmitTest = async () => {
-    if (!testData || !user || !userId || isSubmitting) return; // Prevent multiple submissions
+   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
+    if (!testData || !user || !userId || isSubmitting || !startTime) return;
+     console.log(`Submitting test (Auto: ${autoSubmit})...`);
     setIsSubmitting(true);
 
-    const attemptId = `${testCode}-${userId}-${Date.now()}`;
+    const endTime = Date.now();
+    const attemptTimestamp = startTime; // Use the initial start time for the attempt ID
+    const attemptId = `${testCode}-${userId}-${attemptTimestamp}`;
+
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
-      questionId: q.id || `q-${index}`,
+      // Use index as a simple identifier within this attempt if question IDs aren't stable/available
+      // Ideally, `TestQuestion` should have a unique `id` from the question bank.
+      questionId: `q-${index}`, // Example: use index if no stable ID
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
@@ -198,20 +215,26 @@ export default function ChapterwiseTestPage() {
     const sessionData: TestSession = {
       testId: testCode,
       userId: userId,
-      startTime: Date.now() - ((testData.duration * 60) - timeLeft) * 1000,
-      endTime: Date.now(),
+      startTime: startTime, // Use the stored start time
+      endTime: endTime,
       answers: submittedAnswers,
     };
 
     try {
+      // Store result in local storage
       localStorage.setItem(`testResult-${attemptId}`, JSON.stringify(sessionData));
+      console.log(`Test result saved to local storage with key: testResult-${attemptId}`);
       toast({ title: "Test Submitted!", description: "Your responses have been recorded." });
+
+      // Redirect to results page, passing the unique attemptId
       router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptId=${attemptId}`);
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not submit your test." });
-      setIsSubmitting(false); // Allow retry if submission fails
+       console.error("Submission failed:", e);
+       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results locally." });
+       setIsSubmitting(false); // Allow retry if submission fails locally
     }
-  };
+    // Note: No finally block needed here as navigation happens on success
+  }, [testData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router]);
 
 
   if (isLoading || authLoading) {
@@ -250,6 +273,39 @@ export default function ChapterwiseTestPage() {
 
   const optionKeys = ["A", "B", "C", "D"];
 
+   // Function to render question content (text or image)
+   const renderQuestionContent = (question: TestQuestion) => {
+     // Check if image_url exists and prioritize it
+     if (question.image_url) {
+       return (
+         <Image
+           src={question.image_url} // Use the direct URL
+           alt={`Question ${currentQuestionIndex + 1}`}
+           width={600} // Adjust as needed
+           height={400} // Adjust as needed
+           className="rounded-md border max-w-full h-auto mx-auto my-4" // Added margin
+           data-ai-hint="question diagram" // Keep hint if useful
+         />
+       );
+     }
+     // Fallback to question text if image_url is not present
+     else if (question.question_text) {
+       return (
+         <div
+           className="prose dark:prose-invert max-w-none prose-sm md:prose-base"
+           dangerouslySetInnerHTML={{
+             __html: question.question_text
+                       .replace(/\$(.*?)\$/g, '\\($1\\)')
+                       .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]')
+           }}
+         />
+       );
+     }
+     // Fallback if neither image nor text is available
+     return <p className="text-muted-foreground">Question content not available.</p>;
+   };
+
+
   return (
     <>
     <Script
@@ -285,28 +341,8 @@ export default function ChapterwiseTestPage() {
                 <Badge variant="outline">Marks: {currentQuestion.marks}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="prose dark:prose-invert max-w-none prose-sm md:prose-base">
-             {/* Updated rendering logic for question content */}
-              {currentQuestion.type === 'image' && currentQuestion.question_image_url ? (
-                  <Image
-                    src={currentQuestion.question_image_url}
-                    alt={`Question ${currentQuestionIndex + 1}`}
-                    width={600}
-                    height={400}
-                    className="rounded-md border max-w-full h-auto mx-auto"
-                    data-ai-hint="question diagram"
-                  />
-              ) : currentQuestion.question_text ? (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: currentQuestion.question_text
-                                .replace(/\$(.*?)\$/g, '\\($1\\)')
-                                .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]')
-                    }}
-                  />
-              ) : (
-                <p className="text-muted-foreground">Question content not available.</p>
-              )}
+            <CardContent>
+                {renderQuestionContent(currentQuestion)}
             </CardContent>
           </Card>
 
@@ -328,10 +364,11 @@ export default function ChapterwiseTestPage() {
                 >
                   <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary mt-1"/>
                   <span className="font-medium">{optionKey}.</span>
-                  {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
+                   {/* Check if optionText might contain MathJax */}
+                   {(optionText && (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')))) ? (
                      <div className="prose-sm dark:prose-invert max-w-none flex-1" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
                   ) : (
-                    <span className="flex-1">{optionText}</span>
+                    <span className="flex-1">{optionText || `Option ${optionKey}`}</span> // Display Option Key if text is empty
                   )}
                 </Label>
               );
@@ -373,7 +410,7 @@ export default function ChapterwiseTestPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                             <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitTest} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                            <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                                 Yes, Submit
                             </AlertDialogAction>
@@ -405,11 +442,11 @@ export default function ChapterwiseTestPage() {
             ))}
           </div>
           <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.NotVisited])}></span> Not Visited</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.MarkedForReview])}></span> Marked for Review</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5", QUESTION_STATUS_COLORS[QuestionStatusEnum.AnsweredAndMarked])}></span> Answered & Marked</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.NotVisited])}></span> Not Visited</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.MarkedForReview])}></span> Marked for Review</p>
+            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.AnsweredAndMarked])}></span> Answered & Marked</p>
           </div>
            <div className="mt-6 text-center">
                  <AlertDialog>
@@ -428,7 +465,7 @@ export default function ChapterwiseTestPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                         <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleSubmitTest} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                        <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
                             Yes, Submit
                         </AlertDialogAction>
