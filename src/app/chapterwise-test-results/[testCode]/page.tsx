@@ -9,7 +9,7 @@
  import { Progress } from '@/components/ui/progress';
  import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye } from 'lucide-react'; // Added Eye
  import Link from 'next/link';
- import type { TestResultSummary, GeneratedTest, UserProfile } from '@/types';
+ import type { TestResultSummary, GeneratedTest, UserProfile, ChapterwiseTestJson } from '@/types'; // Import ChapterwiseTestJson
  import { Skeleton } from '@/components/ui/skeleton';
  import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
  import { getTestReport, getAllReportsForTest } from '@/actions/test-report-actions';
@@ -42,18 +42,7 @@
  } satisfies ChartConfig;
 
 
- // Placeholder for section-wise performance
- const sectionPerformanceData = [
-     { section: 'PHY & CHEM', attempted: 93, total: 100, correct: 63, accuracy: 68.00, time: '01:29:42' },
-     { section: 'MATHS', attempted: 30, total: 50, correct: 37, accuracy: 74.00, time: '01:00:42' },
- ];
-
- // Placeholder for efficiency chart
- const efficiencyData = [
-    { name: 'PHY & CHEM', timeUtilized: 80, timePerQuestion: 50 },
-    { name: 'MATHS', timeUtilized: 60, timePerQuestion: 70 },
- ];
-
+ // Removed placeholder for section-wise performance (not applicable here)
 
  export default function TestResultsPage() {
    const params = useParams();
@@ -67,7 +56,7 @@
    const attemptTimestampStr = searchParams.get('attemptTimestamp');
 
    const [results, setResults] = useState<TestResultSummary | null>(null);
-   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
+   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null); // Use GeneratedTest type
    const [leaderboardData, setLeaderboardData] = useState<Array<TestResultSummary & { rank?: number }>>([]); // For top ranks display
    const [isLoading, setIsLoading] = useState(true);
    const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
@@ -103,7 +92,17 @@
 
          if (!reportData) throw new Error(`Could not find results for this attempt.`);
 
-         setTestDefinition(testDefData);
+         // Ensure it's a chapterwise test for this page
+         if (testDefData && testDefData.testType !== 'chapterwise') {
+             console.warn("Attempting to view non-chapterwise test results on chapterwise page. Redirecting or showing error might be appropriate.");
+             setError("This results page is for chapterwise tests only.");
+             setTestDefinition(null);
+             setResults(null);
+             setIsLoading(false);
+             return;
+         }
+
+         setTestDefinition(testDefData as ChapterwiseTestJson | null); // Cast to specific type if needed
          setResults(reportData);
 
          // Update overview chart data based on results
@@ -166,12 +165,14 @@
    const totalAttempts = leaderboardData.length > 0 ? '210' : 'N/A'; // Placeholder total attempts for rank display
    const percentile = results?.percentage ? (results.percentage * 0.95).toFixed(2) : 'N/A'; // Placeholder percentile calc
    const timePerQues = totalQs > 0 && results?.timeTakenMinutes ? `${(results.timeTakenMinutes * 60 / totalQs).toFixed(0)}s` : 'N/A';
+   const chapterwiseSubject = (testDefinition as ChapterwiseTestJson)?.test_subject?.[0] || 'Subject'; // Get the single subject
+
 
     // Placeholder Topper Data (replace with actual fetch logic)
     const topperData = leaderboardData.length > 0 ? {
         name: leaderboardData[0].user?.name ?? 'Topper',
         score: leaderboardData[0].score ?? 0,
-        accuracy: leaderboardData[0].percentage ? (leaderboardData[0].percentage * 1.1).toFixed(2) : 'N/A', // Placeholder
+        accuracy: leaderboardData[0].percentage ? (leaderboardData[0].percentage).toFixed(2) : 'N/A', // Use actual percentage
         correct: leaderboardData[0].correct ?? 0,
         incorrect: leaderboardData[0].incorrect ?? 0,
         time: leaderboardData[0].timeTakenMinutes ? `${leaderboardData[0].timeTakenMinutes} min` : 'N/A'
@@ -202,7 +203,7 @@
                  </div>
 
                  {/* Section Analysis Skeleton */}
-                 <Skeleton className="h-80 w-full" />
+                 <Skeleton className="h-40 w-full" /> {/* Adjusted height */}
 
                   {/* Attempted Efficiency Skeleton */}
                  <Skeleton className="h-60 w-full" />
@@ -257,7 +258,7 @@
                  <h1 className="text-2xl font-bold mt-1">Your performance report for {results.testName || testCode}</h1>
             </div>
              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled> <ListOrdered className="mr-1.5 h-4 w-4"/> Reading Mode</Button>
+                {/* Removed Reading Mode button */}
                 <Button variant="default" size="sm" asChild>
                      <Link href={`/chapterwise-test-review/${results.testCode}?userId=${user?.id}&attemptTimestamp=${results.attemptTimestamp}`}>
                         <Eye className="mr-1.5 h-4 w-4" /> View Solution
@@ -284,11 +285,6 @@
                 <CardDescription className="text-xs mb-1">PERCENTILE</CardDescription>
                 <CardTitle className="text-2xl font-bold">{percentile}%</CardTitle>
             </Card>
-            {/* Add Time/Ques metric */}
-             {/* <Card className="text-center p-4">
-                <CardDescription className="text-xs mb-1">TIME/QUES</CardDescription>
-                <CardTitle className="text-2xl font-bold">{timePerQues}</CardTitle>
-             </Card> */}
         </div>
 
         {/* Leaderboard, Overview, You vs Topper Section */}
@@ -383,93 +379,73 @@
              </Card>
         </div>
 
-        {/* Section-wise Distribution */}
+        {/* Subject Performance Card (Chapterwise) */}
         <Card>
             <CardHeader>
-                <CardTitle>Section wise distribution</CardTitle>
+                <CardTitle>Subject Performance: {chapterwiseSubject}</CardTitle>
+                 <CardDescription>Your performance in this specific chapter test.</CardDescription>
              </CardHeader>
              <CardContent className="space-y-4">
-                 {/* Strongest/Weakest/Fastest/Slowest - Placeholder */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
-                        <Star className="h-6 w-6 text-green-500 mx-auto mb-1"/>
-                        <p className="text-xs text-muted-foreground">STRONGEST</p>
-                        <p className="font-semibold">MATHS</p>
-                    </div>
-                     <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
-                        <AlertTriangle className="h-6 w-6 text-red-500 mx-auto mb-1"/>
-                        <p className="text-xs text-muted-foreground">WEAKEST</p>
-                        <p className="font-semibold">PHY & CHEM</p>
-                    </div>
-                    <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20">
-                         <Gauge className="h-6 w-6 text-blue-500 mx-auto mb-1"/>
-                         <p className="text-xs text-muted-foreground">FASTEST</p>
-                         <p className="font-semibold">MATHS</p>
+                {/* Simplified Performance Summary */}
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                     <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20">
+                         <Edit3 className="h-5 w-5 text-blue-600 mx-auto mb-1"/>
+                         <p className="font-semibold">{results.attempted} <span className="text-xs font-normal">of {totalQs}</span></p>
+                         <p className="text-xs text-muted-foreground">ATTEMPTED</p>
                      </div>
-                    <div className="p-3 rounded-lg border bg-orange-50 dark:bg-orange-900/20">
-                        <Clock className="h-6 w-6 text-orange-500 mx-auto mb-1"/>
-                        <p className="text-xs text-muted-foreground">SLOWEST</p>
-                        <p className="font-semibold">PHY & CHEM</p>
-                    </div>
-                </div>
-                {/* Section Performance Table - Placeholder Data */}
-                 <div>
-                    <p className="text-sm text-muted-foreground my-4">You attempted <span className="font-semibold text-primary">74% questions correct</span> in MATHS and <span className="font-semibold text-destructive">32% questions wrong</span> in PHY & CHEM. Keep practicing to increase your score!</p>
-                     <Table>
-                         <TableHeader>
-                            <TableRow>
-                                <TableHead>Section</TableHead>
-                                <TableHead className="text-center">Attempted</TableHead>
-                                <TableHead className="text-center">Correct</TableHead>
-                                <TableHead className="text-center">Accuracy</TableHead>
-                                <TableHead className="text-right">Time</TableHead>
-                            </TableRow>
-                         </TableHeader>
-                         <TableBody>
-                            {sectionPerformanceData.map((sec) => (
-                                <TableRow key={sec.section}>
-                                    <TableCell className="font-medium">{sec.section}</TableCell>
-                                     <TableCell className="text-center">{sec.attempted}/{sec.total}</TableCell>
-                                    <TableCell className="text-center">{sec.correct}/{sec.attempted}</TableCell>
-                                    <TableCell className="text-center">{sec.accuracy.toFixed(2)}%</TableCell>
-                                    <TableCell className="text-right">{sec.time}</TableCell>
-                                </TableRow>
-                            ))}
-                         </TableBody>
-                     </Table>
-                </div>
+                     <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
+                         <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1"/>
+                         <p className="font-semibold">{results.correct} <span className="text-xs font-normal">of {results.attempted}</span></p>
+                         <p className="text-xs text-muted-foreground">CORRECT</p>
+                     </div>
+                     <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
+                         <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1"/>
+                         <p className="font-semibold">{results.incorrect} <span className="text-xs font-normal">of {results.attempted}</span></p>
+                         <p className="text-xs text-muted-foreground">INCORRECT</p>
+                     </div>
+                     <div className="p-3 rounded-lg border bg-orange-50 dark:bg-orange-900/20">
+                         <Timer className="h-5 w-5 text-orange-600 mx-auto mb-1"/>
+                         <p className="font-semibold">{results.timeTakenMinutes} <span className="text-xs font-normal">min</span></p>
+                         <p className="text-xs text-muted-foreground">TIME TAKEN</p>
+                     </div>
+                 </div>
+                {/* Simple message */}
+                 <p className="text-sm text-muted-foreground my-4 text-center">
+                    You scored <span className="font-semibold text-primary">{results.score?.toFixed(0)}/{totalPossibleMarks}</span> with an accuracy of <span className="font-semibold text-primary">{results.percentage?.toFixed(1)}%</span>. Keep practicing!
+                </p>
+
             </CardContent>
         </Card>
 
-        {/* Attempted Efficiency */}
+        {/* Attempted Efficiency - Simplified for Chapterwise */}
         <Card>
              <CardHeader>
-                <CardTitle>Attempted efficiency</CardTitle>
+                <CardTitle>Attempt Breakdown</CardTitle>
+                 <CardDescription>How you answered the questions in this test.</CardDescription>
              </CardHeader>
              <CardContent className="space-y-4">
-                 {/* Attempted/Correct/Incorrect Stats */}
                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20">
-                         <Edit3 className="h-5 w-5 text-blue-600 mx-auto mb-1"/>
-                        <p className="font-semibold">{results.attempted} <span className="text-xs font-normal">of {totalQs}</span></p>
-                        <p className="text-xs text-muted-foreground">ATTEMPTED</p>
-                    </div>
+                    {/* Correct */}
                     <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
                          <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.correct} <span className="text-xs font-normal">of {totalQs}</span></p>
                          <p className="text-xs text-muted-foreground">CORRECT</p>
                     </div>
+                    {/* Incorrect */}
                     <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
                          <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.incorrect} <span className="text-xs font-normal">of {totalQs}</span></p>
                          <p className="text-xs text-muted-foreground">INCORRECT</p>
                     </div>
+                     {/* Unattempted */}
+                    <div className="p-3 rounded-lg border bg-gray-100 dark:bg-gray-800/20">
+                         <HelpCircle className="h-5 w-5 text-gray-500 mx-auto mb-1"/>
+                        <p className="font-semibold">{results.unanswered} <span className="text-xs font-normal">of {totalQs}</span></p>
+                         <p className="text-xs text-muted-foreground">UNATTEMPTED</p>
+                    </div>
                  </div>
-                 {/* Time Spent Deciding - Placeholder */}
-                 <p className="text-sm text-muted-foreground text-center pt-2">You spent <span className="font-semibold text-primary">0 Min</span> on deciding the questions you don't want to attempt.</p>
-                {/* Efficiency Chart - Placeholder */}
-                {/* TODO: Implement actual chart */}
-                 <div className="h-40 bg-muted rounded-md flex items-center justify-center text-muted-foreground">Efficiency Chart Placeholder</div>
+                  {/* Time Spent Deciding - Removed as it's less relevant for single subject */}
+                 {/* Efficiency Chart Placeholder - Removed as less relevant for single subject */}
              </CardContent>
         </Card>
 
