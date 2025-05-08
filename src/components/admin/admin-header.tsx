@@ -1,11 +1,11 @@
-{'use client';
+'use client';
 
 import Link from 'next/link';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Home, Users, BookOpen, Settings, PanelLeft, Search, ShieldCheck, LogOut, User, Loader2, Banknote, BarChart3, ClipboardList, FileText } from 'lucide-react';
+import { Home, Users, BookOpen, Settings, PanelLeft, Search, ShieldCheck, LogOut, User, Loader2, Banknote, BarChart3, ClipboardList, FileText, PlusCircle, Edit, List, Globe, PieChart } from 'lucide-react'; // Added new icons
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -17,13 +17,14 @@ import Image from 'next/image'; // Import Image
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests/manage', label: 'Manage Tests', icon: BookOpen }, // Added Manage Tests
+  { href: '/admin/tests/manage', label: 'Manage Tests', icon: List }, // Updated icon
   { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle }, // Added Create Test
   { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
   { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit }, // Added Edit Questions
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/admin/reports', label: 'Reports', icon: PieChart }, // Added Reports
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
