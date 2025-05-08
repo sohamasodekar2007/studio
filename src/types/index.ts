@@ -106,7 +106,7 @@ export interface TestQuestion {
     type?: QuestionType; // 'text' or 'image', from original question
     question_text?: string | null;        // Textual content of the question (MathJax)
     question_image_url?: string | null;   // Public URL to the question image (relative to /)
-    options: string[];                    // Array of 4 option strings (may contain MathJax)
+    options: (string | null)[];           // Array of 4 option strings (may contain MathJax) - allow null
     answer: string;                       // Correct option key e.g., "A", "B" (NOT "Option A")
     marks: number;
     explanation_text?: string | null;     // Textual explanation (MathJax)
@@ -125,7 +125,7 @@ interface BaseGeneratedTest {
     count: number; // Number of questions specified by user (for chapterwise), or calculated total (for full length)
     total_questions: number; // Actual total number of questions included
     type: PricingType; // FREE, PAID, FREE_PREMIUM
-    audience: AudienceType;
+    audience: AudienceType | null; // Allow null for audience
     createdAt?: string; // ISO timestamp
     test_subject: string[]; // Subjects involved
 }
@@ -197,12 +197,26 @@ export interface TestSession {
   answers: UserAnswer[]; // Array of user's answers during the session
 }
 
-// For displaying results summary or storing in the report JSON
-// This is the structure saved to src/data/chapterwise-test-report/{userId}/{testCode}-{userId}-{startTime}.json
+// Detailed answer structure stored within the test report
+export interface DetailedAnswer {
+  questionId: string;
+  questionIndex: number;
+  questionText?: string | null;
+  questionImageUrl?: string | null;
+  options?: (string | null)[]; // Array of 4 option strings, allow null
+  userAnswer: string | null;
+  correctAnswer: string;
+  isCorrect: boolean;
+  status: QuestionStatus;
+  explanationText?: string | null;
+  explanationImageUrl?: string | null;
+  marks?: number;
+}
+
+// Structure for storing test results summary in JSON report file
 export interface TestResultSummary {
     testCode: string;
     userId: string;
-    user?: Omit<UserProfile, 'password'>; // Add user profile for displaying name (Optional, may need fetching)
     testName: string;
     attemptTimestamp: number; // Unique ID for this attempt (startTime from TestSession)
     submittedAt: number; // endTime from TestSession
@@ -217,23 +231,14 @@ export interface TestResultSummary {
     percentage: number;
     timeTakenMinutes: number; // Total time taken for the test
     pointsEarned?: number; // Points earned for THIS test attempt
-    detailedAnswers: Array<{
-        questionId: string; // Store original question ID
-        questionIndex: number; // Index within this specific test attempt
-        // Question content representation (one of these will be populated)
-        questionText?: string | null; // MathJax format
-        questionImageUrl?: string | null; // Relative URL
-        options?: string[]; // Store options shown to user
-        userAnswer: string | null; // e.g. "A"
-        correctAnswer: string; // e.g. "C"
-        isCorrect: boolean;
-        status: QuestionStatus;
-        // Explanation content (one of these might be populated)
-        explanationText?: string | null; // MathJax format
-        explanationImageUrl?: string | null; // Relative URL
-        marks?: number; // Marks for this specific question
-    }>;
+    detailedAnswers: DetailedAnswer[]; // Use the defined interface
+     // Add optional user profile for ranking/display in reports
+     user?: Omit<UserProfile, 'password'> | null;
+     // Add optional rank if calculated
+     rank?: number;
 }
+
+
 
 // ---- Short Notes Types ----
 export interface ShortNote {
@@ -305,3 +310,13 @@ export interface UserNotebookData {
 // Default tags for bookmarking
 export const bookmarkTags = ["Easy", "Hard", "Tricky", "Do Again", "Important"] as const;
 export type BookmarkTag = typeof bookmarkTags[number];
+
+
+// ---- User Follows Types ----
+// Structure for storing follow data for a single user
+// Stored in src/data/user-follows/{userId}.json
+export interface UserFollows {
+  userId: string;
+  following: string[]; // Array of user IDs this user is following
+  followers: string[]; // Array of user IDs following this user
+}

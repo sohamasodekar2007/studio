@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -14,7 +13,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy } from 'lucide-react'; // Added Notebook & Trophy icons
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon } from 'lucide-react'; // Added Notebook, Trophy, UserPlus, Users, UserCheckIcon
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
@@ -29,7 +28,7 @@ export function AppSidebar() {
 
   const isActive = (href: string) => {
     // Exact match for most top-level pages
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard'].includes(href)) { // Added leaderboard
+    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard', '/find-friends', '/friends-followers', '/friends-following'].includes(href)) { // Added new friend pages
       return pathname === href;
     }
     // Starts with for tests, admin, and dpp as they have sub-routes
@@ -39,6 +38,9 @@ export function AppSidebar() {
     // Special case for specific dynamic routes if needed
     if (href.startsWith('/tests/') && pathname.startsWith('/tests/')) return true;
     if (href.startsWith('/dpp/') && pathname.startsWith('/dpp/')) return true;
+    if (href.startsWith('/friend-history/') && pathname.startsWith('/friend-history/')) return true;
+    if (href.startsWith('/friends-compare/') && pathname.startsWith('/friends-compare/')) return true;
+
 
     return false;
   };
@@ -123,6 +125,37 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuItem>
           </SidebarGroup>
+
+           <SidebarSeparator className="my-3" />
+
+           {/* Friends Section */}
+           <SidebarGroup>
+                <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Friends</SidebarGroupLabel>
+                <SidebarMenuItem>
+                    <Link href="/find-friends" passHref legacyBehavior>
+                        <SidebarMenuButton as="a" isActive={isActive('/find-friends')} tooltip="Find Friends">
+                            <UserPlus />
+                            <span className="group-data-[state=collapsed]:hidden">Find Friends</span>
+                        </SidebarMenuButton>
+                    </Link>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                    <Link href="/friends-following" passHref legacyBehavior>
+                        <SidebarMenuButton as="a" isActive={isActive('/friends-following')} tooltip="Following">
+                            <UserCheckIcon />
+                            <span className="group-data-[state=collapsed]:hidden">Following</span>
+                        </SidebarMenuButton>
+                    </Link>
+                </SidebarMenuItem>
+                 <SidebarMenuItem>
+                    <Link href="/friends-followers" passHref legacyBehavior>
+                        <SidebarMenuButton as="a" isActive={isActive('/friends-followers')} tooltip="Followers">
+                            <Users />
+                            <span className="group-data-[state=collapsed]:hidden">Followers</span>
+                        </SidebarMenuButton>
+                    </Link>
+                </SidebarMenuItem>
+            </SidebarGroup>
 
           <SidebarSeparator className="my-3" />
 
