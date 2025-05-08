@@ -114,41 +114,74 @@ export default function ProgressPage() {
             <CardDescription>A log of all your completed tests.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Test Name</TableHead>
-                  <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="text-center hidden sm:table-cell">Percentage</TableHead>
-                  <TableHead className="hidden md:table-cell">Submitted On</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {testHistory.map((attempt) => (
-                  <TableRow key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
-                    <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell>
-                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell> {/* Show total marks if available */}
-                    <TableCell className="text-center hidden sm:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
-                    <TableCell className="hidden md:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                       {/* Link to Results Page - Pass attemptTimestamp */}
-                       <Button variant="secondary" size="sm" asChild>
-                            <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
-                                View Result
-                            </Link>
-                       </Button>
-                       {/* Link to Review Page - Pass attemptTimestamp */}
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
-                          <Eye className="mr-1.5 h-4 w-4" /> Review
-                        </Link>
-                      </Button>
-                    </TableCell>
+            {/* Responsive Table Approach: Use div for small screens, table for larger */}
+            {/* For smaller screens (e.g., mobile): Use Cards */}
+            <div className="space-y-4 sm:hidden">
+              {testHistory.map((attempt) => (
+                <Card key={attempt.attemptTimestamp} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="font-medium text-sm flex-1 mr-2">{attempt.testName || 'N/A'}</p>
+                    <p className="text-sm font-semibold whitespace-nowrap">
+                      {attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Submitted: {attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" size="sm" asChild>
+                      <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
+                        Result
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
+                        <Eye className="mr-1 h-3.5 w-3.5" /> Review
+                      </Link>
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* For larger screens: Use Table */}
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Test Name</TableHead>
+                    <TableHead className="text-center">Score</TableHead>
+                    <TableHead className="text-center hidden md:table-cell">Percentage</TableHead> {/* Hide Percentage on medium */}
+                    <TableHead className="hidden lg:table-cell">Submitted On</TableHead> {/* Hide Submitted On for medium */}
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {testHistory.map((attempt) => (
+                    <TableRow key={attempt.attemptTimestamp}>
+                      <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell>
+                      <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
+                      <TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
+                      <TableCell className="hidden lg:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2"> {/* Ensure buttons stay together */}
+                          <Button variant="secondary" size="sm" asChild>
+                            <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
+                              View Result
+                            </Link>
+                          </Button>
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
+                              <Eye className="mr-1.5 h-4 w-4" /> Review
+                            </Link>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
