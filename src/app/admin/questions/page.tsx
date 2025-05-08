@@ -1,3 +1,4 @@
+// src/app/admin/questions/page.tsx
 'use client';
 
 import React from 'react';
@@ -304,8 +305,7 @@ export default function AdminQuestionBankPage() {
            });
        }
     }
-  }, [processImageFile, toast]); // Add dependencies
-  // --- End Image Handling ---
+  }, [processImageFile, toast]);
 
 
   const onSubmit = async (data: QuestionFormValues) => {
@@ -401,10 +401,7 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Subject *</FormLabel>
-                     <Select onValueChange={(value) => {
-                         field.onChange(value);
-                         // Reset lesson when subject changes (handled by useEffect)
-                     }} value={field.value} disabled={isLoading || isLoadingSubjects}>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isLoadingSubjects}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} />
@@ -447,9 +444,10 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Lesson Name *</FormLabel>
-                  <>
-                         Select or type Lesson
-                  </>
+                    <FormControl>
+                      <Input placeholder="Lesson Name" {...field} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -553,25 +551,18 @@ export default function AdminQuestionBankPage() {
                         </FormItem>
                         )}
                     />
-                    <>
-                            
-                                
-                                    
-                                        Pick PYQ date
-                                    
-                                
-                                
-                                
-                                    
-                                        
-                                        
-                                    
-                                
-                            
-                            
-                            
-                        </>
+                    
+                     
                         
+                            Pick PYQ date
+                        
+                    
+                        
+                            
+                            
+                        
+                    
+                
                     
                      <FormField
                         control={form.control}
@@ -616,11 +607,11 @@ export default function AdminQuestionBankPage() {
                             
                                 
                                 
-                            </>
-                            <>
+                            
+                            
                                
                                 
-                            </>
+                            
                         
                     </RadioGroup>
                    </FormControl>
@@ -644,19 +635,19 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
                         <FormControl>
-                         <>
-                        </>
+                         
+                        
                         </FormControl>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
-                 <>
+                 
                     
                     
                     
                     
-                 </>
+                 
                 </>
              ) : (
                 <FormField
@@ -666,21 +657,21 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Image *</FormLabel>
                         <FormControl>
-                             <>
+                             
                                  
                                     Upload Image
-                                </>
-                                 <>
+                                
+                                 
                                      Paste
-                                 </>
+                                 
                                  {questionImagePreview && (
-                                    <>
+                                    
                                          
                                              
                                          
-                                     </>
+                                     
                                  )}
-                            </>
+                            
                         </FormControl>
                          <FormMessage />
                          
@@ -703,22 +694,22 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Correct Answer *</FormLabel>
-                        <>
+                        
                             
                                 
                                     Option A
-                                </>
-                                <>
+                                
+                                
                                     Option B
-                                </>
-                                <>
+                                
+                                
                                     Option C
-                                </>
-                                <>
+                                
+                                
                                     Option D
-                                </>
+                                
                             
-                        </>
+                        
                         <FormMessage />
                     </FormItem>
                     )}
@@ -730,8 +721,7 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
-                        <>
-                        </>
+                        
                         
                         
                     </FormItem>
@@ -745,22 +735,22 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Explanation Image (Optional)</FormLabel>
                         <FormControl>
-                             <>
+                             
                                 
                                      Upload Image
-                                </>
+                                
                                  {/* Paste Button */}
-                                 <>
+                                 
                                      Paste
-                                 </>
+                                 
                                  {explanationImagePreview && (
-                                    <>
+                                    
                                          
                                              
                                          
-                                     </>
+                                     
                                  )}
-                            </>
+                            
                         </FormControl>
                          <FormMessage />
                           
@@ -769,10 +759,10 @@ export default function AdminQuestionBankPage() {
                 />
             </CardContent>
             <CardFooter>
-                 <>
+                 
                     
                     Save Question
-                </>
+                
             </CardFooter>
           </Card>
 
@@ -782,4 +772,22 @@ export default function AdminQuestionBankPage() {
     </>
   );
 }
-//add validation for all and make this to that it will
+//add validation for all and make this to that it will.
+
+i have created this question page in next js, please make a validation in this 
+
+for each fields 
+
+1) all fields are required and show message in realtime for each fields when they will be created and also follow that
+ * Images are saved relative to the publicImagesBasePath
+         const imagesDir = path.join(publicImagesBasePath, subject, lesson, 'images');
+         await ensureDirExists(imagesDir);
+
+         const fileBuffer = Buffer.from(await file.arrayBuffer());
+         const fileExtension = path.extname(file.name).substring(1);
+         const uniqueFilename = await generateUniqueFilename(prefix, fileExtension, fileBuffer);
+         const filePath = path.join(imagesDir, uniqueFilename);
+
+         await fs.writeFile(filePath, fileBuffer);
+         console.log(`Image saved to public path: ${filePath}`);
+         return uniqueFilename; // Return only the filename this code and do the same for explantio image
