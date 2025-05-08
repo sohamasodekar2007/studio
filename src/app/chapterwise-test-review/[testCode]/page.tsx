@@ -8,15 +8,14 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye } from 'lucide-react';
 import Link from 'next/link';
-import type { TestResultSummary, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
+import type { TestResultSummary, QuestionStatus, TestQuestion } from '@/types'; // Removed GeneratedTest import
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-// Removed getGeneratedTestByCode as we rely on the report
 import { getTestReport } from '@/actions/test-report-actions'; // Import action to get specific report
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import Script from 'next/script'; // Ensure Script is imported
+import Script from 'next/script';
 import ImageViewDialog from '@/components/notebooks/image-view-dialog';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -35,6 +34,7 @@ const OPTION_STYLES = {
   correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 };
 
+// Removed constructImagePath helper as paths should be directly in reportData
 
 export default function TestReviewPage() {
   // --- Hooks called unconditionally at the top ---
@@ -81,6 +81,7 @@ export default function TestReviewPage() {
         if (!reportData) {
             throw new Error(`Test attempt data not found for this attempt.`);
         }
+         console.log("Fetched report data:", reportData); // Debug log
         setTestReport(reportData);
 
     } catch (err: any) {
@@ -117,8 +118,14 @@ export default function TestReviewPage() {
   const currentUserAnswerDetailed = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
-  const correctOptionKey = useMemo(() => currentUserAnswerDetailed?.correctAnswer?.replace('Option ', '').trim(), [currentUserAnswerDetailed]);
-  const userSelectedOptionKey = useMemo(() => currentUserAnswerDetailed?.userAnswer, [currentUserAnswerDetailed]);
+  // Updated correctAnswer logic
+  const correctOptionKey = useMemo(() => {
+    const answer = currentUserAnswerDetailed?.correctAnswer;
+    if (!answer) return undefined;
+    // Handle both "Option X" and just "X" formats
+    return answer.startsWith("Option ") ? answer.replace('Option ', '').trim() : answer.trim();
+  }, [currentUserAnswerDetailed]);
+  const userSelectedOptionKey = useMemo(() => currentUserAnswerDetailed?.selectedOption, [currentUserAnswerDetailed]);
   const isUserCorrect = useMemo(() => userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
   const questionStatus = useMemo(() => currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited, [currentUserAnswerDetailed]);
 
@@ -202,42 +209,43 @@ export default function TestReviewPage() {
   }
 
   // --- Render Content Functions (Now safe to call hooks within) ---
-  const renderContentWithMathJax = (
-       textContent: string | undefined | null,
-       imageUrl: string | undefined | null, // This is the absolute public URL from the report
-       context: 'question' | 'explanation'
-   ) => {
-       let contentToRender: React.ReactNode = null;
-       const finalImagePath = imageUrl && imageUrl.startsWith('/') ? imageUrl : null;
+   const renderContentWithMathJax = (
+        textContent: string | undefined | null,
+        imageUrl: string | undefined | null, // This is the absolute public URL from the report
+        context: 'question' | 'explanation'
+    ) => {
+        let contentToRender: React.ReactNode = null;
+        // Ensure the image URL is valid (starts with /)
+        const finalImagePath = imageUrl && imageUrl.startsWith('/') ? imageUrl : null;
 
-       if (finalImagePath) {
-           contentToRender = (
-                <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4 cursor-pointer" onClick={() => handleViewImage(finalImagePath, `${context} Image`)}>
-                   <Image
-                       src={finalImagePath}
-                       alt={context === 'question' ? "Question Image" : "Explanation Image"}
-                       layout="fill"
-                       objectFit="contain"
-                       className="rounded-md border"
-                       data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                       onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
-                       unoptimized
-                   />
-                </div>
+        if (finalImagePath) {
+            contentToRender = (
+                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4 cursor-pointer" onClick={() => handleViewImage(finalImagePath, `${context} Image`)}>
+                    <Image
+                        src={finalImagePath}
+                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
+                        layout="fill"
+                        objectFit="contain"
+                        className="rounded-md border"
+                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
+                        onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
+                        unoptimized
+                    />
+                 </div>
+             );
+        } else if (textContent) {
+            contentToRender = (
+                <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+                    dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                 />
             );
-       } else if (textContent) {
-           contentToRender = (
-               <div
-                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
-                   dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-                />
-           );
-       } else {
-           contentToRender = <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
-       }
+        } else {
+            contentToRender = <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
+        }
 
-       return contentToRender;
-   };
+        return contentToRender;
+    };
 
   // --- Main Render ---
   return (
@@ -248,6 +256,7 @@ export default function TestReviewPage() {
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
+            // Initial typeset after script loads and component mounts
             typesetMathJax();
         }}
       />
@@ -301,6 +310,12 @@ export default function TestReviewPage() {
               if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
               else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
               else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
+
+              // If it's an image question, use different styling for the correct option label
+              if (!currentUserAnswerDetailed.questionText && currentUserAnswerDetailed.questionImageUrl && isCorrect) {
+                  optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption)
+              }
+
 
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
