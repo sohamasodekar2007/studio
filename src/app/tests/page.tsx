@@ -1,4 +1,3 @@
-
 // src/app/tests/page.tsx
 'use client';
 
@@ -13,14 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { GeneratedTest, Exam, PricingType, UserModel } from '@/types'; // Use new GeneratedTest type
+import type { GeneratedTest, ExamOption, PricingType, UserModel } from '@/types'; // Use new GeneratedTest type
 import { exams, pricingTypes } from '@/types'; // Import options
 import { getAllGeneratedTests } from '@/actions/generated-test-actions'; // Import action to get new tests
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context'; // Import useAuth to get user model
 
 // Define default filter options
-const defaultExams: Exam[] = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"];
+// const defaultExams: ExamOption[] = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"]; // Keep 'exams' from types instead
 // const defaultModels: TestModel[] = ["chapterwise", "full_length", "topicwise", "combo"]; // Obsolete filter
 const defaultPricings: PricingType[] = ["FREE", "PAID", "FREE_PREMIUM"]; // Updated pricing types
 
@@ -64,62 +63,42 @@ export default function TestsPage() {
   const filteredTestItems = useMemo(() => {
     if (authLoading || isLoadingTests) return []; // Don't filter until everything is loaded
 
-    // Filter by search term, selected subjects, and pricing first
+    // Filter by search term, selected subjects, and pricing dropdown first
     let initiallyFiltered = allTestItems
-        // Filter by search term (check name and subjects)
         .filter(item => {
             const searchLower = searchTerm.toLowerCase();
             const nameMatch = item.name.toLowerCase().includes(searchLower);
             const subjectMatch = item.test_subject.some(sub => sub.toLowerCase().includes(searchLower));
-            return nameMatch || subjectMatch;
+            const codeMatch = item.test_code.toLowerCase().includes(searchLower);
+            return nameMatch || subjectMatch || codeMatch;
         })
-        // Filter by selected subjects (if any selected)
         .filter(item => {
             return selectedSubjects.length === 0 || item.test_subject.some(sub => selectedSubjects.includes(sub));
         })
-        // Filter by selected Pricing Type dropdown
         .filter(item => {
             return selectedPricingFilter === 'all' || item.type === selectedPricingFilter;
         });
 
     // Now, apply filtering based on the user's access permissions
-    if (user) {
-       const userModel = user.model;
-       return initiallyFiltered.filter(item => {
-         // Everyone sees FREE tests
-         if (item.type === 'FREE') return true;
-         // FREE_PREMIUM tests are visible to all premium users
-         if (item.type === 'FREE_PREMIUM') return userModel !== 'free';
-         // PAID tests require specific premium plans
-         if (item.type === 'PAID') {
-            // Determine if the test is chapterwise or full_length based on subjects/structure (heuristic)
-            // This logic might need refinement based on how tests are truly categorized.
-            // Simple assumption: if only one subject, it *might* be chapterwise.
-            const isPotentiallyChapterwise = item.testType === 'chapterwise';
-            const isPotentiallyFullLength = item.testType === 'full_length';
+    const userModel = user?.model || 'free'; // Default to free if no user or model
 
-            switch (userModel) {
-              case 'chapterwise':
-                // Chapterwise premium users see PAID chapterwise tests
-                 return isPotentiallyChapterwise;
-              case 'full_length':
-                // Full_length premium users see PAID full_length tests
-                return isPotentiallyFullLength;
-              case 'combo':
-                // Combo users see all PAID tests
-                return true;
-              case 'free':
-              default:
-                // Free users don't see any PAID tests
-                return false;
-            }
-         }
-         return false; // Should not happen if type is handled
-       });
-    } else {
-      // If not logged in, only show FREE tests
-      return initiallyFiltered.filter(item => item.type === 'FREE');
-    }
+    return initiallyFiltered.filter(item => {
+        switch (item.type) {
+            case 'FREE':
+                return true; // Everyone sees FREE tests
+            case 'FREE_PREMIUM':
+                // Only visible to users with any premium plan (not free)
+                return userModel !== 'free';
+            case 'PAID':
+                 // Only visible to users with specific premium plans or combo
+                 if (userModel === 'combo') return true; // Combo sees all paid
+                 if (item.testType === 'chapterwise' && userModel === 'chapterwise') return true;
+                 if (item.testType === 'full_length' && userModel === 'full_length') return true;
+                 return false; // Free users or mismatched premium users don't see this PAID test
+            default:
+                return false; // Unknown type, hide
+        }
+    });
 
   }, [searchTerm, selectedSubjects, selectedPricingFilter, allTestItems, user, authLoading, isLoadingTests]);
 
@@ -156,8 +135,8 @@ export default function TestsPage() {
    const formatPricing = (pricing: PricingType) => {
      switch (pricing) {
        case 'FREE': return 'Free';
-       case 'PAID': return 'Paid';
-       case 'FREE_PREMIUM': return 'Free Premium';
+       case 'PAID': return 'Premium'; // Changed 'Paid' to 'Premium' for consistency
+       case 'FREE_PREMIUM': return 'Free for Premium';
        default: return pricing;
      }
    };
@@ -194,7 +173,7 @@ export default function TestsPage() {
                  <SelectValue placeholder="Filter by Type" />
                </SelectTrigger>
                <SelectContent>
-                 <SelectItem value="all">All Types</SelectItem>
+                 <SelectItem value="all">All Access Types</SelectItem>
                  {defaultPricings.map((pt) => (
                    <SelectItem key={pt} value={pt} className="capitalize">
                      {formatPricing(pt)}
@@ -276,7 +255,7 @@ export default function TestsPage() {
                     </div>
 
                     <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.name}</CardTitle>
-                    
+
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground pt-1">
                          <div className="flex items-center gap-1.5">
                             <HelpCircle className="h-4 w-4 text-primary" />
@@ -295,29 +274,13 @@ export default function TestsPage() {
 
 
                     <div className="pt-2 mt-auto">
-                       
-                        <Button 
-                          variant="secondary" 
-                          className="w-full" 
-                          disabled={(item.type === 'PAID' || item.type === 'FREE_PREMIUM') && (!user || user.model === 'free')}
-                          onClick={() => {
-                            if (user && user.id) {
-                                const testUrl = item.testType === 'chapterwise' ? `/chapterwise-test/${item.test_code}?userId=${user.id}` : `/full-length-test/${item.test_code}?userId=${user.id}`; // Placeholder for full-length
-                                window.open(testUrl, '_blank');
-                            } else if (!user && !authLoading) {
-                                // Optionally prompt login or handle differently
-                                alert("Please log in to start the test.");
-                            }
-                          }}
-                        >
-                          {(item.type === 'PAID' || item.type === 'FREE_PREMIUM') && (!user || user.model === 'free') ? 'Upgrade to Access' : 'Start Test'}
-                          <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                        </Button>
+                        {/* Start Test Button */}
+                         <StartTestButton test={item} />
                     </div>
                 </CardContent>
                 </Card>
             ))
-            ) : !error ? ( 
+            ) : !error ? (
             <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4">
                 <CardContent className="p-6 text-center text-muted-foreground">
                     No tests found matching your criteria and plan. Try adjusting the filters or check the admin panel to create tests.
@@ -328,4 +291,3 @@ export default function TestsPage() {
     </div>
   );
 }
-

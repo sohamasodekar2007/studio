@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import type { GeneratedTest } from '@/types';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { PlayCircle, AlertTriangle } from 'lucide-react';
+import { PlayCircle, AlertTriangle, ShoppingCart, Lock } from 'lucide-react'; // Added icons
+import { useRouter } from 'next/navigation'; // Use router for login redirect
 
 interface StartTestButtonProps {
   test: GeneratedTest;
@@ -15,72 +16,126 @@ interface StartTestButtonProps {
 export default function StartTestButton({ test }: StartTestButtonProps) {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
-  const handleStartTest = () => {
+  const userModel = user?.model || 'free';
+
+  // --- Determine if the user can access this test ---
+  const canAccess = () => {
+    switch (test.type) {
+      case 'FREE':
+        return true; // Everyone can access FREE tests
+      case 'FREE_PREMIUM':
+        return userModel !== 'free'; // Only premium users can access FREE_PREMIUM
+      case 'PAID':
+        // PAID tests have specific access rules
+        if (userModel === 'combo') return true; // Combo plan accesses all PAID tests
+        if (test.testType === 'chapterwise' && userModel === 'chapterwise') return true;
+        if (test.testType === 'full_length' && userModel === 'full_length') return true;
+        return false; // Free users or mismatched premium users cannot access this PAID test
+      default:
+        return false; // Unknown type
+    }
+  };
+
+  const hasAccess = canAccess();
+
+  // --- Handle Button Click ---
+  const handleStartClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!user && !authLoading) {
+      e.preventDefault(); // Prevent navigation
       toast({
         variant: 'destructive',
         title: 'Login Required',
-        description: 'Please log in to start the test.',
+        description: 'Please log in or sign up to start the test.',
       });
-      // Optionally redirect to login, or let AuthProvider handle it
-      // router.push(`/auth/login?redirect=/take-test/${test.test_code}`);
-      return false; // Prevent navigation if not logged in
+      // Redirect to login, remembering the intended test page
+      router.push(`/auth/login?redirect=/take-test/${test.test_code}`);
+      return;
     }
-    return true; // Allow navigation
+
+    if (user && !hasAccess) {
+         e.preventDefault(); // Prevent navigation
+         toast({
+             variant: 'destructive',
+             title: 'Upgrade Required',
+             description: `Your current plan (${userModel}) does not include access to this test. Please upgrade.`,
+         });
+         // Optionally redirect to upgrade page: router.push('/upgrade');
+         return;
+    }
+
+    // If user is logged in and has access, the Link component will handle navigation
+    // Open in a new tab is handled by the Link component's target attribute
   };
 
-  let testUrl = '#';
+  // --- Determine Button State and Text ---
   let buttonText = 'Start Test';
   let isDisabled = false;
-
-  if (user && user.id) {
-    if (test.testType === 'chapterwise') {
-      testUrl = `/chapterwise-test/${test.test_code}?userId=${user.id}`;
-    } else if (test.testType === 'full_length') {
-      // Placeholder for full_length test, currently not implemented
-      buttonText = 'Full Length Test (Coming Soon)';
-      isDisabled = true;
-      testUrl = '#'; // Prevent navigation
-    } else {
-      buttonText = 'Test Type Not Supported';
-      isDisabled = true;
-    }
-  } else if (!authLoading) {
-    // User not logged in, button should prompt login or be disabled
-    buttonText = 'Login to Start Test';
-    // isDisabled = true; // Or let handleStartTest manage it
-  }
+  let buttonIcon = <PlayCircle className="mr-2 h-5 w-5" />;
+  let buttonVariant: "default" | "secondary" | "destructive" | "outline" | "ghost" | "link" | null | undefined = "default";
+  let showUpgradePrompt = false;
 
   if (authLoading) {
-    return <Button size="lg" className="w-full sm:w-auto" disabled>Loading User...</Button>;
+    buttonText = 'Loading...';
+    isDisabled = true;
+  } else if (!user) {
+    buttonText = 'Login to Start Test';
+    // Let onClick handler manage redirection, button remains enabled
+  } else if (!hasAccess) {
+    buttonText = 'Upgrade to Access';
+    isDisabled = true; // Disable direct link click
+    buttonIcon = <Lock className="mr-2 h-4 w-4" />; // Show lock icon
+    buttonVariant = "secondary"; // Use secondary variant for upgrade prompt
+    showUpgradePrompt = true; // Indicate we should show upgrade message/link
+  } else {
+     // User logged in and has access
+     buttonText = 'Start Test';
+     buttonIcon = <PlayCircle className="mr-2 h-5 w-5" />;
   }
 
-  if (isDisabled || testUrl === '#') {
-     return (
-        <Button size="lg" className="w-full sm:w-auto" disabled>
-            {test.testType !== 'chapterwise' && <AlertTriangle className="mr-2 h-4 w-4" />}
+  // Override for test type specific issues (like if full_length interface is not ready)
+  if (test.testType !== 'chapterwise' && hasAccess) {
+     buttonText = 'Interface Coming Soon';
+     isDisabled = true;
+     buttonIcon = <AlertTriangle className="mr-2 h-4 w-4" />;
+  }
+
+
+  // Render the button based on the determined state
+  if (showUpgradePrompt) {
+      return (
+         <Button
+            variant={buttonVariant}
+            size="lg"
+            className="w-full"
+            onClick={() => { /* TODO: Redirect to upgrade page */
+                 toast({ title: "Upgrade Required", description: "Please upgrade your plan to access this test." });
+            }}
+         >
+            {buttonIcon}
             {buttonText}
-        </Button>
-     );
+         </Button>
+      );
   }
 
+  const testUrl = (user && user.id && test.testType === 'chapterwise')
+    ? `/chapterwise-test/${test.test_code}?userId=${user.id}`
+    : '#'; // Default to '#' if not chapterwise or no user
 
+  // Render the Link or a disabled button if needed
   return (
     <Link
         href={testUrl}
         passHref
-        target="_blank" // Open in new tab
+        target={!isDisabled && testUrl !== '#' ? "_blank" : undefined} // Open in new tab only if enabled and valid URL
         rel="noopener noreferrer"
-        onClick={(e) => {
-            if (!handleStartTest()) {
-            e.preventDefault(); // Prevent navigation if login required
-            }
-        }}
-        className="w-full sm:w-auto"
+        onClick={handleStartClick} // Handles login check and access check
+        className={`w-full sm:w-auto ${isDisabled || testUrl === '#' ? 'pointer-events-none' : ''}`} // Disable link interaction if button is disabled
+        aria-disabled={isDisabled}
     >
-      <Button size="lg" className="w-full">
-        <PlayCircle className="mr-2 h-5 w-5" />
+      <Button size="lg" className="w-full" variant={buttonVariant || "default"} disabled={isDisabled || authLoading}>
+        {buttonIcon}
         {buttonText}
       </Button>
     </Link>
