@@ -7,7 +7,7 @@
  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
  import { Progress } from '@/components/ui/progress';
- import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target } from 'lucide-react';
+ import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye } from 'lucide-react'; // Added Eye
  import Link from 'next/link';
  import type { TestResultSummary, GeneratedTest, UserProfile } from '@/types';
  import { Skeleton } from '@/components/ui/skeleton';
@@ -26,12 +26,12 @@
    ChartTooltipContent,
  } from "@/components/ui/chart"; // Import ShadCN chart components
 
-  // Placeholder data for charts - Replace with real data later
-  const overviewChartData = [
-      { name: 'Correct', value: 0, fill: 'hsl(var(--chart-2))' }, // Green
-      { name: 'Incorrect', value: 0, fill: 'hsl(var(--chart-5))' }, // Red
-      { name: 'Unattempted', value: 0, fill: 'hsl(var(--chart-3))' }, // Gray/Orange
-  ];
+ // Placeholder data for charts - Replace with real data later
+ const overviewChartData = [
+     { name: 'Correct', value: 0, fill: 'hsl(var(--chart-2))' }, // Green
+     { name: 'Incorrect', value: 0, fill: 'hsl(var(--chart-5))' }, // Red
+     { name: 'Unattempted', value: 0, fill: 'hsl(var(--chart-3))' }, // Gray/Orange
+ ];
  const overviewChartConfig = {
     value: { label: "Questions" },
     Correct: { label: "Correct", color: "hsl(var(--chart-2))" },
