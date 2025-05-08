@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag } from 'lucide-react';
 import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer, ChapterwiseTestJson } from '@/types'; // Added ChapterwiseTestJson
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { getTestReport } from '@/actions/test-report-actions';
@@ -34,24 +34,32 @@ const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "second
 
 const OPTION_STYLES = {
   base: "border-border hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-muted/20",
-  selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-800 dark:text-green-300 font-medium",
-  selectedIncorrect: "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-800 dark:text-red-300 font-medium",
-  correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
-  correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-400",
+  selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300 font-medium",
+  selectedIncorrect: "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300 font-medium",
+  correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
 
 // Helper function to construct image paths relative to the public directory
+// Updated to handle potentially missing subject/lesson in the report (though unlikely for chapterwise)
 const constructImagePath = (subject: string | null | undefined, lesson: string | null | undefined, filename: string | null | undefined): string | null => {
-    if (!subject || !lesson || !filename) return null;
+    if (!filename) return null; // Return null if filename is missing
     const basePath = '/question_bank_images'; // Base path within public
-    return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
+
+    // Use placeholders if subject/lesson are missing, but log a warning
+    const effectiveSubject = subject || 'unknown_subject';
+    const effectiveLesson = lesson || 'unknown_lesson';
+    if (!subject || !lesson) {
+        console.warn(`Constructing image path with missing subject/lesson for filename: ${filename}`);
+    }
+
+    return `${basePath}/${encodeURIComponent(effectiveSubject)}/${encodeURIComponent(effectiveLesson)}/images/${encodeURIComponent(filename)}`;
 };
 
 
 export default function TestReviewPage() {
   const params = useParams();
-  const searchParams = useSearchParams(); // Use searchParams hook
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -166,7 +174,8 @@ export default function TestReviewPage() {
    const correctOptionKey = useMemo(() => {
      const answer = currentReviewQuestion?.correctAnswer;
      if (!answer) return undefined;
-     return typeof answer === 'string' ? answer.replace('Option ', '').trim() : answer;
+     // Handle cases like "A" or "Option A"
+     return typeof answer === 'string' ? answer.replace('Option ', '').trim() : undefined;
    }, [currentReviewQuestion?.correctAnswer]);
 
 
@@ -180,13 +189,15 @@ export default function TestReviewPage() {
   const renderContent = (contentData: { text?: string | null, imageUrl?: string | null, imageAlt: string, subject?: string | null, lesson?: string | null }) => {
         const { text, imageUrl, imageAlt, subject, lesson } = contentData;
 
-        const imagePath = constructImagePath(subject, lesson, imageUrl); // Pass subject/lesson
+        // Determine the correct image path using the helper
+        // imageUrl likely contains only the filename, construct full path
+        const fullImagePath = constructImagePath(subject, lesson, imageUrl);
 
-        if (imagePath) {
+        if (fullImagePath) { // If a valid image path exists, display the image
             return (
                  <div className="relative w-full max-w-xl h-auto mx-auto my-4"> {/* Adjusted size and margin */}
                     <Image
-                        src={imagePath} // Use the verified path
+                        src={fullImagePath} // Use the verified path
                         alt={imageAlt}
                         width={600} // Adjust as needed
                         height={400} // Adjust as needed
@@ -194,12 +205,12 @@ export default function TestReviewPage() {
                         className="rounded-md border bg-white" // Add bg-white for better image visibility
                         data-ai-hint="question diagram" // Keep hint
                         priority={currentQuestionReviewIndex < 3} // Prioritize initial images
-                        onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); }} // Simplified onError
+                        onError={(e) => { console.error(`Error loading image: ${fullImagePath}`, e); }} // Simplified error logging
                         unoptimized // Keep for local/dynamic images
                      />
                  </div>
             );
-        } else if (text) {
+        } else if (text) { // If no image, display text (with MathJax)
             return (
                 <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content mb-4" // Ensure text color contrasts
@@ -207,7 +218,7 @@ export default function TestReviewPage() {
                  />
             );
         }
-        return <p className="text-sm text-muted-foreground">Content not available.</p>;
+        return <p className="text-sm text-muted-foreground">Content not available.</p>; // Fallback if neither exists
     };
 
     const renderOptions = (question: DetailedAnswer | undefined) => {
@@ -262,19 +273,17 @@ export default function TestReviewPage() {
         );
     };
 
-    const renderExplanation = (question: DetailedAnswer | undefined) => {
+     const renderExplanation = (question: DetailedAnswer | undefined) => {
         if (!question) return null;
 
         const hasText = question.explanationText && question.explanationText.trim().length > 0;
         // Derive subject/lesson from the test report for image path construction
         const subject = testReport?.test_subject?.[0]; // Use the subject array if present
         const lesson = (testReport as ChapterwiseTestJson | null)?.lesson; // Use lesson if present
-        const hasImage = !!question.explanationImageUrl; // Image URL is directly in detailed answer
+        const hasImage = !!question.explanationImageUrl;
 
         if (!hasText && !hasImage) {
-            return ( // Return null or a placeholder if no explanation
-                <p className="text-sm text-muted-foreground mt-4">No explanation available for this question.</p>
-            );
+            return null; // Return null if no explanation content
         }
 
         // If there IS explanation content, render the card
@@ -346,9 +355,9 @@ export default function TestReviewPage() {
 
    if (isLoading || authLoading) {
      return (
-       <div className="container mx-auto py-8 px-4 max-w-3xl">
+       <div className="container mx-auto py-8 px-4 max-w-4xl">
          <Skeleton className="h-8 w-1/4 mb-4" />
-         <Skeleton className="h-10 w-1/2 mb-6" />
+         <Skeleton className="h-10 w-full mb-6" />
          <Card>
            <CardHeader><Skeleton className="h-6 w-1/3" /></CardHeader>
            <CardContent>
@@ -356,8 +365,7 @@ export default function TestReviewPage() {
              <Skeleton className="h-12 w-full mb-2" />
              <Skeleton className="h-12 w-full mb-2" />
            </CardContent>
-           {/* CardFooter needs to be imported */}
-           <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
+            <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
          </Card>
        </div>
      );
@@ -405,7 +413,7 @@ export default function TestReviewPage() {
             if (!isLoading) typesetMathJax(); // Typeset if data is already loaded
         }}
       />
-    <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+    <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
       <div className="flex justify-between items-center">
         <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
@@ -448,9 +456,6 @@ export default function TestReviewPage() {
                    <Bookmark className="mr-2 h-4 w-4" />
                    {isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin"/> : "Save to Notebook"}
                 </Button>
-                 {/* <Button variant="ghost" size="sm" className="text-muted-foreground">
-                     <AlertTriangle className="mr-2 h-4 w-4"/> Report Issue
-                </Button> */}
            </div>
            <div className="flex gap-2">
                 <Button
