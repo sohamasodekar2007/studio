@@ -6,9 +6,9 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react';
 import Link from 'next/link';
-import type { TestResultSummary, QuestionStatus } from '@/types'; // Import relevant types
+import type { TestResultSummary, QuestionStatus, Notebook, QuestionBankItem, BookmarkedQuestion } from '@/types'; // Import relevant types
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getTestReport } from '@/actions/test-report-actions'; // Action to get specific report
@@ -16,7 +16,9 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
-import ImageViewDialog from '@/components/notebooks/image-view-dialog'; // Import the image viewer dialog
+import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog'; // Import notebook dialog
+import { getUserNotebooks, addQuestionToNotebooks } from '@/actions/notebook-actions'; // Import notebook actions
+import { useToast } from '@/hooks/use-toast';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -34,6 +36,23 @@ const OPTION_STYLES = {
   correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 };
 
+// Helper function to construct image paths relative to the public directory
+// This helper assumes the detailedAnswers structure includes the base path already
+// or filename needs prefixing. Adjust based on how URLs are stored in the report.
+const constructImagePath = (relativePath: string | null | undefined): string | null => {
+    if (!relativePath) return null;
+    // If the path already starts with '/', assume it's correct relative to public
+    if (relativePath.startsWith('/')) {
+        return relativePath;
+    }
+    // Otherwise, assume it needs the base path (adjust if structure differs)
+    // This fallback might not be needed if saveTestReport correctly saves full paths.
+    // const basePath = '/question_bank_images';
+    // return `${basePath}/${relativePath}`; // Example, adjust if needed
+    console.warn("constructImagePath received a potentially incomplete path:", relativePath);
+    return null; // Return null if path is not absolute starting with /
+};
+
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -44,8 +63,14 @@ export default function TestReviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
-  const [isImageViewOpen, setIsImageViewOpen] = useState(false);
-  const [imageToView, setImageToView] = useState<{url: string, alt: string} | null>(null);
+  const { toast } = useToast();
+
+  // --- Notebook/Bookmark State ---
+  const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); // State for saving to notebook
+  // --- End Notebook/Bookmark State ---
 
   const testCode = params.testCode as string;
   const userId = searchParams.get('userId');
@@ -79,6 +104,11 @@ export default function TestReviewPage() {
             throw new Error(`Test attempt data not found for this attempt.`);
         }
         console.log("Fetched report data for review:", reportData);
+        // Ensure detailedAnswers exists and is an array
+        if (!reportData.detailedAnswers || !Array.isArray(reportData.detailedAnswers)) {
+             console.error("Report data is missing or has invalid detailedAnswers:", reportData);
+             throw new Error("Invalid report data structure received.");
+        }
         setTestReport(reportData);
     } catch (err: any) {
       console.error("Error fetching review data:", err);
@@ -87,6 +117,20 @@ export default function TestReviewPage() {
       setIsLoading(false);
     }
   }, [testCode, userId, attemptTimestampStr]);
+
+    // Fetch Notebooks when user is available
+    useEffect(() => {
+        if (user?.id) {
+             setIsLoadingNotebooks(true);
+             getUserNotebooks(user.id)
+                 .then(data => {
+                      setNotebooks(data.notebooks || []);
+                 })
+                 .catch(err => console.error("Failed to load notebooks:", err))
+                 .finally(() => setIsLoadingNotebooks(false));
+        }
+    }, [user?.id]);
+
 
   useEffect(() => {
     if (authLoading) return;
@@ -111,38 +155,80 @@ export default function TestReviewPage() {
 
   // Memoized values
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
-  const currentUserAnswerDetailed = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
+  const currentReviewQuestion = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const correctOptionKey = useMemo(() => {
-    const answer = currentUserAnswerDetailed?.correctAnswer;
-    if (!answer) return undefined;
-    // Handle both "Option X" and just "X" formats
-    return answer.startsWith("Option ") ? answer.replace('Option ', '').trim() : answer.trim();
-  }, [currentUserAnswerDetailed]);
+   // Determine correct option key, handling potential "Option X" prefix or just "X"
+   const correctOptionKey = useMemo(() => {
+     const answer = currentReviewQuestion?.correctAnswer;
+     if (!answer) return undefined;
+     return answer.startsWith("Option ") ? answer.replace('Option ', '').trim() : answer.trim();
+   }, [currentReviewQuestion]);
 
-  const userSelectedOptionKey = useMemo(() => currentUserAnswerDetailed?.selectedOption, [currentUserAnswerDetailed]);
-  const isUserCorrect = useMemo(() => userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
-  const questionStatus = useMemo(() => currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited, [currentUserAnswerDetailed]);
+
+  const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
+  const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]); // Check if selected is non-null
+  const questionStatus = useMemo(() => currentReviewQuestion?.status || QuestionStatusEnum.NotVisited, [currentReviewQuestion]);
 
   const optionsToDisplay = useMemo(() => {
-    if (!currentUserAnswerDetailed || !currentUserAnswerDetailed.options) {
+    if (!currentReviewQuestion || !currentReviewQuestion.options) {
       return ['', '', '', ''];
     }
-    const opts = currentUserAnswerDetailed.options;
-    return Array.from({ length: 4 }, (_, i) => opts[i] ?? '');
-  }, [currentUserAnswerDetailed]);
+    const opts = currentReviewQuestion.options;
+    // Ensure it's always an array of 4, even if data is malformed
+    return Array.from({ length: 4 }, (_, i) => (typeof opts[i] === 'string' ? opts[i] : ''));
+  }, [currentReviewQuestion]);
 
-  // Event Handlers
-  const handleViewImage = (url: string | null, alt: string) => {
-      if (url) {
-          setImageToView({ url, alt });
-          setIsImageViewOpen(true);
-      }
-  }
 
-   // Conditional Rendering
+  // --- Notebook/Bookmark Handlers ---
+    const handleOpenNotebookModal = () => {
+        if (isLoadingNotebooks) {
+             toast({ variant: "default", title: "Loading notebooks..." });
+             return;
+        }
+        if (!currentReviewQuestion) return;
+        setIsNotebookModalOpen(true);
+    }
+
+    const handleCloseNotebookModal = () => {
+         setIsNotebookModalOpen(false);
+    }
+
+     const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
+         if (!user?.id || !currentReviewQuestion?.questionId || !testReport) return;
+
+         // Use subject and lesson from the report metadata if available
+         const currentQuestionSubject = testReport?.test_subject?.[0] || 'Unknown';
+         const currentQuestionLesson = testReport?.lesson || 'Unknown'; // Might only be available for chapterwise
+
+         const questionData: BookmarkedQuestion = {
+             questionId: currentReviewQuestion.questionId,
+             subject: currentQuestionSubject,
+             lesson: currentQuestionLesson, // Add lesson
+             addedAt: Date.now(),
+             tags: tags,
+         };
+
+         setIsSavingToNotebook(true);
+         try {
+             const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
+             if (result.success) {
+                 toast({ title: "Saved!", description: "Question added to selected notebooks." });
+                 handleCloseNotebookModal();
+             } else {
+                  throw new Error(result.message || "Failed to save to notebooks.");
+             }
+         } catch (error: any) {
+              toast({ variant: "destructive", title: "Save Failed", description: error.message });
+         } finally {
+              setIsSavingToNotebook(false);
+         }
+     }
+     // --- End Notebook/Bookmark Handlers ---
+
+
+  // Conditional Rendering
   if (isLoading || authLoading) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl">
@@ -179,12 +265,12 @@ export default function TestReviewPage() {
     );
   }
 
-  if (!testReport) {
+  if (!testReport || allAnswersFromReport.length === 0) {
       return (
         <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
             <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h1 className="text-2xl font-bold mb-2">Report Data Not Found</h1>
-            <p className="text-muted-foreground mb-6">Could not load the test report data for this attempt.</p>
+            <p className="text-muted-foreground mb-6">Could not load the test report data or answers for this attempt.</p>
             <Button asChild variant="outline">
                 <Link href="/progress">Back to Progress</Link>
             </Button>
@@ -192,7 +278,7 @@ export default function TestReviewPage() {
       );
   }
 
-   if (!currentUserAnswerDetailed) {
+   if (!currentReviewQuestion) {
     // This can happen momentarily if report loads but the index is out of bounds initially
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
@@ -202,28 +288,33 @@ export default function TestReviewPage() {
     );
   }
 
-  // Render Content Functions
-   const renderContentWithMathJax = (
+   // Render Content Functions
+    const renderContentWithMathJax = (
         textContent: string | undefined | null,
-        imageUrl: string | undefined | null, // This is the absolute public URL from the report
+        imageUrl: string | undefined | null, // Expects relative URL from report
         context: 'question' | 'explanation'
     ) => {
-        // Use the image URL directly from the report data
-        const finalImagePath = imageUrl; // No need to construct again
+        const fullImagePath = constructImagePath(imageUrl); // Use helper to construct full path
 
-        if (finalImagePath) {
+        if (fullImagePath) {
             return (
-                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
+                 <div className="relative w-full max-w-xl h-auto mx-auto my-4"> {/* Adjusted size and margin */}
                     <Image
-                        src={finalImagePath}
+                        src={fullImagePath}
                         alt={context === 'question' ? "Question Image" : "Explanation Image"}
-                        layout="fill"
-                        objectFit="contain"
-                        className="rounded-md border cursor-pointer"
+                        width={700} // Provide explicit width
+                        height={500} // Provide explicit height
+                        style={{ width: '100%', height: 'auto', objectFit: 'contain' }} // Responsive styles
+                        className="rounded-md border" // Basic styling
                         data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                        unoptimized
-                        onClick={() => handleViewImage(finalImagePath, `${context} Image`)} // Open dialog on click
-                        onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
+                        unoptimized // Recommended for local/dynamic images
+                        onError={(e) => {
+                            console.error(`Error loading image: ${fullImagePath}`, e);
+                             // Optionally hide the broken image placeholder
+                             const target = e.target as HTMLImageElement;
+                             target.style.display = 'none';
+                             // Or display a fallback message: target.parentElement?.appendChild(document.createTextNode('Image failed to load'));
+                         }}
                     />
                  </div>
              );
@@ -239,6 +330,7 @@ export default function TestReviewPage() {
         }
     };
 
+
   // --- Main Render ---
   return (
     <>
@@ -248,7 +340,8 @@ export default function TestReviewPage() {
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
-            typesetMathJax(); // Initial typeset
+            // Typeset when the component mounts and has data
+            if (testReport) typesetMathJax();
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -266,10 +359,9 @@ export default function TestReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-            {/* Use marks from the detailed answer if available, fallback to calculation */}
-             <Badge variant="outline">Marks: {currentUserAnswerDetailed?.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
+             <Badge variant="outline">Marks: {currentReviewQuestion?.marks ?? 1}</Badge> {/* Default to 1 mark if missing */}
           </div>
-           {currentUserAnswerDetailed.status && (
+           {currentReviewQuestion.status && (
                 <Badge
                     variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
                     className={cn("text-xs w-fit mt-2", {
@@ -287,10 +379,9 @@ export default function TestReviewPage() {
         <CardContent className="space-y-4">
             {/* Render Question */}
             <div className="mb-4 pb-4 border-b border-border">
-                {/* Pass the URLs directly from the report data */}
                  {renderContentWithMathJax(
-                    currentUserAnswerDetailed.questionText,
-                    currentUserAnswerDetailed.questionImageUrl,
+                    currentReviewQuestion.questionText,
+                    currentReviewQuestion.questionImageUrl,
                     'question'
                  )}
             </div>
@@ -308,7 +399,7 @@ export default function TestReviewPage() {
                else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
                else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
                 // Style correct option label for image questions differently
-                if (!currentUserAnswerDetailed.questionText && currentUserAnswerDetailed.questionImageUrl && isCorrect) {
+                if (!currentReviewQuestion.questionText && currentReviewQuestion.questionImageUrl && isCorrect) {
                   optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
                 }
 
@@ -326,41 +417,53 @@ export default function TestReviewPage() {
           </div>
 
           {/* Render Explanation */}
-           {(currentUserAnswerDetailed.explanationText || currentUserAnswerDetailed.explanationImageUrl) && (
+           {(currentReviewQuestion.explanationText || currentReviewQuestion.explanationImageUrl) && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
                  {renderContentWithMathJax(
-                    currentUserAnswerDetailed.explanationText,
-                    currentUserAnswerDetailed.explanationImageUrl,
+                    currentReviewQuestion.explanationText,
+                    currentReviewQuestion.explanationImageUrl,
                     'explanation'
                  )}
               </div>
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between mt-4 p-6 border-t border-border">
-          <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-          </Button>
-          <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
-            Next <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+        <CardFooter className="flex justify-between items-center flex-wrap gap-3 mt-4 p-6 border-t border-border">
+           {/* Bookmark Button */}
+           <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
+                 {isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Bookmark className="mr-2 h-4 w-4" />}
+                 Save to Notebook
+            </Button>
+            {/* Navigation Buttons */}
+           <div className="flex gap-2">
+             <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+              </Button>
+              <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+           </div>
         </CardFooter>
       </Card>
     </div>
 
-    {/* Image View Dialog */}
-     {imageToView && (
-        <ImageViewDialog
-            isOpen={isImageViewOpen}
-            onClose={() => setIsImageViewOpen(false)}
-            imageUrl={imageToView.url}
-            altText={imageToView.alt}
-        />
-    )}
+     {/* Add to Notebook Dialog */}
+     {currentReviewQuestion && user && (
+            <AddToNotebookDialog
+                isOpen={isNotebookModalOpen}
+                onClose={handleCloseNotebookModal}
+                notebooks={notebooks}
+                onSave={handleSaveToNotebooks}
+                isLoading={isSavingToNotebook} // Pass the correct loading state
+                userId={user.id} // Pass userId to dialog for creating new notebooks
+                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])} // Update local state
+            />
+        )}
     </>
   );
 }
+
