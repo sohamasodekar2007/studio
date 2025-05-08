@@ -58,6 +58,7 @@ const questionSchema = z.object({
   correctAnswer: z.enum(["A", "B", "C", "D"], { required_error: "Correct answer is required" }),
   explanationText: z.string().optional(),
   explanationImage: z.any().optional(), // Use 'any' for File object
+  marks: z.number().min(1, "Marks must be at least 1.").positive("Marks must be positive."), // Added marks field
 
   // PYQ Fields
   isPyq: z.boolean().default(false).optional(),
@@ -155,6 +156,7 @@ export default function AdminQuestionBankPage() {
       correctAnswer: undefined,
       explanationText: '',
       explanationImage: null,
+      marks: 1, // Default marks to 1
       isPyq: false,
       pyqExam: undefined,
       pyqDate: null,
@@ -380,7 +382,8 @@ export default function AdminQuestionBankPage() {
   };
 
     return (
-      <> {/* Wrap in React Fragment */}
+     <> {/* Wrap in React Fragment */}
+
         <div className="space-y-6">
           <div className="flex items-center gap-4">
             <ClipboardList className="h-8 w-8 text-primary" />
@@ -522,6 +525,27 @@ export default function AdminQuestionBankPage() {
                         </FormItem>
                         )}
                     />
+                    {/* Marks Input */}
+                    <FormField
+                        control={form.control}
+                        name="marks"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Marks *</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        type="number"
+                                        {...field}
+                                        onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} // Ensure value is number
+                                        min="1"
+                                        placeholder="Marks for correct answer"
+                                        disabled={isLoading}
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
 
                     {/* PYQ Checkbox and Conditional Fields */}
                     <FormField
@@ -548,30 +572,30 @@ export default function AdminQuestionBankPage() {
               </Card>
 
               {/* --- Question Type Selection --- */}
-              <FormField
+               <FormField
                     control={form.control}
                     name="questionType"
                     render={({ field }) => (
-                     <FormItem className="space-y-3">
-                       <FormLabel className="text-lg font-semibold">Select Question Type *</FormLabel>
-                       <FormControl>
+                    <FormItem className="space-y-3">
+                    <FormLabel className="text-lg font-semibold">Select Question Type *</FormLabel>
+                    <FormControl>
                         <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
-                          disabled={isLoading}
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
+                        disabled={isLoading}
                         >
-                          <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl><RadioGroupItem value="text" /></FormControl>
                             <FormLabel className="font-normal flex items-center gap-2"><FileText className="h-4 w-4"/> Text Question</FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl><RadioGroupItem value="image" /></FormControl>
                             <FormLabel className="font-normal flex items-center gap-2"><ImagePlus className="h-4 w-4"/> Image Question</FormLabel>
-                          </FormItem>
+                        </FormItem>
                         </RadioGroup>
-                       </FormControl>
-                      <FormMessage />
+                    </FormControl>
+                    <FormMessage />
                     </FormItem>
                     )}
                 />
@@ -596,7 +620,7 @@ export default function AdminQuestionBankPage() {
                     <FormField
                         control={form.control}
                         name="questionImage"
-                        render={({ field }) => (
+                        render={() => ( // Field state managed by internal refs/state
                         <FormItem>
                             <FormLabel>Question Image *</FormLabel>
                              <FormControl>
@@ -615,7 +639,7 @@ export default function AdminQuestionBankPage() {
                                             <Upload className="mr-2 h-4 w-4" /> Choose Image
                                         </Button>
                                         <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage('questionImage', setQuestionImagePreview)} disabled={isLoading}>
-                                            <ClipboardPaste className="mr-2 h-4 w-4" /> Paste Image
+                                            <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
                                         </Button>
                                     </div>
                                     {questionImagePreview && (
@@ -687,7 +711,7 @@ export default function AdminQuestionBankPage() {
                      <FormField
                         control={form.control}
                         name="explanationImage"
-                        render={({ field }) => (
+                         render={() => ( // Field state managed by internal refs/state
                         <FormItem>
                             <FormLabel>Explanation Image (Optional)</FormLabel>
                              <FormControl>
@@ -706,7 +730,7 @@ export default function AdminQuestionBankPage() {
                                              <Upload className="mr-2 h-4 w-4" /> Choose Image
                                          </Button>
                                          <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage('explanationImage', setExplanationImagePreview)} disabled={isLoading}>
-                                             <ClipboardPaste className="mr-2 h-4 w-4" /> Paste Image
+                                             <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
                                          </Button>
                                     </div>
                                      {explanationImagePreview && (

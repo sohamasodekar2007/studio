@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Imp
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Loader2, Filter, BookOpen, Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
+import type { QuestionBankItem, PricingType, ChapterwiseTestJson, FullLengthTestJson, ExamOption, ClassLevel, AudienceType, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
 import { pricingTypes, academicStatuses as audienceTypes, testStreams, exams } from '@/types'; // Fixed import: examOptions -> exams
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
@@ -74,7 +74,7 @@ const FullLengthSchema = BaseTestSchema.extend({
     path: ["weightagePhysics"], // Apply error to one of the fields
 });
 
-// Discriminated union based on 'testType'
+// Discriminated union schema
 const TestCreationSchema = z.discriminatedUnion("testType", [
     ChapterwiseSchema,
     FullLengthSchema,
