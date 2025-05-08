@@ -1,5 +1,4 @@
-
-'use client';
+{'use client';
 
 import Link from 'next/link';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -12,15 +11,16 @@ import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-// Remove cn import
-// import { cn } from '@/lib/utils';
+import Image from 'next/image'; // Import Image
 
 // Define navigation items for the mobile admin sidebar
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/tests', label: 'Tests', icon: BookOpen },
-  { href: '/admin/questions', label: 'Question Bank', icon: ClipboardList },
+  { href: '/admin/tests/manage', label: 'Manage Tests', icon: BookOpen }, // Added Manage Tests
+  { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle }, // Added Create Test
+  { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
+  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit }, // Added Edit Questions
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
@@ -62,7 +62,6 @@ export function AdminHeader() {
 
 
   return (
-    // Revert header classes
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 sm:py-4">
       {/* Mobile Sidebar Trigger */}
       <Sheet>
@@ -76,10 +75,18 @@ export function AdminHeader() {
           <nav className="grid gap-6 text-lg font-medium">
              <Link
                 href="/admin"
-                className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
+                className="group flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
               >
-                <ShieldCheck className="h-5 w-5 transition-all group-hover:scale-110" />
-                <span className="sr-only">Study Sphere Admin</span>
+                 {/* Use Image component for logo */}
+                 <Image
+                    src="/EduNexus-logo-white.jpg" // White logo for primary background
+                    alt="EduNexus Admin Logo"
+                    width={24} // Adjust size as needed
+                    height={24}
+                    className="h-6 w-6 transition-all group-hover:scale-110"
+                    unoptimized
+                 />
+                <span className="sr-only">EduNexus Admin</span>
             </Link>
             {adminNavItems.map((item) => (
               <Link
@@ -111,13 +118,14 @@ export function AdminHeader() {
                className="overflow-hidden rounded-full"
              >
                <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://avatar.vercel.sh/${user.email || user.id}.png`} alt="Admin Avatar" />
-                  <AvatarFallback>{getInitials(user.displayName, user.email)}</AvatarFallback>
+                   {/* Use Vercel avatar or user uploaded avatar */}
+                    <AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png`} alt="Admin Avatar" />
+                  <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
               </Avatar>
              </Button>
            </DropdownMenuTrigger>
            <DropdownMenuContent align="end">
-             <DropdownMenuLabel>{user.displayName || user.email} (Admin)</DropdownMenuLabel>
+             <DropdownMenuLabel>{user.name || user.email} (Admin)</DropdownMenuLabel>
              <DropdownMenuSeparator />
              <DropdownMenuItem asChild>
                <Link href="/settings">

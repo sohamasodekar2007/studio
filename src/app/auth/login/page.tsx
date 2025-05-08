@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -13,6 +12,7 @@ import { GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
+import Image from 'next/image'; // Import Image
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -57,11 +57,19 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <GraduationCap className="h-10 w-10 text-primary" />
+           <div className="flex justify-center mb-4">
+             {/* EduNexus Logo */}
+              <Image
+                  src="/EduNexus-logo-black.jpg" // Assuming black logo for light theme
+                  alt="EduNexus Logo"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12" // Adjust size as needed
+              />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back!</CardTitle>
-          <CardDescription>Enter your email below to access your STUDY SPHERE account.</CardDescription>
+          {/* Updated description */}
+          <CardDescription>Enter your email below to access your EduNexus account.</CardDescription>
         </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>

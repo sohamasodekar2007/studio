@@ -1,4 +1,4 @@
-'use client';
+{'use client';
 
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -46,7 +46,8 @@ export default function HelpPage() {
             <AccordionItem value="item-2">
               <AccordionTrigger>How can I view my test results and analysis?</AccordionTrigger> {/* Updated Question */}
               <AccordionContent>
-                After completing a test, your results, including score, percentile, time taken, and question-wise analysis, will be available in the 'Results' section (coming soon). This will help you understand your strengths and weaknesses. {/* Updated Answer */}
+                 {/* Updated Answer */}
+                 After completing a test, your results, including score, percentage, time taken, and question-wise analysis, will be available immediately on the results page. You can review past attempts on the <Link href="/progress" className="underline hover:text-primary">My Progress</Link> page. This will help you understand your strengths and weaknesses.
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-3">
@@ -86,7 +87,8 @@ export default function HelpPage() {
             Chat with Support (Coming Soon)
           </Button>
           <Button variant="outline" size="lg" asChild>
-             <a href="mailto:support@examprephub.app" className="text-muted-foreground hover:text-primary"> {/* Updated email & styled link as button */}
+             {/* Updated email */}
+             <a href="mailto:support@edunexus.com" className="text-muted-foreground hover:text-primary">
                  <Mail className="mr-2 h-5 w-5" />
                  Email Us
              </a>

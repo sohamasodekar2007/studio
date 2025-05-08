@@ -1,4 +1,3 @@
-
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle } from "lucide-react";
 import Link from "next/link";
@@ -46,7 +45,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold tracking-tight">EduNexus Admin Dashboard</h1> {/* Updated Title */}
       <p className="text-muted-foreground">Overview of platform activity and management tools.</p>
 
       {/* Stats Cards */}
@@ -100,45 +99,45 @@ export default async function AdminDashboardPage() {
           <CardDescription>Manage key areas of the platform.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-           <Link href="/admin/users" passHref>
+           <Link href="/admin/users" passHref legacyBehavior>
               <Button variant="outline" className="w-full justify-start gap-2">
                   <Users className="h-4 w-4" /> Manage Users
               </Button>
            </Link>
            {/* Updated link to new Test Management page */}
-           <Link href="/admin/tests/manage" passHref>
+           <Link href="/admin/tests/manage" passHref legacyBehavior>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <BookOpen className="h-4 w-4" /> Manage Tests
                </Button>
            </Link>
             {/* New Create Test Button */}
-             <Link href="/admin/tests/create" passHref>
+             <Link href="/admin/tests/create" passHref legacyBehavior>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <PlusCircle className="h-4 w-4" /> Create Test
                </Button>
            </Link>
-            <Link href="/admin/questions" passHref>
+            <Link href="/admin/questions" passHref legacyBehavior>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <ClipboardList className="h-4 w-4" /> Add Question
                </Button>
            </Link>
             {/* New Edit Questions Button */}
-            <Link href="/admin/questions/edit" passHref>
+            <Link href="/admin/questions/edit" passHref legacyBehavior>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <Edit className="h-4 w-4" /> Edit Questions
                </Button>
            </Link>
-            <Link href="/admin/notes" passHref>
+            <Link href="/admin/notes" passHref legacyBehavior>
                <Button variant="outline" className="w-full justify-start gap-2">
                    <FileText className="h-4 w-4" /> Short Notes
                </Button>
            </Link>
-           <Link href="/admin/analytics" passHref>
+           <Link href="/admin/analytics" passHref legacyBehavior>
                 <Button variant="outline" className="w-full justify-start gap-2">
                 <LineChart className="h-4 w-4" /> View Analytics
                 </Button>
             </Link>
-            <Link href="/admin/payments" passHref>
+            <Link href="/admin/payments" passHref legacyBehavior>
                 <Button variant="outline" className="w-full justify-start gap-2">
                 <DollarSign className="h-4 w-4" /> Manage Payments
                 </Button>

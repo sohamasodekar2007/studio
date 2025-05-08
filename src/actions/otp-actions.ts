@@ -1,3 +1,4 @@
+// src/actions/otp-actions.ts
 'use server';
 
 // In-memory OTP cache (NOT SUITABLE FOR PRODUCTION - use a database or persistent cache)
@@ -27,7 +28,8 @@ export async function generateOtp(email: string): Promise<{ success: boolean; me
   otpCache[email] = { otp, expiresAt };
 
   console.log(`**********************************************************************`);
-  console.log(`SIMULATED OTP SERVICE (FOR DEVELOPMENT):`);
+  // Updated brand name
+  console.log(`SIMULATED OTP SERVICE (FOR DEVELOPMENT - EduNexus):`);
   console.log(`OTP for ${email}: ${otp}`);
   console.log(`Expires at: ${new Date(expiresAt).toLocaleString()}`);
   console.log(`(In a real application, this OTP would be sent via email/SMS)`);
@@ -83,9 +85,10 @@ export async function verifyOtp(email: string, otpAttempt: string): Promise<{ su
  */
 export async function sendWelcomeEmail(userEmail: string): Promise<boolean> {
     console.log(`**********************************************************************`);
-    console.log(`SIMULATED WELCOME EMAIL:`);
+    // Updated brand name
+    console.log(`SIMULATED WELCOME EMAIL (EduNexus):`);
     console.log(`To: ${userEmail}`);
-    console.log(`Subject: Welcome to STUDY SPHERE!`);
+    console.log(`Subject: Welcome to EduNexus!`);
     console.log(`Body: Thank you for registering... (Full HTML body would be here)`);
     console.log(`(In a real application, this would be an actual email)`);
     console.log(`**********************************************************************`);

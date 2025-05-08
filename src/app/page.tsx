@@ -59,7 +59,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Welcome to STUDY SPHERE!</h1>
+        {/* Updated title */}
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Welcome to EduNexus!</h1>
+        {/* Updated description */}
         <p className="text-lg text-muted-foreground">Your ultimate platform for MHT-CET, JEE, and NEET preparation.</p>
       </div>
 
@@ -134,6 +136,7 @@ export default function DashboardPage() {
             <CardDescription>Instant answers to your academic questions.</CardDescription>
             <Link href="/doubt-solving" passHref>
                <Button variant="secondary" className="w-full bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-800/60 border border-blue-200 dark:border-blue-700">
+                {/* Updated brand name */}
                 <Sparkles className="mr-2 h-4 w-4"/> Ask EduNexus <ArrowRight className="ml-auto h-4 w-4" />
               </Button>
             </Link>

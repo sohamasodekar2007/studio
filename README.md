@@ -1,4 +1,4 @@
-# ExamPrep Hub
+# EduNexus
 
 This is a Next.js application, designed as a test preparation platform for MHT-CET, JEE, and NEET exams.
 It uses local storage for authentication and `users.json` for user data persistence, suitable for local development and demonstration.
@@ -69,7 +69,7 @@ It uses local storage for authentication and `users.json` for user data persiste
 *   `src/types/`: TypeScript type definitions (`index.ts`).
 *   `src/data/`: Contains local data files like `users.json`, `question_bank`, `test_pages`. **Note:** Local file storage is for demonstration/local development and is not scalable or secure for production.
 *   `src/actions/`: Server Actions (e.g., `user-actions.ts`, `auth-actions.ts`).
-*   `public/`: Static assets (e.g., `question_bank_images`).
+*   `public/`: Static assets (e.g., `question_bank_images`, logos).
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
 *   `.env`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY & SERVER RESTARTED.**
 *   `.env.example`: Example environment variables file.

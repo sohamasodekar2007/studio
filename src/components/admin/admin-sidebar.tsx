@@ -1,4 +1,4 @@
-// src/components/admin/admin-sidebar.tsx
+{// src/components/admin/admin-sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -33,6 +33,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/context/auth-context';
+import Image from 'next/image'; // Import Image
 
 // Define navigation items for the admin sidebar
 const mainNavItems = [
@@ -77,14 +78,31 @@ export function AdminSidebar() {
 
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">
-      <SidebarHeader className="flex items-center justify-between p-2">
+      <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
         <Link
           href="/admin"
-          className="flex items-center gap-2 group-data-[collapsible=icon]:hidden"
+          className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
           aria-label="Admin Dashboard Home"
         >
-          <ShieldCheck className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold">SPHERE Admin</h1>
+          {/* EduNexus Logo */}
+            <Image
+                src="/EduNexus-logo-black.jpg" // Use black for light theme
+                alt="EduNexus Admin Logo"
+                width={30}
+                height={30}
+                className="h-8 w-8 dark:hidden" // Hide on dark mode
+                unoptimized
+            />
+             <Image
+                src="/EduNexus-logo-white.jpg" // Use white for dark theme
+                alt="EduNexus Admin Logo"
+                width={30}
+                height={30}
+                className="h-8 w-8 hidden dark:block" // Show on dark mode
+                unoptimized
+            />
+           {/* Updated Name */}
+          <h1 className="text-lg font-semibold">EduNexus Admin</h1>
         </Link>
         <SidebarTrigger className="hidden sm:flex mr-1" />
       </SidebarHeader>

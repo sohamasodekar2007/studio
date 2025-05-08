@@ -1,4 +1,4 @@
-// src/components/layout/sidebar.tsx
+
 'use client';
 
 import {
@@ -17,8 +17,9 @@ import {
 import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy } from 'lucide-react'; // Added Notebook & Trophy icons
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 import ThemeToggle from '@/components/theme-toggle';
+import Image from 'next/image'; // Import Image
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -35,6 +36,9 @@ export function AppSidebar() {
     if (['/tests', '/admin', '/dpp'].includes(href)) {
       return pathname.startsWith(href);
     }
+    // Special case for specific dynamic routes if needed
+    if (href.startsWith('/tests/') && pathname.startsWith('/tests/')) return true;
+    if (href.startsWith('/dpp/') && pathname.startsWith('/dpp/')) return true;
 
     return false;
   };
@@ -43,8 +47,25 @@ export function AppSidebar() {
     <Sidebar side="left" variant="sidebar" collapsible="icon">
       <SidebarHeader className="flex items-center justify-between p-4">
         <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
-          <GraduationCap className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold">STUDY SPHERE</h1>
+           {/* EduNexus Logo */}
+            <Image
+                src="/EduNexus-logo-black.jpg" // Prioritize black for light mode visibility
+                alt="EduNexus Logo"
+                width={30} // Adjust size as needed
+                height={30}
+                className="h-8 w-8 dark:hidden" // Hide on dark mode
+                unoptimized // Good for local images
+            />
+             <Image
+                src="/EduNexus-logo-white.jpg" // White logo for dark mode
+                alt="EduNexus Logo"
+                width={30} // Adjust size as needed
+                height={30}
+                className="h-8 w-8 hidden dark:block" // Show only on dark mode
+                unoptimized // Good for local images
+            />
+          {/* Updated Name */}
+          <h1 className="text-lg font-semibold">EduNexus</h1>
         </div>
         <SidebarTrigger className="hidden sm:flex" />
       </SidebarHeader>

@@ -1,7 +1,6 @@
-// src/app/auth/signup/page.tsx
-'use client';
+{'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,11 +9,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone } from "lucide-react";
+import { GraduationCap, Loader2, Phone, Send } from "lucide-react"; // Added Send icon
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
-import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { useAuth } from '@/context/auth-context';
+import { generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
+import Image from 'next/image'; // Import Image
 
 // Updated schema with phone number and class selection
 const signupSchema = z.object({
@@ -24,6 +25,8 @@ const signupSchema = z.object({
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
+  // OTP field is optional initially, required in step 2
+  otp: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -35,6 +38,8 @@ export default function SignupPage() {
   const { toast } = useToast();
   const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
 
 
   const form = useForm<SignupFormValues>({
@@ -46,8 +51,42 @@ export default function SignupPage() {
       academicStatus: undefined,
       password: "",
       confirmPassword: "",
+      otp: "",
     },
   });
+
+  // Function to handle OTP generation
+  const handleSendOtp = useCallback(async () => {
+    // Trigger validation for fields required before sending OTP
+    const nameValid = await form.trigger("name");
+    const emailValid = await form.trigger("email");
+    const phoneValid = await form.trigger("phoneNumber");
+    const statusValid = await form.trigger("academicStatus");
+    const passValid = await form.trigger("password");
+    const confirmValid = await form.trigger("confirmPassword");
+
+    if (!nameValid || !emailValid || !phoneValid || !statusValid || !passValid || !confirmValid) {
+      toast({ variant: "destructive", title: "Validation Error", description: "Please fill all required fields correctly before sending OTP." });
+      return;
+    }
+
+    setIsOtpLoading(true);
+    const email = form.getValues("email");
+    try {
+      const result = await generateOtp(email);
+      if (result.success) {
+        toast({ title: "OTP Sent", description: result.message });
+        setOtpSent(true);
+      } else {
+        throw new Error(result.message || "Failed to send OTP.");
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "OTP Error", description: error.message });
+    } finally {
+      setIsOtpLoading(false);
+    }
+  }, [form, toast]);
+
 
   // Function to handle final form submission
   const onSubmit = async (data: SignupFormValues) => {
@@ -56,36 +95,62 @@ export default function SignupPage() {
       return;
     }
 
+    if (!otpSent) {
+      toast({ variant: "destructive", title: "OTP Required", description: "Please send and verify the OTP first." });
+      return;
+    }
+    if (!data.otp || data.otp.length !== 6) {
+      form.setError("otp", { message: "Please enter the 6-digit OTP." });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Pass plain text password to signUp function
+      // 1. Verify OTP
+      const otpVerification = await verifyOtp(data.email, data.otp);
+      if (!otpVerification.success) {
+        form.setError("otp", { message: otpVerification.message });
+        throw new Error(otpVerification.message);
+      }
+
+      // 2. Proceed with signup if OTP is correct
       await signUp(
         data.email,
-        data.password, // Pass plain text password
+        data.password,
         data.name,
         data.phoneNumber,
         data.academicStatus
       );
       // Success toast and redirection handled by AuthContext
     } catch (error: any) {
-      // Error toast handled by AuthContext
+      // Error toast handled by AuthContext or OTP verification
       console.error("Signup page submission error:", error.message);
+       if (!error.message.includes("OTP")) { // Avoid duplicate OTP errors
+           toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
+       }
     } finally {
       setIsLoading(false);
     }
   };
 
   // Update combinedLoading
-  const combinedLoading = isLoading || authLoading;
+  const combinedLoading = isLoading || authLoading || isOtpLoading;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <GraduationCap className="h-10 w-10 text-primary" />
+             {/* EduNexus Logo */}
+              <Image
+                  src="/EduNexus-logo-black.jpg" // Assuming black logo for light theme
+                  alt="EduNexus Logo"
+                  width={48}
+                  height={48}
+                  className="h-12 w-12" // Adjust size as needed
+              />
           </div>
-          <CardTitle className="text-2xl font-bold">Join STUDY SPHERE</CardTitle>
+          <CardTitle className="text-2xl font-bold">Join EduNexus</CardTitle> {/* Updated Title */}
           <CardDescription>Create your account to start practicing.</CardDescription>
         </CardHeader>
         <Form {...form}>
@@ -195,10 +260,42 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
+
+              {/* OTP Field */}
+              <FormField
+                control={form.control}
+                name="otp"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Enter OTP</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <FormControl>
+                        <Input
+                          placeholder="6-digit code"
+                          {...field}
+                          disabled={!otpSent || combinedLoading}
+                          maxLength={6}
+                        />
+                      </FormControl>
+                       <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleSendOtp}
+                        disabled={otpSent || isOtpLoading || combinedLoading || !form.formState.isValid}
+                      >
+                        {isOtpLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4"/>}
+                        {otpSent ? 'Sent' : 'Send OTP'}
+                      </Button>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              {/* Enable signup button by default (only disable during loading) */}
-              <Button type="submit" className="w-full" disabled={combinedLoading}>
+              {/* Sign Up button */}
+              <Button type="submit" className="w-full" disabled={!otpSent || combinedLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign Up
               </Button>

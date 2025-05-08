@@ -27,8 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
-        <title>STUDY SPHERE - MHT-CET, JEE, NEET Test Series</title>
-        <meta name="description" content="Your ultimate destination for MHT-CET, JEE, and NEET exam preparation. Practice tests, DPPs, performance analysis, and more." />
+        {/* Updated title to EduNexus */}
+        <title>EduNexus - MHT-CET, JEE, NEET Test Series</title>
+        <meta name="description" content="Your ultimate destination for MHT-CET, JEE, and NEET exam preparation with EduNexus. Practice tests, DPPs, performance analysis, and more." />
 
         <Script id="mathjax-config" strategy="beforeInteractive">
           {`

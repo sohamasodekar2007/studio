@@ -1,4 +1,4 @@
-// src/components/admin/admin-layout.tsx
+{// src/components/admin/admin-layout.tsx
 'use client';
 
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
@@ -19,12 +19,16 @@ export default function AdminLayoutContent({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && (!user || user.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL)) {
+    // Added check for NEXT_PUBLIC_ADMIN_EMAIL before using it
+    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (!loading && (!user || !adminEmail || user.email !== adminEmail)) {
       router.push('/auth/login');
     }
   }, [user, loading, router]);
 
-  if (loading || !user || user.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
+   // Added check for NEXT_PUBLIC_ADMIN_EMAIL before using it
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  if (loading || !user || !adminEmail || user.email !== adminEmail) {
     return (
        <div className="flex items-center justify-center min-h-screen bg-muted/40">
             <Skeleton className="h-16 w-16 rounded-full" />
