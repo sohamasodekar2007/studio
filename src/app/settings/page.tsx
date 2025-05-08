@@ -1,5 +1,4 @@
-// src/app/settings/page.tsx
-"use client";
+'use client';
 
 import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -159,7 +158,7 @@ export default function SettingsPage() {
     setAvatarPreview(null); // Set preview to null immediately
     if (avatarInputRef.current) avatarInputRef.current.value = "";
     profileForm.clearErrors("avatarFile");
-    toast({ title: "Avatar Removed", description: "Click 'Save Profile Changes' to confirm." });
+    toast({ title: "Avatar Marked for Removal", description: "Click 'Save Profile Changes' to confirm." });
   };
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
@@ -344,8 +343,8 @@ export default function SettingsPage() {
   }
 
   // Construct avatar source ensuring fallback mechanism
-  const displayAvatarSrc = avatarPreview ?? (fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png`);
-  const avatarKey = fullUserProfile?.avatarUrl || user.email || user.id; // Unique key for Vercel/fallback
+   const displayAvatarSrc = avatarPreview ?? (fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png`);
+   const avatarKey = avatarPreview ? avatarPreview : (fullUserProfile?.avatarUrl || user.email || user.id); // Change key when preview changes
 
 
   return (

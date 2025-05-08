@@ -1,4 +1,4 @@
-{'use client';
+'use client';
 
 import {
   Sidebar,
@@ -114,7 +114,7 @@ export function AppSidebar() {
   const [stepIndex, setStepIndex] = useState(0);
 
 
-  const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isAdmin = user?.role === 'Admin'; // Check user role
 
   const isActive = (href: string) => {
     const exactMatchRoutes = [
@@ -155,7 +155,7 @@ export function AppSidebar() {
       setStepIndex(0);
     } else if (type === 'step:after' || type === 'error:target_not_found') {
       // Update step index
-      setStepIndex(index + 1);
+      setStepIndex(index + (status === STATUS.ERROR ? 0 : 1)); // Handle potential error state properly
     }
   };
 
@@ -166,8 +166,8 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex"> {/* Hide on small screens initially */}
-        <SidebarHeader className="flex items-center justify-between p-4">
+      <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer"> {/* Added peer */}
+        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
           <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
              {/* EduNexus Logo */}
               <Image
@@ -295,7 +295,7 @@ export function AppSidebar() {
                       <Link href="/friends-compare" passHref legacyBehavior>
                           <SidebarMenuButton as="a" isActive={isActive('/friends-compare')} tooltip="Compare Performance" id="tutorial-target-compare">
                               <BarChartHorizontal />
-                              <span className="group-data-[state=collapsed]:hidden">Compare Performance</span>
+                              <span className="group-data-[state=collapsed]:hidden">Compare</span>
                           </SidebarMenuButton>
                       </Link>
                   </SidebarMenuItem>

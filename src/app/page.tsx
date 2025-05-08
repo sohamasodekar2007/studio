@@ -8,49 +8,63 @@ import Link from "next/link";
 import Image from 'next/image';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { Skeleton } from '@/components/ui/skeleton';
-import type { TestSession, TestResultSummary } from '@/types'; // Import necessary types
+import type { TestResultSummary } from '@/types'; // Import necessary types
+import { getAllTestReportsForUser } from '@/actions/test-report-actions'; // Action to get history
 
-// Placeholder Data - Replace with dynamic data later
+// Placeholder data for Recent Activity - replace with actual data fetching later
 const recentActivity = [
-    { id: 1, type: 'test_taken', text: 'Completed Physics Mock Test 1', time: '2h ago' },
-    { id: 2, type: 'new_test', text: 'New JEE Advanced Maths Test added', time: '1d ago' },
-    { id: 3, type: 'tip_generated', text: 'Generated study tips for Calculus', time: '3d ago' },
+    { id: 1, type: 'test_taken', text: 'Completed "Physics Mock Test 1"', time: '2 hours ago' },
+    { id: 2, type: 'new_test', text: 'New test added: "Chemistry Thermodynamics"', time: '1 day ago' },
+    { id: 3, type: 'tip_generated', text: 'Generated study tips for "Calculus"', time: '3 days ago' },
 ];
 
-// Initial performance stats (will be updated by useEffect)
-const initialPerformanceStats = {
-    testsTaken: 0, // Will be calculated
-    averageScore: 65, // Example - Calculation complex for local storage
-    highestScore: 85, // Example - Calculation complex for local storage
-};
 
 export default function DashboardPage() {
     const { user, loading: authLoading } = useAuth();
-    const [performanceStats, setPerformanceStats] = useState(initialPerformanceStats);
+    const [performanceStats, setPerformanceStats] = useState({
+        testsTaken: 0,
+        averageScore: 0, // Will calculate if possible
+        highestScore: 0, // Will calculate if possible
+    });
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
     useEffect(() => {
-        if (typeof window !== 'undefined' && user && user.id) {
+        if (user && user.id) {
             setIsLoadingHistory(true);
-            try {
-                let testsTakenCount = 0;
-                // Iterate through local storage to count relevant test results
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith(`testResult-`) && key.includes(`-${user.id}-`)) {
-                        testsTakenCount++;
-                    }
-                }
-                setPerformanceStats(prev => ({ ...prev, testsTaken: testsTakenCount }));
-            } catch (error) {
-                console.error("Error fetching test history count:", error);
-            } finally {
-                 setIsLoadingHistory(false);
-            }
+            getAllTestReportsForUser(user.id)
+                .then(history => {
+                    const validAttempts = history.filter(h => typeof h.score === 'number' && typeof h.totalMarks === 'number' && h.totalMarks > 0);
+                    const testsTakenCount = history.length;
+                    let totalScore = 0;
+                    let highestScorePercent = 0;
+
+                    validAttempts.forEach(attempt => {
+                        totalScore += attempt.score!;
+                        const percentage = (attempt.score! / attempt.totalMarks!) * 100;
+                        if (percentage > highestScorePercent) {
+                            highestScorePercent = percentage;
+                        }
+                    });
+
+                    const averageScorePercent = validAttempts.length > 0 ? (totalScore / validAttempts.length / (validAttempts[0].totalMarks || 1)) * 100 : 0;
+
+                    setPerformanceStats({
+                        testsTaken: testsTakenCount,
+                        averageScore: parseFloat(averageScorePercent.toFixed(1)), // Keep 1 decimal place
+                        highestScore: parseFloat(highestScorePercent.toFixed(1)),
+                    });
+                })
+                .catch(error => {
+                    console.error("Error fetching test history for dashboard:", error);
+                    setPerformanceStats({ testsTaken: 0, averageScore: 0, highestScore: 0 }); // Reset on error
+                })
+                .finally(() => {
+                    setIsLoadingHistory(false);
+                });
         } else {
-             // Reset stats if no user or not in browser
-             setPerformanceStats(initialPerformanceStats);
-             setIsLoadingHistory(false); // Ensure loading stops if no user
+            // Reset stats if no user
+            setPerformanceStats({ testsTaken: 0, averageScore: 0, highestScore: 0 });
+            setIsLoadingHistory(false); // Ensure loading stops if no user
         }
     }, [user]); // Rerun when user state changes
 
@@ -74,7 +88,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
             <CardDescription>Explore full syllabus and chapter-wise tests.</CardDescription>
-            <Link href="/tests" passHref>
+            <Link href="/tests" passHref legacyBehavior>
               <Button variant="outline" className="w-full">
                 View All Tests <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -89,7 +103,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
             <CardDescription>Sharpen skills with daily chapter problems.</CardDescription>
-            <Link href="/dpp" passHref>
+            <Link href="/dpp" passHref legacyBehavior>
               <Button variant="outline" className="w-full">
                 Start DPP <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -104,7 +118,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
             <CardDescription>Track your test attempts and performance.</CardDescription>
-            <Link href="/progress" passHref>
+            <Link href="/progress" passHref legacyBehavior>
               <Button variant="outline" className="w-full">
                 View History <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -119,7 +133,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
             <CardDescription>Get personalized tips for tricky topics.</CardDescription>
-            <Link href="/study-tips" passHref>
+            <Link href="/study-tips" passHref legacyBehavior>
               <Button variant="secondary" className="w-full bg-purple-100 text-purple-800 hover:bg-purple-200 dark:bg-purple-900/50 dark:text-purple-200 dark:hover:bg-purple-800/60 border border-purple-200 dark:border-purple-700">
                  <Sparkles className="mr-2 h-4 w-4"/> Get Tips <ArrowRight className="ml-auto h-4 w-4" />
               </Button>
@@ -134,7 +148,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
             <CardDescription>Instant answers to your academic questions.</CardDescription>
-            <Link href="/doubt-solving" passHref>
+            <Link href="/doubt-solving" passHref legacyBehavior>
                <Button variant="secondary" className="w-full bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-800/60 border border-blue-200 dark:border-blue-700">
                 {/* Updated brand name */}
                 <Sparkles className="mr-2 h-4 w-4"/> Ask EduNexus <ArrowRight className="ml-auto h-4 w-4" />
@@ -143,13 +157,15 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Placeholder for another feature or promotional card */}
-        <Card className="hover:shadow-lg transition-shadow duration-300 ease-in-out border border-dashed border-border hover:border-primary/50 flex flex-col items-center justify-center text-center">
+        {/* Leaderboard Card */}
+        <Card className="hover:shadow-lg transition-shadow duration-300 ease-in-out border border-border hover:border-primary/50 flex flex-col items-center justify-center text-center">
            <CardContent className="pt-6">
               <Trophy className="h-10 w-10 text-amber-500 mx-auto mb-3"/>
               <CardTitle className="text-base font-medium mb-1">Leaderboards</CardTitle>
-              <CardDescription className="text-sm">See how you rank against others (Coming Soon).</CardDescription>
-              <Button variant="ghost" size="sm" disabled className="mt-3 text-xs">View Rankings</Button>
+              <CardDescription className="text-sm">See how you rank against others.</CardDescription>
+              <Link href="/leaderboard" passHref>
+                <Button variant="link" size="sm" className="mt-3 text-xs">View Rankings <ArrowRight className="ml-1 h-3 w-3" /></Button>
+              </Link>
            </CardContent>
         </Card>
       </div>
@@ -181,12 +197,10 @@ export default function DashboardPage() {
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Average Score:</span>
                                 <span className="font-medium">{performanceStats.averageScore}%</span>
-                                <span className="text-xs text-muted-foreground/70">(Example)</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Highest Score:</span>
                                 <span className="font-medium">{performanceStats.highestScore}%</span>
-                                 <span className="text-xs text-muted-foreground/70">(Example)</span>
                             </div>
                         </>
                    )}
@@ -196,7 +210,7 @@ export default function DashboardPage() {
                </CardContent>
            </Card>
 
-           {/* Recent Activity Feed */}
+           {/* Recent Activity Feed - Placeholder */}
            <Card className="lg:col-span-3 hover:shadow-md transition-shadow duration-200">
                <CardHeader>
                    <CardTitle>Recent Activity</CardTitle>
@@ -225,3 +239,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
