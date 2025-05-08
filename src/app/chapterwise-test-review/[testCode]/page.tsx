@@ -19,13 +19,7 @@ import { cn } from '@/lib/utils';
 import Script from 'next/script'; // Ensure Script is imported
 import ImageViewDialog from '@/components/notebooks/image-view-dialog'; // Import the image view dialog
 
-// Helper function to construct image paths relative to the public directory
-const constructImagePath = (subject: string | null | undefined, lesson: string | null | undefined, filename: string | null | undefined): string | null => {
-    if (!subject || !lesson || !filename) return null;
-    // Ensure the path starts correctly and encode components
-    const basePath = '/question_bank_images'; // Base path within public
-    return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
-};
+// Removed constructImagePath helper as paths should be directly available in the report
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -185,9 +179,7 @@ export default function TestReviewPage() {
   const totalQuestions = allAnswersFromReport.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
   // Handle cases where answer might not start with "Option "
-  const correctOptionKey = currentAnswerDetailed.correctAnswer?.startsWith('Option ')
-                           ? currentAnswerDetailed.correctAnswer.replace('Option ', '').trim()
-                           : currentAnswerDetailed.correctAnswer; // Assume it's just the key if format differs
+   const correctOptionKey = currentAnswerDetailed.correctAnswer?.replace('Option ', '').trim();
   const userSelectedOptionKey = currentAnswerDetailed?.userAnswer;
   const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
@@ -209,12 +201,9 @@ export default function TestReviewPage() {
        context: 'question' | 'explanation'
    ) => {
        let contentToRender: React.ReactNode = null;
-        // Use constructImagePath only if we have subject/lesson context
-       const finalImagePath = (context === 'question' && currentAnswerDetailed?.questionImageUrl)
-           ? currentAnswerDetailed.questionImageUrl // Use URL directly from report if available
-           : (context === 'explanation' && currentAnswerDetailed?.explanationImageUrl)
-           ? currentAnswerDetailed.explanationImageUrl // Use URL directly from report if available
-           : null; // Fallback if URLs aren't in the report structure
+
+       // Use the image URL directly if available
+       const finalImagePath = imageUrl;
 
        if (finalImagePath) {
            contentToRender = (
