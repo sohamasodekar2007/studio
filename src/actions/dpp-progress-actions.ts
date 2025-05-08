@@ -4,8 +4,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { UserDppLessonProgress, DppAttempt } from '@/types';
+import { updateUserPoints } from './points-actions'; // Import the points action
 
 const dppProgressBasePath = path.join(process.cwd(), 'src', 'data', 'user-dpp-progress');
+
+// --- Point System Constants ---
+const POINTS_FOR_CORRECT_DPP = 2;
+const POINTS_FOR_INCORRECT_DPP = -1; // Example: Deduct points for incorrect
 
 /**
  * Helper function to ensure directory exists, creating it recursively if necessary.
@@ -60,6 +65,7 @@ export async function getDppProgress(
 
 /**
  * Saves a single DPP attempt for a user. Creates or updates the progress file.
+ * Awards points based on correctness.
  * @param userId The ID of the user.
  * @param subject The subject name.
  * @param lesson The lesson name.
@@ -84,6 +90,8 @@ export async function saveDppAttempt(
   const subjectDirPath = path.join(userDirPath, subject);
   const filePath = path.join(subjectDirPath, `${lesson}.json`);
 
+  let pointsAwarded = 0; // Track points for this attempt
+
   try {
     // Ensure directories exist
     await ensureDirExists(userDirPath);
@@ -104,6 +112,21 @@ export async function saveDppAttempt(
         progressData.lastAccessed = Date.now(); // Update last accessed time
     }
 
+    // Check if this question has been answered correctly before in this lesson
+    const previousAttempts = progressData.questionAttempts[questionId] || [];
+    const previouslyCorrect = previousAttempts.some(attempt => attempt.isCorrect);
+
+    // Award points only if it wasn't answered correctly before
+    if (!previouslyCorrect) {
+      pointsAwarded = isCorrect ? POINTS_FOR_CORRECT_DPP : POINTS_FOR_INCORRECT_DPP;
+    } else if (previouslyCorrect && !isCorrect) {
+        // Optional: Penalize if user changes a correct answer to incorrect?
+        // pointsAwarded = POINTS_FOR_INCORRECT_DPP;
+    } else {
+        // No points awarded if already correct, or changing from incorrect to incorrect.
+        pointsAwarded = 0;
+    }
+
     // Initialize attempts array for the question if it doesn't exist
     if (!progressData.questionAttempts[questionId]) {
       progressData.questionAttempts[questionId] = [];
@@ -122,6 +145,16 @@ export async function saveDppAttempt(
     // Write the updated progress data back to the file
     await fs.writeFile(filePath, JSON.stringify(progressData, null, 2), 'utf-8');
     console.log(`DPP attempt saved for user ${userId}, lesson ${lesson}, question ${questionId}`);
+
+    // Update total user points if points were awarded/deducted
+    if (pointsAwarded !== 0) {
+         try {
+             await updateUserPoints(userId, pointsAwarded);
+         } catch (pointsError: any) {
+             console.error(`Failed to update points for user ${userId} after DPP attempt:`, pointsError);
+             // Decide how to handle: Log, return partial success? Returning success for the attempt save.
+         }
+     }
 
     return { success: true };
 

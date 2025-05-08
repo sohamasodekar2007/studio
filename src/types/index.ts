@@ -33,11 +33,11 @@ export interface UserProfile {
   model: UserModel; // User's subscription model
   expiry_date: string | null; // ISO string date or null for free/admin
   createdAt?: string; // Optional ISO timestamp
-  role?: 'User' | 'Admin'; // Optional role, primarily for client-side display logic
+  totalPoints?: number; // Add totalPoints field, optional for existing users
 }
 
-// Type for Context User (less sensitive data, includes avatar)
-export type ContextUser = Omit<UserProfile, 'password' | 'role'> | null; // Remove role from context user type
+// Type for Context User (less sensitive data, includes avatar and points)
+export type ContextUser = Omit<UserProfile, 'password' | 'role'> | null; // Role is inferred, password excluded
 
 
 // ---- Question Bank Types ----
@@ -129,7 +129,6 @@ interface BaseGeneratedTest {
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
-// NOTE: This structure assumes direct embedding of questions for Chapterwise tests
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise'; // Discriminator
     lesson: string;
@@ -146,7 +145,6 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 }
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
-// NOTE: This structure embeds subject-wise question arrays
 export interface FullLengthTestJson extends BaseGeneratedTest {
     testType: 'full_length'; // Discriminator
     stream: TestStream;
@@ -216,6 +214,7 @@ export interface TestResultSummary {
     totalMarks: number; // Add total marks possible for the test
     percentage: number;
     timeTakenMinutes: number; // Total time taken for the test
+    pointsEarned?: number; // Points earned for THIS test attempt
     detailedAnswers: Array<{
         questionId: string; // Store original question ID
         questionIndex: number; // Index within this specific test attempt

@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook } from 'lucide-react'; // Added Notebook icon
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy } from 'lucide-react'; // Added Notebook & Trophy icons
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
@@ -28,7 +28,7 @@ export function AppSidebar() {
 
   const isActive = (href: string) => {
     // Exact match for most top-level pages
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks'].includes(href)) {
+    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard'].includes(href)) { // Added leaderboard
       return pathname === href;
     }
     // Starts with for tests, admin, and dpp as they have sub-routes
@@ -42,7 +42,7 @@ export function AppSidebar() {
   return (
     <Sidebar side="left" variant="sidebar" collapsible="icon">
       <SidebarHeader className="flex items-center justify-between p-4">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
           <GraduationCap className="h-6 w-6 text-primary" />
           <h1 className="text-lg font-semibold">STUDY SPHERE</h1>
         </div>
@@ -57,7 +57,7 @@ export function AppSidebar() {
               <Link href="/" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/')} tooltip="Dashboard">
                   <Home />
-                  <span>Dashboard</span>
+                  <span className="group-data-[state=collapsed]:hidden">Dashboard</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -65,7 +65,7 @@ export function AppSidebar() {
               <Link href="/tests" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/tests')} tooltip="Test Series">
                   <ListChecks />
-                  <span>Test Series</span>
+                  <span className="group-data-[state=collapsed]:hidden">Test Series</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -73,7 +73,7 @@ export function AppSidebar() {
                 <Link href="/dpp" passHref legacyBehavior>
                     <SidebarMenuButton as="a" isActive={isActive('/dpp')} tooltip="DPP">
                         <ClipboardCheck />
-                        <span>DPP</span>
+                        <span className="group-data-[state=collapsed]:hidden">DPP</span>
                     </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
@@ -81,7 +81,7 @@ export function AppSidebar() {
               <Link href="/notebooks" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/notebooks')} tooltip="Notebooks">
                   <Notebook />
-                  <span>Notebooks</span>
+                  <span className="group-data-[state=collapsed]:hidden">Notebooks</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -89,7 +89,15 @@ export function AppSidebar() {
               <Link href="/progress" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/progress')} tooltip="My Progress">
                   <Activity />
-                  <span>My Progress</span>
+                  <span className="group-data-[state=collapsed]:hidden">My Progress</span>
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <Link href="/leaderboard" passHref legacyBehavior>
+                <SidebarMenuButton as="a" isActive={isActive('/leaderboard')} tooltip="Leaderboard">
+                  <Trophy />
+                  <span className="group-data-[state=collapsed]:hidden">Leaderboard</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -103,7 +111,7 @@ export function AppSidebar() {
               <Link href="/study-tips" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/study-tips')} tooltip="AI Study Tips">
                   <Wand2 />
-                  <span>AI Study Tips</span>
+                  <span className="group-data-[state=collapsed]:hidden">AI Study Tips</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -111,7 +119,7 @@ export function AppSidebar() {
               <Link href="/doubt-solving" passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive('/doubt-solving')} tooltip="Doubt Solving">
                   <MessageSquare />
-                  <span>Doubt Solving</span>
+                  <span className="group-data-[state=collapsed]:hidden">Doubt Solving</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -126,7 +134,7 @@ export function AppSidebar() {
                   <Link href="/admin" passHref legacyBehavior>
                     <SidebarMenuButton as="a" isActive={isActive('/admin')} tooltip="Admin Panel">
                       <ShieldCheck />
-                      <span>Admin Panel</span>
+                      <span className="group-data-[state=collapsed]:hidden">Admin Panel</span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
@@ -136,8 +144,8 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto flex flex-col items-center gap-2 group-data-[collapsible=icon]:gap-0">
-        <div className="w-full flex justify-center group-data-[collapsible=icon]:my-2">
+      <SidebarFooter className="mt-auto flex flex-col items-center gap-2 group-data-[state=collapsed]:gap-0">
+        <div className="w-full flex justify-center group-data-[state=collapsed]:my-2">
           <ThemeToggle />
         </div>
         <SidebarSeparator className="my-1 group-data-[state=collapsed]:hidden"/>
