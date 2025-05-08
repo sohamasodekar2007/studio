@@ -114,7 +114,7 @@ export default function ProgressPage() {
             <CardDescription>A log of all your completed tests.</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Responsive Table Approach: Use div for small screens, table for larger */}
+            {/* Responsive Table Approach */}
             {/* For smaller screens (e.g., mobile): Use Cards */}
             <div className="space-y-4 sm:hidden">
               {testHistory.map((attempt) => (
@@ -158,7 +158,7 @@ export default function ProgressPage() {
                 </TableHeader>
                 <TableBody>
                   {testHistory.map((attempt) => (
-                    <TableRow key={attempt.attemptTimestamp}>
+                    <TableRow key={attempt.attemptTimestamp}>{/* Remove whitespace here */}
                       <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell>
                       <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
                       <TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
