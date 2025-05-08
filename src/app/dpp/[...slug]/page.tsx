@@ -10,18 +10,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Import CardFooter
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
-import type { QuestionBankItem, DifficultyLevel } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle } from 'lucide-react'; // Added icons
+import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; // Import DPP progress actions
+import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt } from '@/types';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History } from 'lucide-react'; // Added icons
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge'; // Import Badge
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { useToast } from '@/hooks/use-toast'; // Import useToast
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
 export default function DppLessonPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth(); // Get user from auth context
+  const { toast } = useToast(); // Initialize toast
   const { slug } = params;
 
   const [subject, setSubject] = useState<string | null>(null);
@@ -31,9 +36,13 @@ export default function DppLessonPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('All');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); // Store answers by question ID
+  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); // Store answers by question ID for CURRENT session
   const [showSolution, setShowSolution] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false); // State for saving attempt
+
+  const [dppProgress, setDppProgress] = useState<UserDppLessonProgress | null>(null); // State for user progress data
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false); // Separate loading state for progress
 
   // --- MathJax Integration ---
   const typesetMathJax = useCallback(() => {
@@ -47,6 +56,7 @@ export default function DppLessonPage() {
   }, [currentQuestionIndex, allQuestions, showSolution, typesetMathJax]); // Re-typeset when question changes or solution shown
   // --- End MathJax Integration ---
 
+  // Fetch Questions
   useEffect(() => {
     if (Array.isArray(slug) && slug.length === 2) {
       const decodedSubject = decodeURIComponent(slug[0]);
@@ -63,10 +73,10 @@ export default function DppLessonPage() {
             lesson: decodedLesson,
           });
           setAllQuestions(fetchedQuestions);
-           setCurrentQuestionIndex(0); // Reset index when questions load
-           setUserAnswers({}); // Reset answers
-           setShowSolution(false); // Hide solution
-           setIsCorrect(null); // Reset correctness
+          setCurrentQuestionIndex(0); // Reset index when questions load
+          setUserAnswers({}); // Reset answers
+          setShowSolution(false); // Hide solution
+          setIsCorrect(null); // Reset correctness
         } catch (err) {
           console.error(`Failed to load questions for ${decodedSubject}/${decodedLesson}:`, err);
           setError('Could not load practice questions for this lesson.');
@@ -81,6 +91,24 @@ export default function DppLessonPage() {
     }
   }, [slug]);
 
+  // Fetch User Progress
+  useEffect(() => {
+    if (user?.id && subject && lesson) {
+      setIsLoadingProgress(true);
+      getDppProgress(user.id, subject, lesson)
+        .then(progress => {
+          setDppProgress(progress);
+        })
+        .catch(err => {
+          console.error("Failed to load DPP progress:", err);
+          // Don't block the UI, just log the error
+        })
+        .finally(() => {
+          setIsLoadingProgress(false);
+        });
+    }
+  }, [user, subject, lesson]); // Fetch when user/subject/lesson are available
+
   const filteredQuestions = useMemo(() => {
     if (selectedDifficulty === 'All') {
       return allQuestions;
@@ -89,6 +117,9 @@ export default function DppLessonPage() {
   }, [allQuestions, selectedDifficulty]);
 
   const currentQuestion = filteredQuestions[currentQuestionIndex];
+  const previousAttempts = currentQuestion ? dppProgress?.questionAttempts[currentQuestion.id] : [];
+  const lastAttempt = previousAttempts?.[0]; // Most recent attempt is first
+
 
   const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
     setSelectedDifficulty(difficulty);
@@ -105,16 +136,44 @@ export default function DppLessonPage() {
       setShowSolution(false); // Hide solution if user selects a new answer
   };
 
-   const checkAnswer = () => {
-       if (!currentQuestion) return;
+   const checkAnswer = async () => {
+       if (!currentQuestion || !user?.id || !subject || !lesson) return;
        const selected = userAnswers[currentQuestion.id];
        if (selected === null || selected === undefined) {
-           // Optionally show a toast or message to select an option first
+           toast({ variant: "destructive", title: "No Answer Selected", description: "Please select an option first."});
            return;
        }
+
        const correct = selected === currentQuestion.correct;
        setIsCorrect(correct);
        setShowSolution(true); // Show solution after checking
+
+       // Save attempt
+       setIsSaving(true);
+       try {
+           const result = await saveDppAttempt(user.id, subject, lesson, currentQuestion.id, selected, correct);
+           if (!result.success) {
+               throw new Error(result.message || "Failed to save attempt.");
+           }
+           // Optionally refetch progress to update UI immediately, or update local state
+           // For simplicity, we'll rely on the next page load or manual refresh for now
+           // Or, update local dppProgress state optimistically:
+           const newAttempt: DppAttempt = { timestamp: Date.now(), selectedOption: selected, isCorrect: correct };
+           setDppProgress(prev => {
+               const newAttempts = { ...(prev?.questionAttempts || {}) };
+               newAttempts[currentQuestion.id] = [newAttempt, ...(newAttempts[currentQuestion.id] || [])];
+               return {
+                   ...(prev || { userId: user.id!, subject: subject!, lesson: lesson!, questionAttempts: {} }),
+                   questionAttempts: newAttempts,
+                   lastAccessed: Date.now()
+               };
+           });
+
+       } catch (error: any) {
+           toast({ variant: "destructive", title: "Save Failed", description: error.message });
+       } finally {
+           setIsSaving(false);
+       }
    };
 
    const goToNextQuestion = () => {
@@ -122,8 +181,15 @@ export default function DppLessonPage() {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
+           // Reset the selected answer for the new question in the current session state
+           // Note: This doesn't clear the persistent progress, only the current selection UI
+           const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
+           if (nextQuestionId) {
+               setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
+           }
        } else {
            // Optionally handle end of DPP (e.g., show summary, navigate back)
+           toast({ title: "DPP Completed", description: "You've reached the end of this set."});
            router.push('/dpp'); // Example: Navigate back to list
        }
    };
@@ -166,10 +232,9 @@ export default function DppLessonPage() {
         return (
             <RadioGroup
                 value={selectedOption ?? undefined}
-                 // Disable if solution is shown
                 onValueChange={(value) => handleOptionSelect(questionId, value)}
                 className="space-y-3 mt-4" // Added margin-top
-                disabled={showSolution}
+                disabled={showSolution || isSaving} // Disable while saving or showing solution
             >
                 {Object.entries(q.options).map(([key, value]) => {
                     const isSelected = selectedOption === key;
@@ -193,9 +258,9 @@ export default function DppLessonPage() {
                             key={key}
                             htmlFor={`${questionId}-${key}`}
                             className={cn(
-                                "flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-all",
+                                "flex items-start space-x-3 p-4 border rounded-lg transition-all",
                                 optionStyle,
-                                showSolution ? "cursor-default" : "cursor-pointer" // Adjust cursor based on state
+                                (showSolution || isSaving) ? "cursor-default opacity-70" : "cursor-pointer" // Adjust cursor and opacity
                             )}
                         >
                             <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1"/>
@@ -255,8 +320,26 @@ export default function DppLessonPage() {
         );
      }
 
+     // Render previous attempt status
+     const renderPreviousAttemptStatus = () => {
+        if (isLoadingProgress) {
+            return <Skeleton className="h-4 w-24" />;
+        }
+        if (lastAttempt) {
+            const attemptDate = new Date(lastAttempt.timestamp).toLocaleDateString();
+            const statusText = lastAttempt.isCorrect ? "Correct" : "Incorrect";
+            const statusClass = lastAttempt.isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
+            return (
+                <span className={`text-xs flex items-center gap-1 ${statusClass}`}>
+                    <History className="h-3 w-3" /> Last Attempt ({attemptDate}): {statusText}
+                </span>
+            );
+        }
+        return <span className="text-xs text-muted-foreground">Not Attempted Before</span>;
+    };
 
-  if (isLoading) {
+
+  if (isLoading || authLoading) { // Check authLoading as well
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
         <Skeleton className="h-8 w-1/2 mb-2" />
@@ -285,6 +368,16 @@ export default function DppLessonPage() {
         </Card>
       </div>
     );
+  }
+
+  if (!user) { // Redirect if not logged in (after loading finishes)
+     router.push('/auth/login?redirect=/dpp');
+     return ( // Show loading while redirecting
+        <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6 text-center">
+             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary"/>
+             <p>Redirecting to login...</p>
+        </div>
+     );
   }
 
   if (error) {
@@ -382,11 +475,13 @@ export default function DppLessonPage() {
         {currentQuestion ? (
             <Card className="shadow-md">
             <CardHeader>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-start flex-wrap gap-2">
                     <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         {renderPyqInfo(currentQuestion)}
                         <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
+                         {/* Display previous attempt status */}
+                         {renderPreviousAttemptStatus()}
                     </div>
                 </div>
             </CardHeader>
@@ -399,8 +494,9 @@ export default function DppLessonPage() {
                 <Button
                     variant="secondary"
                     onClick={checkAnswer}
-                    disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined}
+                    disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}
                 >
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Check Answer
                 </Button>
                 {isCorrect !== null && (
@@ -410,7 +506,7 @@ export default function DppLessonPage() {
                 )}
                 <Button
                     onClick={goToNextQuestion}
-                    disabled={!showSolution} // Only enable Next after checking/showing solution
+                    disabled={!showSolution || isSaving} // Only enable Next after checking/showing solution and not saving
                 >
                     {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
                 </Button>
@@ -419,7 +515,7 @@ export default function DppLessonPage() {
         ) : (
              <Card>
                 <CardContent className="p-10 text-center text-muted-foreground">
-                    Select a question to start.
+                    Loading question...
                 </CardContent>
             </Card>
         )}

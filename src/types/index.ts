@@ -37,7 +37,7 @@ export interface UserProfile {
 }
 
 // Type for Context User (less sensitive data, includes avatar)
-export type ContextUser = Omit<UserProfile, 'password'> | null;
+export type ContextUser = Omit<UserProfile, 'password' | 'role'> | null; // Remove role from context user type
 
 
 // ---- Question Bank Types ----
@@ -127,12 +127,13 @@ interface BaseGeneratedTest {
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
+// NOTE: This structure assumes direct embedding of questions for Chapterwise tests
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise'; // Discriminator
     test_subject: [string]; // Array with exactly one subject
     lesson: string;
     examFilter: ExamOption | 'all'; // Filter used during generation
-    questions: TestQuestion[]; // Chapterwise tests directly embed questions
+    questions: TestQuestion[]; // Directly embed questions
 
     // Ensure fields from FullLengthTestJson are not present or explicitly undefined
     physics?: undefined;
@@ -144,6 +145,7 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 }
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
+// NOTE: This structure embeds subject-wise question arrays
 export interface FullLengthTestJson extends BaseGeneratedTest {
     testType: 'full_length'; // Discriminator
     stream: TestStream;
@@ -155,7 +157,7 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
         maths?: number; // Optional based on stream
         biology?: number; // Optional based on stream
     };
-    // Subject-specific question arrays for full length tests
+    // Subject-specific question arrays
     physics?: TestQuestion[];
     chemistry?: TestQuestion[];
     maths?: TestQuestion[];
@@ -165,7 +167,6 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
     questions?: undefined; // Full length tests have subject-specific arrays
     lesson?: undefined;
 }
-
 
 // Discriminated union for generated tests
 export type GeneratedTest = ChapterwiseTestJson | FullLengthTestJson;
@@ -248,4 +249,24 @@ export interface ShortNotesMetadata {
     subject: string;
     examType: ExamOption;
     notes: ShortNote[];
+}
+
+// ---- DPP Progress Tracking Types ----
+
+// Represents a single attempt on a DPP question
+export interface DppAttempt {
+  timestamp: number; // Unix timestamp of the attempt
+  selectedOption: string | null; // "A", "B", "C", "D", or null if skipped/cleared
+  isCorrect: boolean;
+}
+
+// Structure for storing a user's progress on a specific DPP lesson
+// This will be the content of the file: src/data/user-dpp-progress/{userId}/{subject}/{lesson}.json
+export interface UserDppLessonProgress {
+  userId: string;
+  subject: string;
+  lesson: string;
+  lastAccessed?: number; // Optional: timestamp of last access
+  // Map where key is questionId and value is an array of attempts
+  questionAttempts: Record<string, DppAttempt[]>;
 }
