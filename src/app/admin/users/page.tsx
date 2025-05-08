@@ -1,23 +1,21 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, UserCheck, User } from "lucide-react"; // Added Icons
-import { Skeleton } from "@/components/ui/skeleton";
+import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, UserCheck, User, Shield, Loader2 } from "lucide-react"; // Added Shield, Loader2
+import { Skeleton } from '@/components/ui/skeleton';
 import { type UserProfile, type UserModel } from '@/types';
-// Import the action to read users from JSON
-import { readUsers, deleteUserFromJson, updateUserInJson, readUsersWithPasswordsInternal, findUserByEmailInternal } from '@/actions/user-actions'; // Import actions (updateUserPasswordInJson is used internally by ResetPasswordDialog)
+import { readUsers, deleteUserFromJson, updateUserRole, findUserByEmailInternal } from '@/actions/user-actions'; // Removed updateUserInJson, added updateUserRole
 import { useToast } from '@/hooks/use-toast';
-import EditUserDialog from '@/components/admin/edit-user-dialog'; // Import dialog components
+import EditUserDialog from '@/components/admin/edit-user-dialog';
 import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
-// import ChangeRoleDialog from '@/components/admin/change-role-dialog'; // REMOVED ChangeRoleDialog import
-import AddUserDialog from '@/components/admin/add-user-dialog'; // Import AddUserDialog
+import AddUserDialog from '@/components/admin/add-user-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,54 +27,46 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'; // Added Avatar imports
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
-// Define the allowed admin email pattern and primary admin email
-const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 
 // Helper function to determine role based on email
-const getUserRole = (email: string | null): 'Admin' | 'User' => {
+const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
     if (!email) return 'User';
     return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
 };
 
-// Define combined type for state
-// Redefine UserProfileWithRole to exclude password from the base type
+// Ensure the UserProfile type from actions/state includes the role
 type UserProfileWithRole = Omit<UserProfile, 'password'> & { role: 'Admin' | 'User' };
 
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
-  // Ensure UserProfile type includes the optional role for display
   const [users, setUsers] = useState<UserProfileWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false); // State for delete confirmation
+  const [isDeleting, setIsDeleting] = useState<string | null>(null); // Track deleting user ID
+  const [isChangingRole, setIsChangingRole] = useState<string | null>(null); // Track role change user ID
 
   // State for managing dialogs
   const [dialogState, setDialogState] = useState<{
-    type: 'edit' | 'reset' | 'add' | null; // Removed 'role' type
-    user: UserProfileWithRole | null; // Use combined type
+    type: 'edit' | 'reset' | 'add' | null;
+    user: UserProfileWithRole | null;
   }>({ type: null, user: null });
 
 
-  // Updated fetchAllUsers to assign role correctly
   const fetchAllUsers = useCallback(() => {
      setIsLoading(true);
-     readUsers() // Fetches users without passwords
+     readUsers() // Fetches users without passwords but with inferred roles
       .then(data => {
-        // Assign role based on email pattern
-        const usersWithRoles = data.map(u => ({
-            ...u,
-            role: getUserRole(u.email), // Use the helper function
-        }));
-        setUsers(usersWithRoles);
+        setUsers(data as UserProfileWithRole[]); // Assert type
       })
       .catch(error => {
         console.error("Failed to fetch users:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load users." });
-        setUsers([]); // Set to empty on error
+        setUsers([]);
       })
       .finally(() => {
         setIsLoading(false);
@@ -86,88 +76,98 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchAllUsers();
-  }, [fetchAllUsers]); // Depend on the memoized fetch function
+  }, [fetchAllUsers]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(user =>
         (user.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (user.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || // Search by model
-        (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase()) // Search by assigned role
+        (user.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
   }, [users, searchTerm]);
 
-   // Helper to safely format date
   const formatDate = (dateString: string | Date | null | undefined) => {
     if (!dateString) return 'N/A';
     try {
-      // Attempt to parse if it's a string, otherwise assume it's a Date object
       const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      // Check if the date is valid after parsing/using
-      if (isNaN(date.getTime())) {
-          return 'Invalid Date';
-      }
+      if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch {
-      return 'Invalid Date';
-    }
+    } catch { return 'Invalid Date'; }
   };
 
-   // Handle User Deletion with Confirmation
-   const handleDeleteUser = async (userId: string | number) => {
-       setIsDeleting(true); // Indicate deletion in progress (optional: disable delete button)
-       const originalUsers = [...users];
-       // Optimistic update
-       setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
-
+   const handleDeleteUser = async (userId: string) => {
+       setIsDeleting(userId);
        try {
-           const result = await deleteUserFromJson(userId.toString()); // Ensure userId is string
+           const result = await deleteUserFromJson(userId);
            if (!result.success) {
-               setUsers(originalUsers); // Revert
                toast({ variant: "destructive", title: "Delete Failed", description: result.message });
            } else {
                toast({ title: "User Deleted", description: "User has been successfully removed." });
-               // No need to re-fetch, optimistic update succeeded
+               // Update local state directly
+               setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
            }
        } catch (error: any) {
            console.error("Failed to delete user:", error);
-           setUsers(originalUsers); // Revert
            toast({ variant: "destructive", title: "Error", description: "Could not delete user." });
        } finally {
-           setIsDeleting(false); // Reset deletion state
+           setIsDeleting(null);
        }
    };
 
-   // Function to handle updates from Edit dialog (handles both profile and potential role change via email)
+    // Function to handle role update
+    const handleRoleChange = async (userId: string, newRole: 'Admin' | 'User') => {
+        setIsChangingRole(userId);
+        try {
+             // Check if trying to change primary admin's role
+             const userToChange = users.find(u => u.id === userId);
+             if (userToChange?.email === primaryAdminEmail) {
+                 toast({ variant: "destructive", title: "Action Denied", description: "Cannot change the role of the primary admin account." });
+                 setIsChangingRole(null);
+                 return;
+             }
+
+            const result = await updateUserRole(userId, newRole);
+            if (result.success && result.user) {
+                 toast({ title: "Role Updated", description: `User promoted to ${newRole}.` });
+                 // Update local state
+                 setUsers(prevUsers =>
+                    prevUsers.map(u => (u.id === userId ? { ...u, role: newRole, model: result.user?.model, expiry_date: result.user?.expiry_date } : u)) // Update role and potentially model/expiry
+                 );
+            } else {
+                throw new Error(result.message || `Failed to change role to ${newRole}.`);
+            }
+        } catch (error: any) {
+             console.error("Failed to change role:", error);
+             toast({ variant: "destructive", title: "Role Change Failed", description: error.message });
+        } finally {
+            setIsChangingRole(null);
+        }
+    };
+
    const handleUserUpdate = (updatedUser: UserProfileWithRole) => {
-        // Role is already determined within the Edit dialog based on the *saved* email
         setUsers(prevUsers =>
             prevUsers.map(u => (u.id === updatedUser.id ? updatedUser : u))
         );
-        closeDialog(); // Close the currently open dialog
+        closeDialog();
     };
 
-
-   // Function to handle adding a user from Add dialog
-    const handleUserAdded = (newUser: UserProfileWithRole) => { // Receive user with role
-       setUsers(prevUsers => [newUser, ...prevUsers]); // Add new user to the beginning of the list
+   const handleUserAdded = (newUser: UserProfileWithRole) => {
+       setUsers(prevUsers => [newUser, ...prevUsers]);
        closeDialog();
    }
 
-   // Dialog handlers
-    const openEditDialog = (user: UserProfileWithRole) => setDialogState({ type: 'edit', user });
-    const openResetDialog = (user: UserProfileWithRole) => setDialogState({ type: 'reset', user });
-    // Removed openRoleDialog handler
-    const openAddDialog = () => setDialogState({ type: 'add', user: null }); // Open Add dialog
-    const closeDialog = () => setDialogState({ type: null, user: null });
+   const openEditDialog = (user: UserProfileWithRole) => setDialogState({ type: 'edit', user });
+   const openResetDialog = (user: UserProfileWithRole) => setDialogState({ type: 'reset', user });
+   const openAddDialog = () => setDialogState({ type: 'add', user: null });
+   const closeDialog = () => setDialogState({ type: null, user: null });
 
-    const getInitials = (name?: string | null, email?: string | null) => {
+   const getInitials = (name?: string | null, email?: string | null) => {
         if (name) return name.charAt(0).toUpperCase();
         if (email) return email.charAt(0).toUpperCase();
         return <User className="h-4 w-4"/>;
-    }
-
+   }
 
   return (
     <div className="space-y-6">
@@ -176,7 +176,6 @@ export default function AdminUsersPage() {
             <h1 className="text-3xl font-bold tracking-tight">Manage Users</h1>
             <p className="text-muted-foreground">View, create, edit, or delete platform users.</p>
          </div>
-         {/* Enable Add User button and link to openAddDialog */}
          <Button onClick={openAddDialog}>
            <PlusCircle className="mr-2 h-4 w-4" /> Add New User
          </Button>
@@ -227,8 +226,7 @@ export default function AdminUsersPage() {
               ) : filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => {
                  const isCurrentUserPrimaryAdmin = user.email === primaryAdminEmail;
-                 // Construct avatar URL
-                  const avatarSrc = user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png?size=40`; // Add size parameter
+                 const avatarSrc = user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png?size=40`;
 
                   return (
                   <TableRow key={user.id}>
@@ -246,13 +244,11 @@ export default function AdminUsersPage() {
                           <Phone className="h-3 w-3 text-muted-foreground"/>
                           {user.phone}
                         </span>
-                      ) : (
-                        'N/A'
-                      )}
+                      ) : ('N/A')}
                     </TableCell>
                      <TableCell>
                        <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
-                         {user.role || 'User'}
+                         {user.role || 'User'} {/* Display role from state */}
                        </Badge>
                      </TableCell>
                       <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
@@ -261,32 +257,43 @@ export default function AdminUsersPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          {/* Disable actions for the primary admin user */}
-                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={isCurrentUserPrimaryAdmin}>
+                          <Button aria-haspopup="true" size="icon" variant="ghost">
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Toggle menu</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                           {/* Enable buttons and add onClick handlers */}
-                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
-                             <Edit className="mr-2 h-4 w-4" /> Edit User / Plan / Role
+                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                             <Edit className="mr-2 h-4 w-4" /> Edit User / Plan
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                            </DropdownMenuItem>
-                           {/* REMOVED "Change Plan/Role" MenuItem as it's consolidated into Edit */}
+                            {/* Conditional Role Change */}
+                            {!isCurrentUserPrimaryAdmin && (
+                                <>
+                                 <DropdownMenuSeparator />
+                                 {user.role === 'User' ? (
+                                     <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'Admin')} disabled={isChangingRole === user.id}>
+                                         {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />} Promote to Admin
+                                     </DropdownMenuItem>
+                                 ) : (
+                                     <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'User')} disabled={isChangingRole === user.id}>
+                                         {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />} Demote to User
+                                     </DropdownMenuItem>
+                                 )}
+                                </>
+                            )}
                           <DropdownMenuSeparator />
-                           {/* Delete Confirmation Dialog Trigger */}
                            <AlertDialog>
                              <AlertDialogTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
-                                  disabled={isCurrentUserPrimaryAdmin || isDeleting} // Disable if primary admin or already deleting
+                                  disabled={isCurrentUserPrimaryAdmin || !!isDeleting}
                                 >
-                                  <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                                    {isDeleting === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User
                                 </Button>
                              </AlertDialogTrigger>
                               <AlertDialogContent>
@@ -312,7 +319,7 @@ export default function AdminUsersPage() {
                 )})
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center"> {/* Updated colSpan */}
+                  <TableCell colSpan={9} className="h-24 text-center">
                     No users found matching your criteria.
                   </TableCell>
                 </TableRow>
@@ -324,7 +331,6 @@ export default function AdminUsersPage() {
           <div className="text-xs text-muted-foreground">
             Showing <strong>{filteredUsers.length}</strong> of <strong>{users.length}</strong> users
           </div>
-          {/* Optional: Add pagination controls here */}
         </CardFooter>
       </Card>
 
@@ -334,7 +340,7 @@ export default function AdminUsersPage() {
           user={dialogState.user}
           isOpen={dialogState.type === 'edit'}
           onClose={closeDialog}
-          onUserUpdate={handleUserUpdate} // Use the callback
+          onUserUpdate={handleUserUpdate}
         />
       )}
        {dialogState.type === 'reset' && dialogState.user && (
@@ -342,20 +348,15 @@ export default function AdminUsersPage() {
           user={dialogState.user}
           isOpen={dialogState.type === 'reset'}
           onClose={closeDialog}
-          // No onUserUpdate needed for password reset, as it doesn't change displayed data
         />
       )}
-      {/* REMOVED ChangeRoleDialog rendering */}
-       {/* Add User Dialog */}
        {dialogState.type === 'add' && (
         <AddUserDialog
             isOpen={dialogState.type === 'add'}
             onClose={closeDialog}
-            onUserAdded={handleUserAdded} // Pass callback to update list
+            onUserAdded={handleUserAdded}
         />
        )}
-
     </div>
   );
 }
-
