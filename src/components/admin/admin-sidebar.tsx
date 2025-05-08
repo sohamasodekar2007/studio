@@ -1,4 +1,4 @@
-{// src/components/admin/admin-sidebar.tsx
+// src/components/admin/admin-sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -45,14 +45,14 @@ const contentManagementItems = [
   { href: '/admin/tests/manage', label: 'Manage Tests', icon: List },
   { href: '/admin/tests/create', label: 'Create Test', icon: PlusCircle },
   { href: '/admin/questions', label: 'Add Question', icon: ClipboardList },
-  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit },
+  { href: '/admin/questions/edit', label: 'Edit Questions', icon: Edit }, // Added Edit Questions
   { href: '/admin/notes', label: 'Short Notes', icon: FileText },
 ];
 
 const platformManagementItems = [
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/admin/reports', label: 'Reports', icon: PieChart },
+  { href: '/admin/reports', label: 'Reports', icon: PieChart }, // Added Reports
 ];
 
 const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
