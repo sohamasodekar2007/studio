@@ -11,7 +11,7 @@ import { findUserByEmailInternal, saveUserToJson, readUsers, getUserById, addUse
 import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react'; // Import Loader2
 import { v4 as uuidv4 } from 'uuid'; // Ensure UUID is imported
 import bcrypt from 'bcryptjs'; // Import bcryptjs
 
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Check local storage for logged-in user on initial load (client-side only)
-  // Also verifies if the user's plan has changed since last login
+  // Also verifies if the user's plan/role has changed since last login
   useEffect(() => {
     if (!isMounted) return; // Only run after mount
 
@@ -86,8 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             // Fetch the LATEST user profile from the backend (users.json)
-             // Modify console.log to use standard string concatenation
-             console.log("AuthProvider: Fetching latest profile for user ID: " + storedUser.id);
+             console.log(`AuthProvider: Fetching latest profile for user ID: ${storedUser.id}`);
              const latestProfile = await getUserById(storedUser.id); // getUserById returns Omit<UserProfile, 'password'>
 
              if (!latestProfile) {
@@ -97,13 +96,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   return;
              }
 
-            // Compare local storage user plan with the latest backend data
-             const planChanged = storedUser.model !== latestProfile.model ||
-                                storedUser.expiry_date !== latestProfile.expiry_date;
+            // Compare local storage user plan/role with the latest backend data
+             const profileChanged = storedUser.model !== latestProfile.model ||
+                                   storedUser.expiry_date !== latestProfile.expiry_date ||
+                                   storedUser.role !== latestProfile.role; // Check role change
 
-            if (planChanged) {
-                 console.warn(`AuthProvider: User plan mismatch detected for ${storedUser.email}. Logging out.`);
-                  await logout("Your account plan has been updated. Please log in again."); // Logout with specific message
+            if (profileChanged) {
+                 console.warn(`AuthProvider: User plan or role mismatch detected for ${storedUser.email}. Logging out.`);
+                  await logout("Your account details have been updated. Please log in again."); // Logout with specific message
                   setLoading(false);
                   return;
             }
@@ -132,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const mapUserProfileToContextUser = (userProfile: Omit<UserProfile, 'password'> | null): ContextUser => {
       if (!userProfile) return null;
-      // Ensure all necessary fields are mapped
+      // Ensure all necessary fields are mapped, including the role
       return {
           id: userProfile.id,
           email: userProfile.email,
@@ -141,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatarUrl: userProfile.avatarUrl, // Map avatarUrl
           class: userProfile.class,
           model: userProfile.model,
+          role: userProfile.role, // Map the role
           expiry_date: userProfile.expiry_date,
           createdAt: userProfile.createdAt, // Keep createdAt if needed
       };
@@ -184,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
         // Fetch the full user profile including password hash using internal action
-        const foundUser = await findUserByEmailInternal(email); // Use internal fetch
+        const foundUser = await readUsersWithPasswordsInternal(email); // Use correct internal fetch
 
         if (foundUser && foundUser.password) {
             // Compare the provided password with the stored hash
@@ -198,12 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Store user data (excluding password) in local storage
                 if (contextUser) {
                     localStorage.setItem('loggedInUser', JSON.stringify(userWithoutPassword));
-                     // NO LONGER Store password in local storage
-                     localStorage.removeItem('simulatedPassword');
                 }
 
                 // Redirect logic
-                const isAdmin = contextUser?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+                const isAdmin = contextUser?.role === 'Admin'; // Check the role field
                 const redirectPath = isAdmin ? '/admin' : '/';
                  console.log(`AuthProvider: Redirecting to ${redirectPath}`);
                 router.push(redirectPath);
@@ -211,12 +210,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              } else {
                 // Password mismatch
                  console.warn(`AuthProvider: Login failed for ${email}. Invalid password.`);
-                 throw new Error('Login failed: Invalid email or password for local authentication.');
+                 throw new Error('Login failed: Invalid email or password.');
              }
         } else {
             // User not found or has no password hash stored
              console.warn(`AuthProvider: Login failed for ${email}. User not found or password not set.`);
-            throw new Error('Login failed: Invalid email or password for local authentication.');
+            throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
       console.error("Simulated login failed:", error);
@@ -233,7 +232,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true); // Indicate loading during logout process
     setUser(null);
     localStorage.removeItem('loggedInUser');
-    localStorage.removeItem('simulatedPassword'); // Clear simulated password (just in case)
     toast({ title: "Logged Out", description: message || "You have been successfully logged out." });
     router.push('/auth/login');
     setLoading(false);
@@ -263,8 +261,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Signup failed: Email already exists.');
         }
 
-      // Hash the password
-      // const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS); // Hashing is now done in addUserToJson
 
       // Create UserProfile for local JSON storage
       // Pass plain text password to addUserToJson, it will handle hashing
@@ -275,6 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: phoneNumber || null,
         class: academicStatus || null,
         model: 'free', // Default to 'free'
+        role: 'User', // Default to 'User' role
         expiry_date: null, // Free model has no expiry
       };
 
@@ -298,11 +295,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        setUser(contextUser);
         if (contextUser) {
             localStorage.setItem('loggedInUser', JSON.stringify(saveResult.user)); // Store user without password
-            localStorage.removeItem('simulatedPassword'); // Ensure no plain password stored
         }
         console.log(`AuthProvider: User ${email} automatically logged in after signup.`);
 
-      toast({ title: "Account Created!", description: "Welcome to Study Sphere! You are now logged in." });
+      toast({ title: "Account Created!", description: `Welcome to EduNexus! You are now logged in.` }); // Updated brand name
       router.push('/'); // Redirect to dashboard after signup
 
     } catch (error: any) {
@@ -315,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast, isMounted]);
 
 
-  // Route protection logic (remains largely the same, but relies on checked local storage)
+  // Route protection logic
   useEffect(() => {
     if (loading || !isMounted) return; // Don't run protection until initial check is done
 
@@ -329,30 +325,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         '/privacy',
         '/tests', // Allow browsing tests
         '/dpp', // Allow browsing DPP list
-        // Add specific test/dpp detail pages if needed, e.g., using regex or startsWith
-        // '/tests/[testId]', // Example, adjust based on actual routing
-        // '/dpp/[...slug]' // Example
      ];
     // Check if the current path matches any public route or specific pattern
      const isPublicRoute = publicRoutes.some(route => {
          if (route.includes('[')) { // Basic check for dynamic route patterns
-             // Check if pathname starts with the static part of the route pattern
              const staticPart = route.split('[')[0];
              return pathname.startsWith(staticPart) && pathname !== staticPart; // Match sub-paths but not the index
          }
+         // Handle dynamic /tests/[testId] and /dpp/[...slug] routes
+         if (pathname.startsWith('/tests/') && route === '/tests') return true;
+         if (pathname.startsWith('/dpp/') && route === '/dpp') return true;
          return pathname === route;
      });
 
-    console.log("AuthProvider Route Protection:", { pathname, isAuthPage, isAdminRoute, isPublicRoute, userExists: !!user });
+    console.log("AuthProvider Route Protection:", { pathname, isAuthPage, isAdminRoute, isPublicRoute, userExists: !!user, userRole: user?.role });
 
     if (user) { // User is considered logged in (based on verified local state)
-      const isAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+      const isAdmin = user.role === 'Admin'; // Check the role from the user state
 
       if (isAuthPage) {
         router.push(isAdmin ? '/admin' : '/'); // Redirect away from auth pages if logged in
       } else if (isAdminRoute && !isAdmin) {
         router.push('/'); // Redirect non-admins from admin routes
-        toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission." });
+        toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access the admin panel." });
       }
     } else { // User is not logged in
       if (!isAuthPage && !isPublicRoute) {
@@ -370,16 +365,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    if (loading && isMounted && !pathname.startsWith('/auth')) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
-         <div className="space-y-4 w-full max-w-md p-4">
-           {/* Simplified Skeleton */}
-           <Skeleton className="h-10 w-3/4 mx-auto" />
-           <Skeleton className="h-6 w-1/2 mx-auto" />
-           <div className="p-4 border rounded-md">
-             <Skeleton className="h-8 w-full mb-2" />
-             <Skeleton className="h-8 w-full mb-2" />
-             <Skeleton className="h-8 w-full" />
-           </div>
-         </div>
+         {/* Use Loader2 for a cleaner loading indicator */}
+         <Loader2 className="h-12 w-12 animate-spin text-primary" />
        </div>
      );
    }
@@ -391,10 +378,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
          <Alert variant="destructive">
            <AlertTriangle className="h-4 w-4" />
-           <AlertTitle>Application Error</AlertTitle>
+           <AlertTitle>Application Initialization Error</AlertTitle>
            <AlertDescription>
              {initializationError}
-             <p className="mt-2 text-xs">There might be an issue with accessing local storage or reading user data. Please try clearing your browser cache or contact support if the problem persists.</p>
+             <p className="mt-2 text-xs">Please ensure your browser supports local storage and try clearing your cache or contact support.</p>
              </AlertDescription>
          </Alert>
        </div>

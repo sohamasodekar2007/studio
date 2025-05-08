@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, UserCheck, User, Shield, Loader2 } from "lucide-react"; // Added Shield, Loader2
 import { Skeleton } from '@/components/ui/skeleton';
-import { type UserProfile, type UserModel } from '@/types';
-import { readUsers, deleteUserFromJson, updateUserRole, findUserByEmailInternal } from '@/actions/user-actions'; // Removed updateUserInJson, added updateUserRole
+import type { UserProfile, UserModel } from '@/types';
+import { readUsers, deleteUserFromJson, updateUserRole } from '@/actions/user-actions'; // Use updateUserRole
 import { useToast } from '@/hooks/use-toast';
 import EditUserDialog from '@/components/admin/edit-user-dialog';
 import ResetPasswordDialog from '@/components/admin/reset-password-dialog';
@@ -28,22 +28,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
-const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
-
-// Helper function to determine role based on email
-const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
-    if (!email) return 'User';
-    return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
-};
 
 // Ensure the UserProfile type from actions/state includes the role
-type UserProfileWithRole = Omit<UserProfile, 'password'> & { role: 'Admin' | 'User' };
+// Role is now mandatory in the UserProfile type itself
+type UserProfileWithRole = Omit<UserProfile, 'password'>;
 
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
+  const { user: adminUser, loading: authLoading } = useAuth(); // Get admin user from context
   const [users, setUsers] = useState<UserProfileWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +55,7 @@ export default function AdminUsersPage() {
 
   const fetchAllUsers = useCallback(() => {
      setIsLoading(true);
-     readUsers() // Fetches users without passwords but with inferred roles
+     readUsers() // Fetches users without passwords but with assigned roles
       .then(data => {
         setUsers(data as UserProfileWithRole[]); // Assert type
       })
@@ -100,6 +96,13 @@ export default function AdminUsersPage() {
    const handleDeleteUser = async (userId: string) => {
        setIsDeleting(userId);
        try {
+           const userToDelete = users.find(u => u.id === userId);
+            if (userToDelete?.email === primaryAdminEmail) {
+                 toast({ variant: "destructive", title: "Action Denied", description: "Cannot delete the primary admin account." });
+                 setIsDeleting(null);
+                 return;
+            }
+
            const result = await deleteUserFromJson(userId);
            if (!result.success) {
                toast({ variant: "destructive", title: "Delete Failed", description: result.message });
@@ -128,12 +131,14 @@ export default function AdminUsersPage() {
                  return;
              }
 
+             // REMOVED: Email format validation is now removed from the action
+
             const result = await updateUserRole(userId, newRole);
             if (result.success && result.user) {
-                 toast({ title: "Role Updated", description: `User promoted to ${newRole}.` });
-                 // Update local state
+                 toast({ title: "Role Updated", description: `User role changed to ${newRole}.` });
+                 // Update local state completely with the returned user data
                  setUsers(prevUsers =>
-                    prevUsers.map(u => (u.id === userId ? { ...u, role: newRole, model: result.user?.model, expiry_date: result.user?.expiry_date } : u)) // Update role and potentially model/expiry
+                    prevUsers.map(u => (u.id === userId ? result.user as UserProfileWithRole : u)) // Use the full updated user object
                  );
             } else {
                 throw new Error(result.message || `Failed to change role to ${newRole}.`);
@@ -154,7 +159,7 @@ export default function AdminUsersPage() {
     };
 
    const handleUserAdded = (newUser: UserProfileWithRole) => {
-       setUsers(prevUsers => [newUser, ...prevUsers]);
+       setUsers(prevUsers => [newUser, ...prevUsers].sort((a, b) => (a.name || '').localeCompare(b.name || ''))); // Add and sort
        closeDialog();
    }
 
@@ -248,7 +253,7 @@ export default function AdminUsersPage() {
                     </TableCell>
                      <TableCell>
                        <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
-                         {user.role || 'User'} {/* Display role from state */}
+                         {user.role} {/* Display role from user data */}
                        </Badge>
                      </TableCell>
                       <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>

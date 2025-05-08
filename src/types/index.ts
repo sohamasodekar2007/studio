@@ -31,13 +31,14 @@ export interface UserProfile {
   referral?: string; // Optional referral code
   class: AcademicStatus | null; // Academic status
   model: UserModel; // User's subscription model
+  role: 'Admin' | 'User'; // Role is now mandatory
   expiry_date: string | null; // ISO string date or null for free/admin
   createdAt?: string; // Optional ISO timestamp
   totalPoints?: number; // Add totalPoints field, optional for existing users
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
-export type ContextUser = Omit<UserProfile, 'password' | 'role'> | null; // Role is inferred, password excluded
+export type ContextUser = Omit<UserProfile, 'password'> | null; // Role is now part of UserProfile
 
 
 // ---- Question Bank Types ----
@@ -288,7 +289,7 @@ export interface BookmarkedQuestion {
   subject: string;    // Subject of the question
   lesson: string;     // Lesson of the question
   addedAt: number;    // Timestamp when bookmarked
-  tags?: string[];    // Optional tags like "Easy", "Hard", "Tricky", "Do Again"
+  tags?: BookmarkTag[];    // Use specific BookmarkTag type
 }
 
 // Interface for the user's entire notebook data structure
