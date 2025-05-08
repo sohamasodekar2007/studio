@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Script from 'next/script'; // For MathJax
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Import CardFooter
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import type { QuestionBankItem, DifficultyLevel } from '@/types';
@@ -141,6 +141,7 @@ export default function DppLessonPage() {
                        objectFit="contain"
                        className="rounded border"
                        data-ai-hint="question diagram"
+                       priority={currentQuestionIndex < 2} // Prioritize first few images
                    />
                </div>
            );
@@ -378,42 +379,50 @@ export default function DppLessonPage() {
         </div>
 
         {/* Question Display Card */}
-        <Card className="shadow-md">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-                 <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
-                 <div className="flex items-center gap-2">
-                    {renderPyqInfo(currentQuestion)}
-                    <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
-                 </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {renderQuestionContent(currentQuestion)}
-            {renderOptions(currentQuestion)}
-             {showSolution && renderExplanation(currentQuestion)}
-          </CardContent>
-          <CardFooter className="flex justify-between items-center flex-wrap gap-2">
-             <Button
-                 variant="secondary"
-                 onClick={checkAnswer}
-                 disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined}
-             >
-                Check Answer
-            </Button>
-             {isCorrect !== null && (
-                <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                    {isCorrect ? 'Correct!' : 'Incorrect'}
-                </span>
-             )}
-             <Button
-                 onClick={goToNextQuestion}
-                 disabled={!showSolution} // Only enable Next after checking/showing solution
-             >
-                {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
-            </Button>
-          </CardFooter>
-        </Card>
+        {currentQuestion ? (
+            <Card className="shadow-md">
+            <CardHeader>
+                <div className="flex justify-between items-center">
+                    <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
+                    <div className="flex items-center gap-2">
+                        {renderPyqInfo(currentQuestion)}
+                        <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {renderQuestionContent(currentQuestion)}
+                {renderOptions(currentQuestion)}
+                {showSolution && renderExplanation(currentQuestion)}
+            </CardContent>
+            <CardFooter className="flex justify-between items-center flex-wrap gap-2">
+                <Button
+                    variant="secondary"
+                    onClick={checkAnswer}
+                    disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined}
+                >
+                    Check Answer
+                </Button>
+                {isCorrect !== null && (
+                    <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                        {isCorrect ? 'Correct!' : 'Incorrect'}
+                    </span>
+                )}
+                <Button
+                    onClick={goToNextQuestion}
+                    disabled={!showSolution} // Only enable Next after checking/showing solution
+                >
+                    {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
+                </Button>
+            </CardFooter>
+            </Card>
+        ) : (
+             <Card>
+                <CardContent className="p-10 text-center text-muted-foreground">
+                    Select a question to start.
+                </CardContent>
+            </Card>
+        )}
       </div>
     </>
   );
