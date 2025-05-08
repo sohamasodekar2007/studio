@@ -1,4 +1,4 @@
-{'use client';
+"use client";
 
 import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -21,7 +21,6 @@ import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/type
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
-import path from 'path'; // Keep path import
 import bcrypt from 'bcryptjs'; // Import bcryptjs
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit for profile pictures
@@ -201,7 +200,7 @@ export default function SettingsPage() {
         }
 
         // Data to update (excluding avatar initially, will be added based on upload/removal)
-        const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'class' | 'model' | 'expiry_date' | 'referral' | 'role' | 'avatarUrl'>> = {
+        const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'class' | 'model' | 'expiry_date' | 'referral' | 'avatarUrl'>> = {
             name: data.name,
             phone: data.phone,
         };
