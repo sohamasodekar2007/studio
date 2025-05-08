@@ -34,8 +34,8 @@ export default function FindFriendsPage() {
           readUsers(),
           getFollowData(user.id),
         ]);
-        // Filter out the current user
-        setAllUsers(usersData.filter(u => u.id !== user.id));
+        // Filter out the current user AND admin users
+        setAllUsers(usersData.filter(u => u.id !== user.id && u.role !== 'Admin'));
         setFollowData(follows);
       } catch (error) {
         console.error("Failed to load users or follow data:", error);
@@ -44,12 +44,15 @@ export default function FindFriendsPage() {
         setIsLoading(false);
       }
     };
-    if (!authLoading) {
+    if (!authLoading && user) {
       fetchData();
+    } else if (!authLoading && !user) {
+      setIsLoading(false); // Stop loading if user is not logged in
     }
   }, [user, authLoading, toast]);
 
   const filteredUsers = useMemo(() => {
+    // Start with users already filtered to exclude self and admins
     return allUsers.filter(u =>
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -171,6 +174,8 @@ export default function FindFriendsPage() {
                      <div>
                        <p className="font-medium text-sm">{u.name || 'Anonymous User'}</p>
                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                       {/* Optionally show class/model if available */}
+                       <p className="text-xs text-muted-foreground">{u.class || ''} {u.model ? `(${u.model})` : ''}</p>
                      </div>
                    </div>
                    <Button

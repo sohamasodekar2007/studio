@@ -35,7 +35,8 @@ export default function FollowersPage() {
         ]);
 
         const followerIds = followData?.followers || [];
-        const profiles = allUsersData.filter(u => followerIds.includes(u.id));
+        // Filter profiles AND exclude admins
+        const profiles = allUsersData.filter(u => followerIds.includes(u.id) && u.role !== 'Admin');
         setFollowersProfiles(profiles);
 
       } catch (error) {
@@ -45,12 +46,15 @@ export default function FollowersPage() {
         setIsLoading(false);
       }
     };
-    if (!authLoading) {
-      fetchData();
-    }
+     if (!authLoading && user) {
+       fetchData();
+     } else if (!authLoading && !user){
+         setIsLoading(false); // Stop loading if no user
+     }
   }, [user, authLoading, toast]);
 
   const filteredFollowers = useMemo(() => {
+    // Already filtered for non-admins in useEffect
     return followersProfiles.filter(u =>
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -110,6 +114,7 @@ export default function FollowersPage() {
                      <div>
                        <p className="font-medium text-sm">{follower.name || 'Anonymous User'}</p>
                        <p className="text-xs text-muted-foreground">{follower.email}</p>
+                       <p className="text-xs text-muted-foreground">{follower.class || ''} {follower.model ? `(${follower.model})` : ''}</p>
                      </div>
                    </div>
                    {/* Optionally add a button to view their profile or history later */}

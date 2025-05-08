@@ -27,6 +27,7 @@ import {
 
 export default function FollowingPage() {
   const { user, loading: authLoading } = useAuth();
+  const [allUsers, setAllUsers] = useState<Omit<UserProfile, 'password'>[]>([]); // Store all users temporarily
   const [followingProfiles, setFollowingProfiles] = useState<Omit<UserProfile, 'password'>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,9 +46,11 @@ export default function FollowingPage() {
           readUsers(),
           getFollowData(user.id),
         ]);
+        setAllUsers(allUsersData); // Store all users to revert optimistic updates if needed
 
         const followingIds = followData?.following || [];
-        const profiles = allUsersData.filter(u => followingIds.includes(u.id));
+        // Filter profiles AND exclude admins
+        const profiles = allUsersData.filter(u => followingIds.includes(u.id) && u.role !== 'Admin');
         setFollowingProfiles(profiles);
 
       } catch (error) {
@@ -57,12 +60,15 @@ export default function FollowingPage() {
         setIsLoading(false);
       }
     };
-     if (!authLoading) {
+     if (!authLoading && user) {
        fetchData();
+     } else if (!authLoading && !user){
+         setIsLoading(false); // Stop loading if no user
      }
   }, [user, authLoading, toast]);
 
   const filteredFollowing = useMemo(() => {
+    // Already filtered for non-admins in useEffect
     return followingProfiles.filter(u =>
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -75,9 +81,10 @@ export default function FollowingPage() {
 
     setActionLoading(prev => ({ ...prev, [targetUserId]: true }));
 
+    // Store the original list for potential revert
+    const originalList = [...followingProfiles];
     try {
        // Optimistic UI Update
-       const originalList = [...followingProfiles];
        setFollowingProfiles(prev => prev.filter(p => p.id !== targetUserId));
 
       const result = await unfollowUser(user.id, targetUserId);
@@ -88,18 +95,11 @@ export default function FollowingPage() {
         toast({ variant: "destructive", title: "Unfollow Failed", description: result.message || "Could not unfollow user." });
       } else {
         toast({ title: "Unfollowed", description: `You are no longer following ${targetUserName || 'user'}.` });
-        // Optimistic update successful, no need to refetch unless necessary
+        // Optimistic update successful
       }
     } catch (error: any) {
       // Revert optimistic update on error
-      setFollowingProfiles(prev => {
-          const userExists = prev.find(u => u.id === targetUserId);
-          if (!userExists) {
-              const originalUser = allUsers.find(u => u.id === targetUserId);
-              if (originalUser) return [...prev, originalUser];
-          }
-          return prev;
-      });
+      setFollowingProfiles(originalList);
       toast({ variant: "destructive", title: "Unfollow Failed", description: error.message || "Could not unfollow user." });
     } finally {
       setActionLoading(prev => ({ ...prev, [targetUserId]: false }));
@@ -159,6 +159,7 @@ export default function FollowingPage() {
                      <div>
                        <p className="font-medium text-sm">{followedUser.name || 'Anonymous User'}</p>
                        <p className="text-xs text-muted-foreground">{followedUser.email}</p>
+                       <p className="text-xs text-muted-foreground">{followedUser.class || ''} {followedUser.model ? `(${followedUser.model})` : ''}</p>
                      </div>
                    </div>
                     <AlertDialog>
