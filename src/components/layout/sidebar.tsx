@@ -1,3 +1,4 @@
+// src/components/layout/sidebar.tsx
 'use client';
 
 import {
@@ -13,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon, BarChartHorizontal } from 'lucide-react'; // Added BarChartHorizontal
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon, BarChartHorizontal, FileClock, Target } from 'lucide-react'; // Added FileClock, Target
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
@@ -28,7 +29,23 @@ export function AppSidebar() {
 
   const isActive = (href: string) => {
     // Exact match for most top-level pages
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard', '/find-friends', '/friends-followers', '/friends-following', '/friends-compare'].includes(href)) { // Added /friends-compare
+    const exactMatchRoutes = [
+        '/',
+        '/settings',
+        '/help',
+        '/study-tips',
+        '/doubt-solving',
+        '/progress',
+        '/notebooks',
+        '/leaderboard',
+        '/find-friends',
+        '/friends-followers',
+        '/friends-following',
+        '/friends-compare',
+        '/pyq-mock-tests', // Added
+        '/pyq-dpps', // Added
+    ];
+    if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
     // Starts with for tests, admin, and dpp as they have sub-routes
@@ -39,8 +56,6 @@ export function AppSidebar() {
     if (href.startsWith('/tests/') && pathname.startsWith('/tests/')) return true;
     if (href.startsWith('/dpp/') && pathname.startsWith('/dpp/')) return true;
     if (href.startsWith('/friend-history/') && pathname.startsWith('/friend-history/')) return true;
-    // Removed /friends-compare/ check here as it's handled by exact match
-
 
     return false;
   };
@@ -97,6 +112,22 @@ export function AppSidebar() {
                     <SidebarMenuButton as="a" isActive={isActive('/dpp')} tooltip="DPP">
                         <ClipboardCheck />
                         <span className="group-data-[state=collapsed]:hidden">DPP</span>
+                    </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem> {/* New PYQ DPPs */}
+                <Link href="/pyq-dpps" passHref legacyBehavior>
+                    <SidebarMenuButton as="a" isActive={isActive('/pyq-dpps')} tooltip="PYQ DPPs">
+                        <Target />
+                        <span className="group-data-[state=collapsed]:hidden">PYQ DPPs</span>
+                    </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+            <SidebarMenuItem> {/* New PYQ Mock Tests */}
+                <Link href="/pyq-mock-tests" passHref legacyBehavior>
+                    <SidebarMenuButton as="a" isActive={isActive('/pyq-mock-tests')} tooltip="PYQ Mock Tests">
+                        <FileClock />
+                        <span className="group-data-[state=collapsed]:hidden">PYQ Mock Tests</span>
                     </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>
