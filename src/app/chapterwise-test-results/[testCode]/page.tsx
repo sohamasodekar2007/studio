@@ -19,11 +19,13 @@
  import { predictRank, type PredictRankOutput } from '@/ai/flows/predict-rank-flow';
  import { useToast } from '@/hooks/use-toast';
  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
- import { ResponsiveContainer, PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
+ // Import Label from recharts
+ import { ResponsiveContainer, PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Label } from 'recharts';
  import {
    ChartContainer,
    ChartTooltip,
    ChartTooltipContent,
+   type ChartConfig, // Import ChartConfig type
  } from "@/components/ui/chart"; // Import ShadCN chart components
 
  // Placeholder data for charts - Replace with real data later
@@ -498,12 +500,3 @@
      </>
    );
  }
-
-// Define ChartConfig type locally if not globally available or imported
-type ChartConfig = {
-  [key: string]: {
-    label?: React.ReactNode;
-    color?: string;
-    icon?: React.ComponentType;
-  };
-};
