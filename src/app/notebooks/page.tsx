@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, Notebook, PlusCircle, Trash2, Loader2, MoreVertical, Info } from 'lucide-react';
-import type { UserNotebookData, Notebook, BookmarkedQuestion } from '@/types';
-import { getUserNotebooks, createNotebook, deleteNotebook } from '@/actions/notebook-actions'; // removeQuestionFromNotebook removed as it belongs on detail page
+import type { UserNotebookData, Notebook as NotebookType } from '@/types'; // Renamed Notebook to NotebookType
+import { getUserNotebooks, createNotebook, deleteNotebook } from '@/actions/notebook-actions';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -23,8 +23,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Import DropdownMenu components
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Import Tooltip components
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function NotebooksListPage() {
   const { user, loading: authLoading } = useAuth();
@@ -36,7 +38,7 @@ export default function NotebooksListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreating, setIsCreating] = useState(isCreating);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
   const fetchNotebookData = useCallback(async () => {
@@ -178,59 +180,59 @@ export default function NotebooksListPage() {
           )}
 
         {/* Notebook Grid */}
+        <div className="space-y-4"> {/* Replaced grid with space-y */}
         {(notebookData?.notebooks || []).length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {notebookData?.notebooks.map((notebook) => (
-                <Card key={notebook.id} className="hover:shadow-md transition-shadow duration-200 group relative">
-                    <Link href={`/notebooks/${notebook.id}`} passHref>
-                        <CardContent className="p-4 cursor-pointer">
-                            <CardTitle className="text-lg mb-1 truncate group-hover:text-primary transition-colors">{notebook.name}</CardTitle>
-                            <CardDescription>{getQuestionCount(notebook.id)} Questions</CardDescription>
-                        </CardContent>
-                    </Link>
-                    {/* Delete Dropdown */}
-                    <div className="absolute top-2 right-2">
-                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <MoreVertical className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                 {/* Add other actions like Rename later if needed */}
-                                 {/* <DropdownMenuItem disabled><Pencil className="mr-2 h-4 w-4" /> Rename</DropdownMenuItem> */}
-                                 {/* <DropdownMenuSeparator /> */}
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                                            disabled={isDeletingId === notebook.id}
-                                        >
-                                            {isDeletingId === notebook.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete
+            <ScrollArea className="h-[calc(100vh-300px)]"> {/* Adjust height as needed */}
+                 <div className="space-y-1 pr-2">
+                    {notebookData?.notebooks.map((notebook) => (
+                        <Card key={notebook.id} className="hover:shadow-sm transition-shadow duration-150 group relative bg-card flex items-center">
+                            <Link href={`/notebooks/${notebook.id}`} passHref className="flex-grow block">
+                                <CardContent className="p-3 cursor-pointer">
+                                    <CardTitle className="text-base mb-0.5 truncate group-hover:text-primary transition-colors">{notebook.name}</CardTitle>
+                                    <CardDescription className="text-xs">{getQuestionCount(notebook.id)} Questions</CardDescription>
+                                </CardContent>
+                            </Link>
+                            {/* Delete Dropdown */}
+                            <div className="pr-2">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 group-hover:opacity-100 transition-opacity">
+                                            <MoreVertical className="h-4 w-4" />
                                         </Button>
-                                    </AlertDialogTrigger>
-                                     <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Delete Notebook?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to delete "{notebook.name}"? All associated bookmarks will be removed. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDeleteNotebook(notebook.id)} className="bg-destructive hover:bg-destructive/90">
-                                                Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </Card>
-            ))}
-            </div>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                                    disabled={isDeletingId === notebook.id}
+                                                >
+                                                    {isDeletingId === notebook.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Delete Notebook?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete "{notebook.name}"? All associated bookmarks will be removed. This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDeleteNotebook(notebook.id)} className="bg-destructive hover:bg-destructive/90">
+                                                        Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        </Card>
+                    ))}
+                 </div>
+             </ScrollArea>
         ) : (
              <Card>
                 <CardContent className="p-10 text-center text-muted-foreground">
@@ -239,6 +241,7 @@ export default function NotebooksListPage() {
                 </CardContent>
              </Card>
         )}
+        </div>
     </div>
   );
 }
