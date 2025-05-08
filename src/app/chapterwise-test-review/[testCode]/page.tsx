@@ -30,7 +30,7 @@ const OPTION_STYLES = {
   base: "border-border hover:border-primary dark:border-gray-700 dark:hover:border-primary",
   selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
   selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
-  correctUnselected: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
+  correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300", // Style for correct option when not selected
   // For image questions where there's no explicit "selected" state but we want to highlight the correct one
   correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 
@@ -172,55 +172,62 @@ export default function TestReviewPage() {
 
   const totalQuestions = allQuestionsFromReport.length || 0;
   const optionKeys = ["A", "B", "C", "D"];
-  const correctOptionKey = currentReviewAnswer?.correctAnswer; // Already stored as key "A", "B", etc.
+  // Handle cases where answer might not start with "Option "
+  const correctOptionKey = currentReviewAnswer.correctAnswer?.replace('Option ', '').trim() || currentReviewAnswer.correctAnswer; // Assume it's just the key if format differs
   const userSelectedOptionKey = currentReviewAnswer?.userAnswer;
-  const isUserCorrect = currentReviewAnswer?.isCorrect;
+  const isUserCorrect = userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentReviewAnswer?.status || QuestionStatusEnum.NotVisited;
 
   // Get options from the test definition if available, otherwise use placeholder
-  const currentQuestionDefinition = testDefinition ? getAllQuestionsFromTest(testDefinition)[currentQuestionReviewIndex] : null;
+  // Assuming the report's detailedAnswers has the options used during the test
+  const currentQuestionDefinition = testDefinition ? (testDefinition.questions || [])[currentQuestionReviewIndex] : null;
   const optionsToDisplay = currentQuestionDefinition?.options || ["A", "B", "C", "D"]; // Fallback if definition fails
 
 
-    // Function to render content, handling both text and image, and applying MathJax transformation
-    const renderContentWithMathJax = (
-        textContent: string | undefined | null,
-        imageUrl: string | undefined | null, // This is the RELATIVE public URL from report/definition
-        context: 'question' | 'explanation'
-    ) => {
-        let contentToRender: React.ReactNode = null;
+   // Function to render content, handling both text and image, and applying MathJax transformation
+   const renderContentWithMathJax = (
+       textContent: string | undefined | null,
+       imageUrl: string | undefined | null, // This is the RELATIVE public URL from report/definition
+       context: 'question' | 'explanation'
+   ) => {
+       let contentToRender: React.ReactNode = null;
 
-        // Determine if it's an image content
-        const isImageContent = !!imageUrl;
+       // Determine if it's an image content
+       const isImageContent = !!imageUrl;
 
-        if (isImageContent && imageUrl) {
-            contentToRender = (
-                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
-                    <Image
-                        src={imageUrl} // Use the URL directly
-                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
-                        layout="fill"
-                        objectFit="contain"
-                        className="rounded-md border"
-                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                        onError={(e) => console.error(`Error loading image: ${imageUrl}`, e)} // Add error handling for images
-                    />
-                 </div>
-             );
-        } else if (textContent) {
-            // Render using dangerouslySetInnerHTML for MathJax to process
-            contentToRender = (
-                <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" // Added class for targeting
-                    dangerouslySetInnerHTML={{ __html: textContent }} // Assume textContent already has MathJax delimiters if needed
-                 />
+       if (isImageContent && imageUrl) {
+           // No need for encodeURIComponent here as the URL from the report/definition should already be correctly formatted for public access
+           const imagePath = imageUrl;
+           contentToRender = (
+                <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
+                   <Image
+                       src={imagePath} // Use the URL directly
+                       alt={context === 'question' ? "Question Image" : "Explanation Image"}
+                       layout="fill"
+                       objectFit="contain"
+                       className="rounded-md border"
+                       data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
+                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add error handling for images
+                   />
+                    <noscript>
+                        <p className="text-center text-muted-foreground text-sm mt-2">[Image: {imageUrl}]</p>
+                    </noscript>
+                </div>
             );
-        } else {
-            contentToRender = <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
-        }
+       } else if (textContent) {
+           // Render using dangerouslySetInnerHTML for MathJax to process
+           contentToRender = (
+               <div
+                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" // Added class for targeting
+                   dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} // Replace delimiters
+                />
+           );
+       } else {
+           contentToRender = <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
+       }
 
-        return contentToRender;
-    };
+       return contentToRender;
+   };
 
 
   return (
@@ -292,9 +299,7 @@ export default function TestReviewPage() {
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium mt-0.5">{optionKey}.</span>
-                   <div className="flex-1">
-                        {/* Render option text with MathJax support */}
-                         {renderContentWithMathJax(optionText, null, 'question')}
+                   <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
                    </div>
                   {isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrect && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}

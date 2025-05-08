@@ -163,7 +163,7 @@ export default function DppLessonPage() {
                const newAttempts = { ...(prev?.questionAttempts || {}) };
                newAttempts[currentQuestion.id] = [newAttempt, ...(newAttempts[currentQuestion.id] || [])];
                return {
-                   ...(prev || { userId: user.id!, subject: subject!, lesson: lesson!, questionAttempts: {} }),
+                   ...(prev || { userId: user?.id || '', subject: subject || '', lesson: lesson || '', questionAttempts: {} }),
                    questionAttempts: newAttempts,
                    lastAccessed: Date.now()
                };
@@ -197,10 +197,14 @@ export default function DppLessonPage() {
    // Function to render question content (text or image)
    const renderQuestionContent = (q: QuestionBankItem) => {
        if (q.type === 'image' && q.question.image) {
-           const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/images/${q.question.image}`;
+           // Ensure components are properly encoded for URLs
+           const subjectPath = encodeURIComponent(q.subject);
+           const lessonPath = encodeURIComponent(q.lesson);
+           const imageFilename = encodeURIComponent(q.question.image);
+           const imagePath = `/question_bank_images/${subjectPath}/${lessonPath}/images/${imageFilename}`;
            return (
-               <div className="relative w-full max-w-md h-64 mx-auto my-4"> {/* Adjust size as needed */}
-                   <Image
+                <div className="relative w-full max-w-lg h-64 mx-auto my-4"> {/* Adjust size as needed */}
+                    <Image
                        src={imagePath}
                        alt={`Question Image: ${q.id}`}
                        layout="fill"
@@ -208,8 +212,13 @@ export default function DppLessonPage() {
                        className="rounded border"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2} // Prioritize first few images
-                   />
-               </div>
+                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add basic error handling
+                    />
+                    {/* Fallback text if image fails to load */}
+                    <noscript>
+                        <p className="text-center text-muted-foreground text-sm mt-2">[Image: {q.question.image}]</p>
+                    </noscript>
+                </div>
            );
        } else if (q.type === 'text' && q.question.text) {
            return (
@@ -279,7 +288,7 @@ export default function DppLessonPage() {
     const renderExplanation = (q: QuestionBankItem) => {
         const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
         const hasImage = q.explanation.image && q.explanation.image.trim().length > 0;
-        const imagePath = hasImage ? `/question_bank_images/${q.subject}/${q.lesson}/images/${q.explanation.image}` : null;
+        const imagePath = hasImage ? `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.explanation.image!)}` : null;
 
         if (!hasText && !hasImage) return null; // No explanation to show
 
@@ -293,7 +302,7 @@ export default function DppLessonPage() {
                          <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                      )}
                      {hasImage && imagePath && (
-                          <div className="relative w-full max-w-md h-64 mx-auto mt-4">
+                          <div className="relative w-full max-w-lg h-64 mx-auto mt-4">
                              <Image
                                  src={imagePath}
                                  alt={`Explanation Image`}
@@ -301,7 +310,11 @@ export default function DppLessonPage() {
                                  objectFit="contain"
                                  className="rounded border"
                                  data-ai-hint="explanation image"
+                                 onError={(e) => { console.error(`Error loading explanation image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add error handling
                              />
+                              <noscript>
+                                 <p className="text-center text-muted-foreground text-sm mt-2">[Explanation Image: {q.explanation.image}]</p>
+                             </noscript>
                           </div>
                      )}
                  </CardContent>
