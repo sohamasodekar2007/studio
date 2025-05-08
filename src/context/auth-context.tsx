@@ -7,13 +7,23 @@ import type { UserProfile, UserModel, AcademicStatus as UserAcademicStatus, Cont
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
-import { findUserByEmailInternal, saveUserToJson, readUsers, getUserById, addUserToJson, updateUserInJson, deleteUserFromJson, updateUserPasswordInJson, readUsersWithPasswordsInternal } from '@/actions/user-actions'; // Ensure all are imported
+import {
+    readUsersWithPasswordsInternal, // Use the internal function to get hash
+    saveUserToJson,
+    readUsers,
+    getUserById,
+    addUserToJson,
+    updateUserInJson,
+    deleteUserFromJson,
+    updateUserPasswordInJson,
+    updateUserRole, // Ensure updateUserRole is imported
+} from '@/actions/user-actions';
 import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Loader2 } from 'lucide-react'; // Import Loader2
-import { v4 as uuidv4 } from 'uuid'; // Ensure UUID is imported
-import bcrypt from 'bcryptjs'; // Import bcryptjs
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcryptjs'; // Ensure bcryptjs is imported
 
 interface AuthContextProps {
   user: ContextUser;
@@ -176,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, toast]); // Add `logout`? Be careful of loops.
 
 
-  const login = useCallback(async (email: string, password?: string) => {
+ const login = useCallback(async (email: string, password?: string) => {
     if (!isMounted) return;
     if (!password) {
         toast({ variant: 'destructive', title: 'Login Failed', description: 'Password is required.' });
@@ -185,7 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
         // Fetch the full user profile including password hash using internal action
-        const foundUser = await readUsersWithPasswordsInternal(email); // Use correct internal fetch
+        // Ensure readUsersWithPasswordsInternal expects only email
+        const foundUser = await readUsersWithPasswordsInternal(email);
 
         if (foundUser && foundUser.password) {
             // Compare the provided password with the stored hash
@@ -193,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
              if (passwordMatch) {
                 console.log(`AuthProvider: Login successful for ${email}`);
-                const { password: userPassword, ...userWithoutPassword } = foundUser; // Destructure to remove password hash
+                const { password: _, ...userWithoutPassword } = foundUser; // Destructure to remove password hash
                 const contextUser = mapUserProfileToContextUser(userWithoutPassword);
                 setUser(contextUser);
                 // Store user data (excluding password) in local storage
@@ -254,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
         // Check if user already exists locally using the internal function
-        const existingUser = await findUserByEmailInternal(email); // Use internal fetch
+        const existingUser = await readUsersWithPasswordsInternal(email); // Use internal fetch
 
         if (existingUser) {
              console.warn(`AuthProvider: Signup attempt failed - email ${email} already exists.`);
@@ -332,9 +343,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              const staticPart = route.split('[')[0];
              return pathname.startsWith(staticPart) && pathname !== staticPart; // Match sub-paths but not the index
          }
-         // Handle dynamic /tests/[testId] and /dpp/[...slug] routes
-         if (pathname.startsWith('/tests/') && route === '/tests') return true;
-         if (pathname.startsWith('/dpp/') && route === '/dpp') return true;
+         // Handle dynamic routes that should be public (like viewing a specific test)
+         if (pathname.startsWith('/tests/') && pathname.split('/').length === 3 && route === '/tests') return true;
+         if (pathname.startsWith('/dpp/') && pathname.split('/').length > 2 && route === '/dpp') return true; // Allow /dpp/subject/lesson
          return pathname === route;
      });
 
@@ -362,11 +373,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // --- UI Loading State ---
    // Show skeleton only during the initial loading phase AND if not on an auth page
    // AND if the component is mounted (to prevent SSR flash)
-   if (loading && isMounted && !pathname.startsWith('/auth')) {
+   if (loading && isMounted && !pathname.startsWith('/auth') && !user) { // Add !user check
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
          {/* Use Loader2 for a cleaner loading indicator */}
-         <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <div className="space-y-4 w-full max-w-md p-4">
+           {/* Simplified Skeleton */}
+           <Skeleton className="h-10 w-3/4 mx-auto" />
+           <Skeleton className="h-6 w-1/2 mx-auto" />
+           <Skeleton className="h-40 w-full" />
+         </div>
        </div>
      );
    }
