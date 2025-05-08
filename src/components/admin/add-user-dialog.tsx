@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -92,24 +91,28 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
       const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
 
       // Prepare the UserProfile object
-      const newUserProfile: UserProfile = {
+      // The actual UserProfile type expects the hashed password, addUserToJson handles hashing.
+      // For the callback, we can omit the password.
+      const newUserProfileForCallback: Omit<UserProfile, 'password'> = {
         id: uuidv4(), // Generate a unique ID for the new user
         name: data.name,
         email: data.email,
-        password: data.password, // Store password directly (INSECURE for production)
         phone: data.phone,
         referral: "", // Default referral
         class: data.class,
         model: data.role === 'Admin' ? 'combo' : data.model, // Admins get combo model
         expiry_date: data.role === 'Admin' ? '2099-12-31T00:00:00.000Z' : expiryDateString, // Long expiry for admin
         createdAt: new Date().toISOString(),
+        avatarUrl: null, // Add default avatarUrl
       };
 
+      // Use the server action to add the user to users.json (it handles hashing)
+      const result = await addUserToJson({
+          ...newUserProfileForCallback, // Spread the profile data
+          password: data.password, // Pass the plain text password
+      });
 
-      // Use the server action to add the user to users.json
-      const result = await addUserToJson(newUserProfile);
-
-      if (!result.success) {
+      if (!result.success || !result.user) { // Check if user object is returned
         throw new Error(result.message || 'Failed to add new user.');
       }
 
@@ -117,7 +120,8 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         title: 'User Added Successfully',
         description: `User ${data.email} has been created with the role ${data.role}.`,
       });
-      onUserAdded(newUserProfile); // Call the callback with the new user object
+      // Use the user data returned from the action for the callback
+      onUserAdded(result.user);
       form.reset(); // Reset form fields
       onClose(); // Close dialog
 
@@ -247,9 +251,9 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                     <FormItem>
                       <FormLabel>Academic Status</FormLabel>
                       <Select
-                         onValueChange={field.onChange}
-                         // Handle null default value correctly
-                         value={field.value ?? ""}
+                         // Convert null to '_none_' for the Select value, handle change
+                         onValueChange={(value) => field.onChange(value === '_none_' ? null : value)}
+                         value={field.value === null ? '_none_' : field.value ?? '_none_'} // Use placeholder value
                          disabled={isLoading}
                        >
                          <FormControl>
@@ -258,7 +262,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                            </SelectTrigger>
                          </FormControl>
                          <SelectContent>
-                           <SelectItem value="">-- None --</SelectItem>
+                           <SelectItem value="_none_">-- None --</SelectItem> {/* Use a non-empty value */}
                            {academicStatuses.map((status) => (
                              <SelectItem key={status} value={status}>
                                {status}
@@ -303,7 +307,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                          name="expiry_date"
                          render={({ field }) => (
                              <FormItem className="flex flex-col">
-                             <FormLabel>Expiry Date *</FormLabel>
+                             <FormLabel>Expiry Date {selectedModel !== 'free' ? '*' : ''}</FormLabel>
                              <Popover>
                                  <PopoverTrigger asChild>
                                  <FormControl>
