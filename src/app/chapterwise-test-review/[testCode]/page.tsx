@@ -5,12 +5,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-// Import CardFooter
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag } from 'lucide-react';
-import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer, ChapterwiseTestJson } from '@/types'; // Added ChapterwiseTestJson
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
+import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer, ChapterwiseTestJson } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { getTestReport } from '@/actions/test-report-actions';
 import Image from 'next/image';
@@ -39,21 +38,11 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
-
 // Helper function to construct image paths relative to the public directory
-// Updated to handle potentially missing subject/lesson in the report (though unlikely for chapterwise)
-const constructImagePath = (subject: string | null | undefined, lesson: string | null | undefined, filename: string | null | undefined): string | null => {
-    if (!filename) return null; // Return null if filename is missing
-    const basePath = '/question_bank_images'; // Base path within public
-
-    // Use placeholders if subject/lesson are missing, but log a warning
-    const effectiveSubject = subject || 'unknown_subject';
-    const effectiveLesson = lesson || 'unknown_lesson';
-    if (!subject || !lesson) {
-        console.warn(`Constructing image path with missing subject/lesson for filename: ${filename}`);
-    }
-
-    return `${basePath}/${encodeURIComponent(effectiveSubject)}/${encodeURIComponent(effectiveLesson)}/images/${encodeURIComponent(filename)}`;
+// No changes needed here, assumes URLs in report are correct relative paths
+const constructImagePath = (url: string | null | undefined): string | null => {
+    if (!url || !url.startsWith('/')) return null; // Only return if it's a relative path starting with /
+    return url;
 };
 
 
@@ -68,7 +57,7 @@ export default function TestReviewPage() {
   const userId = searchParams.get('userId');
   const attemptTimestampStr = searchParams.get('attemptTimestamp');
 
-  const [testReport, setTestReport] = useState<TestResultSummary | null>(null); // Renamed state for clarity
+  const [testReport, setTestReport] = useState<TestResultSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
@@ -77,7 +66,7 @@ export default function TestReviewPage() {
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
-  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); // State for saving to notebook
+  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
   // --- End Notebook/Bookmark State ---
 
   const typesetMathJax = useCallback(() => {
@@ -155,7 +144,7 @@ export default function TestReviewPage() {
         return;
     }
     fetchReviewData();
-  }, [user, authLoading, router, testCode, userId, attemptTimestampStr, fetchReviewData]); // Removed typesetMathJax from here
+  }, [user, authLoading, router, testCode, userId, attemptTimestampStr, fetchReviewData]);
 
   // Call MathJax typesetting after data loads or index changes
   useEffect(() => {
@@ -170,67 +159,69 @@ export default function TestReviewPage() {
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  // Determine correct option key, handling potential "Option X" prefix or just "X"
-   const correctOptionKey = useMemo(() => {
-     const answer = currentReviewQuestion?.correctAnswer;
-     if (!answer) return undefined;
-     // Handle cases like "A" or "Option A"
-     return typeof answer === 'string' ? answer.replace('Option ', '').trim() : undefined;
-   }, [currentReviewQuestion?.correctAnswer]);
-
-
+  // Determine correct option key
+  const correctOptionKey = useMemo(() => currentReviewQuestion?.correctAnswer?.replace('Option ', '').trim(), [currentReviewQuestion?.correctAnswer]);
   const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
   const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
   const questionStatus = useMemo(() => currentReviewQuestion?.status || QuestionStatusEnum.NotVisited, [currentReviewQuestion]);
 
 
-  // --- Enhanced Rendering Functions ---
+   // Function to render question or explanation content (handles image/text)
+   const renderContent = (context: 'question' | 'explanation') => {
+       if (!currentReviewQuestion) return <p className="text-muted-foreground">Content not available.</p>;
 
-  const renderContent = (contentData: { text?: string | null, imageUrl?: string | null, imageAlt: string, subject?: string | null, lesson?: string | null }) => {
-        const { text, imageUrl, imageAlt, subject, lesson } = contentData;
+       const text = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
+       const imageUrl = constructImagePath(context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl);
+       const altText = context === 'question' ? "Question Image" : "Explanation Image";
 
-        // Determine the correct image path using the helper
-        // imageUrl likely contains only the filename, construct full path
-        const fullImagePath = constructImagePath(subject, lesson, imageUrl);
+       if (imageUrl) { // Prioritize image
+           return (
+               <div className="relative w-full max-w-xl mx-auto my-4 aspect-[4/3]"> {/* Constrained aspect ratio */}
+                  <Image
+                      src={imageUrl}
+                      alt={altText}
+                      layout="fill"
+                      objectFit="contain" // Use contain to ensure full image is visible
+                      className="rounded-md border bg-white dark:bg-gray-800" // Ensure contrast
+                      data-ai-hint={context === 'question' ? 'question diagram' : 'explanation image'}
+                      priority={currentQuestionReviewIndex < 3 && context === 'question'} // Prioritize initial question images
+                      onError={(e) => {
+                          console.error(`Error loading ${context} image: ${imageUrl}`, e);
+                          (e.target as HTMLImageElement).style.display = 'none'; // Hide broken image icon
+                          // Optionally render fallback text here if needed
+                      }}
+                      unoptimized // Good for local/dynamic images
+                   />
+               </div>
+           );
+       } else if (text) { // Fallback to text with MathJax
+           return (
+               <div
+                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+                   dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+               />
+           );
+       }
 
-        if (fullImagePath) { // If a valid image path exists, display the image
-            return (
-                 <div className="relative w-full max-w-xl h-auto mx-auto my-4"> {/* Adjusted size and margin */}
-                    <Image
-                        src={fullImagePath} // Use the verified path
-                        alt={imageAlt}
-                        width={600} // Adjust as needed
-                        height={400} // Adjust as needed
-                        style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain' }} // Responsive styles
-                        className="rounded-md border bg-white" // Add bg-white for better image visibility
-                        data-ai-hint="question diagram" // Keep hint
-                        priority={currentQuestionReviewIndex < 3} // Prioritize initial images
-                        onError={(e) => { console.error(`Error loading image: ${fullImagePath}`, e); }} // Simplified error logging
-                        unoptimized // Keep for local/dynamic images
-                     />
-                 </div>
-            );
-        } else if (text) { // If no image, display text (with MathJax)
-            return (
-                <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content mb-4" // Ensure text color contrasts
-                    dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-                 />
-            );
-        }
-        return <p className="text-sm text-muted-foreground">Content not available.</p>; // Fallback if neither exists
-    };
+       // If neither image nor text is available for the primary question content
+       if (context === 'question') {
+            return <p className="text-sm text-muted-foreground">Question content not available.</p>;
+       }
+
+        // Return null if explanation has neither text nor image (don't render the section)
+       return null;
+   };
 
     const renderOptions = (question: DetailedAnswer | undefined) => {
-        if (!question || !question.options) return null; // No options to render
+        if (!question || !question.options) return null;
 
-        const questionId = question.questionId || `q-${question.questionIndex}`; // Fallback ID
-        const selectedOption = userSelectedOptionKey; // User's selected option for this question
-        const correctOption = correctOptionKey; // Correct option key
+        const questionId = question.questionId || `q-${question.questionIndex}`;
+        const selectedOption = userSelectedOptionKey;
+        const correctOption = correctOptionKey;
 
         return (
              <RadioGroup
-                value={selectedOption ?? undefined} // Display the user's selection
+                value={selectedOption ?? undefined}
                 className="space-y-3 mt-4"
                 disabled={true} // Options are not clickable in review mode
             >
@@ -245,27 +236,26 @@ export default function TestReviewPage() {
                     } else if (isSelected && !isCorrectOption) {
                         optionStyle = OPTION_STYLES.selectedIncorrect;
                     } else if (!isSelected && isCorrectOption) {
-                        optionStyle = OPTION_STYLES.correctButNotSelected; // Highlight correct if unselected
+                        optionStyle = OPTION_STYLES.correctButNotSelected;
                     }
 
-                    // Ensure optionText is a string before processing
                     const displayValue = typeof optionText === 'string' ? optionText : '[Option Text Missing]';
 
                     return (
                          <Label
                             key={optionKey}
-                            htmlFor={`${questionId}-${optionKey}`} // Keep unique ID
+                            htmlFor={`${questionId}-${optionKey}`}
                             className={cn(
-                                "flex items-start space-x-3 p-4 border rounded-lg transition-all cursor-default opacity-90", // Non-interactive style
+                                "flex items-start space-x-3 p-4 border rounded-lg transition-all cursor-default opacity-90",
                                 optionStyle
                             )}
                         >
-                            <span className="font-medium">{optionKey}.</span>
+                            {/* Remove RadioGroupItem as it's not interactive */}
+                            <span className="font-medium mt-0.5">{optionKey}.</span>
                             <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: displayValue.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
-                             {/* Icons for Correct/Incorrect */}
-                             {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
-                             {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
-                             {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />} {/* Indicate correct but unselected */}
+                             {isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 mt-0.5" />}
+                             {isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0 mt-0.5" />}
+                             {!isSelected && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70 mt-0.5" />}
                          </Label>
                     );
                 })}
@@ -273,38 +263,21 @@ export default function TestReviewPage() {
         );
     };
 
-     const renderExplanation = (question: DetailedAnswer | undefined) => {
-        if (!question) return null;
+     const renderExplanation = () => {
+        const explanationContent = renderContent('explanation');
+        if (!explanationContent) return null; // Don't render the card if no content
 
-        const hasText = question.explanationText && question.explanationText.trim().length > 0;
-        // Derive subject/lesson from the test report for image path construction
-        const subject = testReport?.test_subject?.[0]; // Use the subject array if present
-        const lesson = (testReport as ChapterwiseTestJson | null)?.lesson; // Use lesson if present
-        const hasImage = !!question.explanationImageUrl;
-
-        if (!hasText && !hasImage) {
-            return null; // Return null if no explanation content
-        }
-
-        // If there IS explanation content, render the card
          return (
              <Card className="mt-6 bg-muted/30 dark:bg-muted/20 border-border">
                  <CardHeader>
                      <CardTitle className="text-lg">Explanation</CardTitle>
                  </CardHeader>
                  <CardContent>
-                     {renderContent({
-                         text: question.explanationText,
-                         imageUrl: question.explanationImageUrl,
-                         imageAlt: "Explanation Image",
-                         subject: subject, // Pass derived subject
-                         lesson: lesson, // Pass derived lesson
-                     })}
+                    {explanationContent}
                  </CardContent>
              </Card>
          );
     };
-
 
   // --- Notebook/Bookmark Handlers ---
     const handleOpenNotebookModal = () => {
@@ -323,10 +296,8 @@ export default function TestReviewPage() {
      const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
          if (!user?.id || !currentReviewQuestion?.questionId || !testReport) return;
 
-         // Derive subject/lesson from test report
           const subject = testReport.test_subject?.[0] || "Unknown";
-          const lesson = (testReport as ChapterwiseTestJson | null)?.lesson || testReport.testName || "Unknown"; // Use lesson if present
-
+          const lesson = (testReport as ChapterwiseTestJson | null)?.lesson || testReport.testName || "Unknown";
 
          const questionData: BookmarkedQuestion = {
              questionId: currentReviewQuestion.questionId,
@@ -336,7 +307,7 @@ export default function TestReviewPage() {
              tags: tags,
          };
 
-         setIsSavingToNotebook(true); // Set saving state
+         setIsSavingToNotebook(true);
          try {
              const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
              if (result.success) {
@@ -348,7 +319,7 @@ export default function TestReviewPage() {
          } catch (error: any) {
               toast({ variant: "destructive", title: "Save Failed", description: error.message });
          } finally {
-              setIsSavingToNotebook(false); // Reset saving state
+              setIsSavingToNotebook(false);
          }
      }
      // --- End Notebook/Bookmark Handlers ---
@@ -365,7 +336,7 @@ export default function TestReviewPage() {
              <Skeleton className="h-12 w-full mb-2" />
              <Skeleton className="h-12 w-full mb-2" />
            </CardContent>
-            <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
+           <CardFooter className="flex justify-between"><Skeleton className="h-10 w-24" /><Skeleton className="h-10 w-24" /></CardFooter>
          </Card>
        </div>
      );
@@ -378,7 +349,7 @@ export default function TestReviewPage() {
          <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
          <p className="text-muted-foreground mb-6">{error}</p>
          <Button asChild variant="outline">
-           <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
+            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
              Back to Results
            </Link>
          </Button>
@@ -405,12 +376,12 @@ export default function TestReviewPage() {
   return (
     <>
      <Script
-        id="mathjax-script-review" // Unique ID
+        id="mathjax-script-review"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
-            if (!isLoading) typesetMathJax(); // Typeset if data is already loaded
+            if (!isLoading) typesetMathJax();
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -432,23 +403,18 @@ export default function TestReviewPage() {
                 {questionStatus.replace('_', ' ')}
              </Badge>
           </div>
-           {/* Optional: Add question-specific info like marks */}
            <CardDescription className="text-xs text-muted-foreground pt-1">
               Marks: {currentReviewQuestion.marks ?? 1} | ID: {currentReviewQuestion.questionId}
            </CardDescription>
         </CardHeader>
         <CardContent>
-             {renderContent({
-                 text: currentReviewQuestion.questionText,
-                 imageUrl: currentReviewQuestion.questionImageUrl,
-                 imageAlt: "Question Image",
-                 subject: testReport.test_subject?.[0], // Pass subject
-                 lesson: (testReport as ChapterwiseTestJson | null)?.lesson, // Pass lesson
-             })}
+            {/* Render Question Content (Image or Text) */}
+             {renderContent('question')}
              <Separator className="my-5" />
              <h4 className="font-medium mb-3">Options:</h4>
              {renderOptions(currentReviewQuestion)}
-             {renderExplanation(currentReviewQuestion)}
+             {/* Render Explanation (Image or Text) */}
+             {renderExplanation()}
         </CardContent>
         <CardFooter className="flex justify-between items-center flex-wrap gap-2">
            <div className="flex gap-2">
@@ -484,8 +450,8 @@ export default function TestReviewPage() {
                 notebooks={notebooks}
                 onSave={handleSaveToNotebooks}
                 isLoading={isSavingToNotebook}
-                userId={user.id} // Pass userId to dialog for creating new notebooks
-                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])} // Update local state
+                userId={user.id}
+                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])}
             />
         )}
     </>

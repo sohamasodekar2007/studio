@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import ImageViewDialog from './image-view-dialog'; // Import the new dialog
+// import ImageViewDialog from './image-view-dialog'; // Removed import
 
 interface QuestionPreviewCardProps {
   bookmarkedQuestion: BookmarkedQuestion;
@@ -42,8 +42,8 @@ export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove, isRe
   const [questionData, setQuestionData] = useState<QuestionBankItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isImageViewOpen, setIsImageViewOpen] = useState(false);
-  const [imageToView, setImageToView] = useState<string | null>(null);
+  // const [isImageViewOpen, setIsImageViewOpen] = useState(false); // State removed
+  // const [imageToView, setImageToView] = useState<string | null>(null); // State removed
 
 
   useEffect(() => {
@@ -67,12 +67,7 @@ export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove, isRe
     fetchQuestion();
   }, [bookmarkedQuestion]);
 
-  const handleViewImage = (path: string | null) => {
-      if (path) {
-          setImageToView(path);
-          setIsImageViewOpen(true);
-      }
-  }
+  // Removed handleViewImage function
 
   const renderPreviewContent = () => {
     if (isLoading) {
@@ -100,15 +95,11 @@ export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove, isRe
         return (
              <div className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4 text-muted-foreground flex-shrink-0"/>
-                {/* Display only ID for image questions */}
                 <span className="text-sm truncate font-mono text-muted-foreground">({questionData.id})</span>
-                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs ml-auto" onClick={() => handleViewImage(imagePath)}>
-                    <Eye className="h-3.5 w-3.5 mr-1"/> View Image
-                </Button>
+                {/* Removed View Image button - image displayed on review page now */}
             </div>
         );
     } else if (questionData.type === 'text' && questionData.question.text) {
-        // Basic preview, no MathJax rendering here for performance
         return (
             <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0"/>
@@ -170,15 +161,7 @@ export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove, isRe
       </CardContent>
     </Card>
 
-    {/* Image View Dialog */}
-    {imageToView && (
-        <ImageViewDialog
-            isOpen={isImageViewOpen}
-            onClose={() => setIsImageViewOpen(false)}
-            imageUrl={imageToView}
-            altText={`Question Image: ${bookmarkedQuestion.questionId}`}
-        />
-    )}
+    {/* Removed ImageViewDialog */}
     </>
   );
 }
