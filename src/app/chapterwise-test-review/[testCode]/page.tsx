@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import type { TestSession, GeneratedTest, QuestionStatus, TestQuestion, QuestionType } from '@/types';
+import type { TestResultSummary, GeneratedTest, QuestionStatus, TestQuestion, QuestionType } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
@@ -180,8 +180,10 @@ export default function TestReviewPage() {
 
   // Get options from the test definition if available, otherwise use placeholder
   // Assuming the report's detailedAnswers has the options used during the test
-  const currentQuestionDefinition = testDefinition ? (testDefinition.questions || [])[currentQuestionReviewIndex] : null;
-  const optionsToDisplay = currentQuestionDefinition?.options || ["A", "B", "C", "D"]; // Fallback if definition fails
+  // Modified to access options directly from detailedAnswers if definition is missing
+   const currentQuestionDefinition = testDefinition ? (testDefinition.questions || [])[currentQuestionReviewIndex] : null;
+   // Use options from definition first, fallback to detailedAnswers (though this might be less ideal)
+   const optionsToDisplay = currentQuestionDefinition?.options || (allQuestionsFromReport[currentQuestionReviewIndex]?.options as string[] | undefined) || ["A", "B", "C", "D"];
 
 
    // Function to render content, handling both text and image, and applying MathJax transformation
@@ -196,18 +198,22 @@ export default function TestReviewPage() {
        const isImageContent = !!imageUrl;
 
        if (isImageContent && imageUrl) {
-           // No need for encodeURIComponent here as the URL from the report/definition should already be correctly formatted for public access
-           const imagePath = imageUrl;
+           // Ensure the path starts with a slash and is properly URI encoded
+           const imagePath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+           // Avoid double encoding if already encoded
+           const finalImagePath = imagePath.includes('%') ? imagePath : encodeURI(imagePath);
+
            contentToRender = (
                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
                    <Image
-                       src={imagePath} // Use the URL directly
+                       src={finalImagePath} // Use the correctly constructed and encoded path
                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
                        layout="fill"
                        objectFit="contain"
                        className="rounded-md border"
                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add error handling for images
+                       onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add error handling for images
+                       unoptimized // Add this if images are served locally without Next.js optimization
                    />
                     <noscript>
                         <p className="text-center text-muted-foreground text-sm mt-2">[Image: {imageUrl}]</p>
@@ -299,7 +305,7 @@ export default function TestReviewPage() {
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium mt-0.5">{optionKey}.</span>
-                   <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
+                   <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: (optionText || '').replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
                    </div>
                   {isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrect && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}

@@ -7,7 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Script from 'next/script'; // For MathJax
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'; // Import CardFooter
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; // Import DPP progress actions
@@ -197,15 +197,12 @@ export default function DppLessonPage() {
    // Function to render question content (text or image)
    const renderQuestionContent = (q: QuestionBankItem) => {
        if (q.type === 'image' && q.question.image) {
-           // Ensure components are properly encoded for URLs
-           const subjectPath = encodeURIComponent(q.subject);
-           const lessonPath = encodeURIComponent(q.lesson);
-           const imageFilename = encodeURIComponent(q.question.image);
-           const imagePath = `/question_bank_images/${subjectPath}/${lessonPath}/images/${imageFilename}`;
+           // Construct the correct path relative to the public folder
+           const imagePath = `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.question.image)}`;
            return (
                 <div className="relative w-full max-w-lg h-64 mx-auto my-4"> {/* Adjust size as needed */}
                     <Image
-                       src={imagePath}
+                       src={imagePath} // Use the correctly constructed path
                        alt={`Question Image: ${q.id}`}
                        layout="fill"
                        objectFit="contain"
@@ -288,6 +285,7 @@ export default function DppLessonPage() {
     const renderExplanation = (q: QuestionBankItem) => {
         const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
         const hasImage = q.explanation.image && q.explanation.image.trim().length > 0;
+        // Construct the correct path relative to the public folder
         const imagePath = hasImage ? `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.explanation.image!)}` : null;
 
         if (!hasText && !hasImage) return null; // No explanation to show
@@ -304,7 +302,7 @@ export default function DppLessonPage() {
                      {hasImage && imagePath && (
                           <div className="relative w-full max-w-lg h-64 mx-auto mt-4">
                              <Image
-                                 src={imagePath}
+                                 src={imagePath} // Use the correctly constructed path
                                  alt={`Explanation Image`}
                                  layout="fill"
                                  objectFit="contain"
