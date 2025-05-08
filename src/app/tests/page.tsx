@@ -17,10 +17,9 @@ import { exams, pricingTypes } from '@/types'; // Import options
 import { getAllGeneratedTests } from '@/actions/generated-test-actions'; // Import action to get new tests
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/auth-context'; // Import useAuth to get user model
+import StartTestButton from '@/components/test-interface/start-test-button'; // Import the StartTestButton component
 
 // Define default filter options
-// const defaultExams: ExamOption[] = ["MHT-CET", "JEE Main", "JEE Advanced", "NEET"]; // Keep 'exams' from types instead
-// const defaultModels: TestModel[] = ["chapterwise", "full_length", "topicwise", "combo"]; // Obsolete filter
 const defaultPricings: PricingType[] = ["FREE", "PAID", "FREE_PREMIUM"]; // Updated pricing types
 
 export default function TestsPage() {
@@ -87,8 +86,10 @@ export default function TestsPage() {
             case 'FREE':
                 return true; // Everyone sees FREE tests
             case 'FREE_PREMIUM':
-                // Only visible to users with any premium plan (not free)
-                return userModel !== 'free';
+                // Visible to any premium user OR free users
+                // Changed logic: free_premium should be accessible by premium and free
+                return true;
+                // return userModel !== 'free'; // Old logic: Only premium users can access FREE_PREMIUM
             case 'PAID':
                  // Only visible to users with specific premium plans or combo
                  if (userModel === 'combo') return true; // Combo sees all paid
@@ -136,10 +137,29 @@ export default function TestsPage() {
      switch (pricing) {
        case 'FREE': return 'Free';
        case 'PAID': return 'Premium'; // Changed 'Paid' to 'Premium' for consistency
-       case 'FREE_PREMIUM': return 'Free for Premium';
+       case 'FREE_PREMIUM': return 'Free Premium'; // Display "Free Premium" clearly
        default: return pricing;
      }
    };
+
+   const getPricingBadgeVariant = (pricing: PricingType): "default" | "secondary" | "destructive" | "outline" => {
+      switch (pricing) {
+          case 'FREE': return 'default'; // Often green, but use default primary here
+          case 'PAID': return 'destructive'; // Red for premium/paid
+          case 'FREE_PREMIUM': return 'secondary'; // Blue/purple for free_premium
+          default: return 'outline';
+      }
+   }
+
+   const getPricingBadgeClasses = (pricing: PricingType): string => {
+       switch (pricing) {
+           case 'FREE': return 'bg-green-600 text-white border-green-600';
+           case 'PAID': return 'bg-red-600 text-white border-red-600';
+           case 'FREE_PREMIUM': return 'bg-blue-600 text-white border-blue-600'; // Example: Blue for FREE_PREMIUM
+           default: return '';
+       }
+   }
+
 
   const totalLoading = authLoading || isLoadingTests;
 
@@ -249,9 +269,12 @@ export default function TestsPage() {
                             ))}
                         </div>
                         {/* Pricing Badge */}
-                        <Badge variant={item.type === 'FREE' ? 'default' : (item.type === 'PAID' ? 'destructive' : 'secondary')} className={`text-xs flex-shrink-0 ${item.type === 'FREE' ? 'bg-green-600 text-white border-green-600' : item.type === 'PAID' ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'}`}>
-                            <Tag className="h-3 w-3 mr-1"/> {formatPricing(item.type)}
-                        </Badge>
+                         <Badge
+                            variant={getPricingBadgeVariant(item.type)}
+                            className={`text-xs flex-shrink-0 ${getPricingBadgeClasses(item.type)}`}
+                         >
+                           <Tag className="h-3 w-3 mr-1"/> {formatPricing(item.type)}
+                         </Badge>
                     </div>
 
                     <CardTitle className="text-lg mb-1 leading-tight group-hover:text-primary transition-colors">{item.name}</CardTitle>
@@ -268,7 +291,7 @@ export default function TestsPage() {
                            <div className="flex items-center gap-1.5 col-span-2">
                             <CheckSquare className="h-4 w-4 text-primary" />
                             {/* Display audience or stream depending on test type */}
-                            <span>For: {item.testType === 'chapterwise' ? item.audience : item.stream}</span>
+                            <span>For: {item.audience} {item.stream ? `(${item.stream})` : ''}</span>
                            </div>
                     </div>
 
