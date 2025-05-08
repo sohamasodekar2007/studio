@@ -6,26 +6,18 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { TestResultSummary, GeneratedTest, QuestionStatus, TestQuestion } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
+// Removed getGeneratedTestByCode as we rely on the report
 import { getTestReport } from '@/actions/test-report-actions'; // Import action to get specific report
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script'; // Ensure Script is imported
-import ImageViewDialog from '@/components/notebooks/image-view-dialog'; // Import the image view dialog
-
-// Helper function to construct image paths relative to the public directory
-// const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
-//     if (!filename) return null;
-//     // Ensure the path starts correctly and encode components
-//     const basePath = '/question_bank_images'; // Base path within public
-//     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
-// }; // This helper is now less relevant as URLs should be absolute in the report
+import ImageViewDialog from '@/components/notebooks/image-view-dialog';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -39,47 +31,34 @@ const OPTION_STYLES = {
   base: "border-border hover:border-primary dark:border-gray-700 dark:hover:border-primary",
   selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
   selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
-  correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300", // Style for correct option when not selected
-  // For image questions where there's no explicit "selected" state but we want to highlight the correct one
+  correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
   correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
-
 };
 
 
 export default function TestReviewPage() {
+  // --- Hooks called unconditionally at the top ---
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-
-  const testCode = params.testCode as string;
-  const userId = searchParams.get('userId');
-  const attemptTimestampStr = searchParams.get('attemptTimestamp'); // Get timestamp as string
-
-  const [testReport, setTestReport] = useState<TestResultSummary | null>(null); // Store the full report
-  // Removed testDefinition state as we rely solely on the report
-  // const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null);
+  const [testReport, setTestReport] = useState<TestResultSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
   const [isImageViewOpen, setIsImageViewOpen] = useState(false);
   const [imageToView, setImageToView] = useState<{url: string, alt: string} | null>(null);
 
+  const testCode = params.testCode as string;
+  const userId = searchParams.get('userId');
+  const attemptTimestampStr = searchParams.get('attemptTimestamp'); // Get timestamp as string
 
-   const typesetMathJax = useCallback(() => {
+  const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
            console.log("Attempting MathJax typesetting on review page...");
            (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error in review page:", err));
        }
    }, []);
-
-   // Typeset whenever the current question index changes, or when data loads initially
-   useEffect(() => {
-       // Typeset only when testReport data is available
-       if (testReport) {
-           typesetMathJax();
-       }
-   }, [currentQuestionReviewIndex, testReport, typesetMathJax]);
 
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptTimestampStr) {
@@ -97,13 +76,11 @@ export default function TestReviewPage() {
     setIsLoading(true);
     setError(null);
     try {
-        // Fetch only the report data
         const reportData = await getTestReport(userId, testCode, attemptTimestamp);
 
         if (!reportData) {
             throw new Error(`Test attempt data not found for this attempt.`);
         }
-
         setTestReport(reportData);
 
     } catch (err: any) {
@@ -114,6 +91,7 @@ export default function TestReviewPage() {
     }
   }, [testCode, userId, attemptTimestampStr]);
 
+  // --- Effects ---
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -128,14 +106,45 @@ export default function TestReviewPage() {
     fetchReviewData();
   }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchReviewData]);
 
+  useEffect(() => {
+      if (testReport) {
+          typesetMathJax();
+      }
+  }, [currentQuestionReviewIndex, testReport, typesetMathJax]);
 
-    const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
+  // --- Memoized values (called after hooks) ---
+  const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
+  const currentUserAnswerDetailed = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
+  const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
+  const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
+  const correctOptionKey = useMemo(() => currentUserAnswerDetailed?.correctAnswer?.replace('Option ', '').trim(), [currentUserAnswerDetailed]);
+  const userSelectedOptionKey = useMemo(() => currentUserAnswerDetailed?.userAnswer, [currentUserAnswerDetailed]);
+  const isUserCorrect = useMemo(() => userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
+  const questionStatus = useMemo(() => currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited, [currentUserAnswerDetailed]);
 
-  const currentUserAnswerDetailed = allAnswersFromReport?.[currentQuestionReviewIndex];
+  const optionsToDisplay = useMemo(() => {
+    if (!currentUserAnswerDetailed || !currentUserAnswerDetailed.options) {
+      return ['', '', '', ''];
+    }
+    // Ensure options array has 4 elements, padding with empty strings if necessary
+    const opts = currentUserAnswerDetailed.options;
+    return Array.from({ length: 4 }, (_, i) => opts[i] ?? '');
+  }, [currentUserAnswerDetailed]);
 
+
+  // --- Event Handlers ---
+  const handleViewImage = (url: string | null, alt: string) => {
+      if (url) {
+          setImageToView({ url, alt });
+          setIsImageViewOpen(true);
+      }
+  }
+
+   // --- Conditional Rendering (Moved after all hooks) ---
   if (isLoading || authLoading) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl">
+        {/* Skeleton remains the same */}
         <Skeleton className="h-10 w-3/4 mb-4" />
         <Skeleton className="h-8 w-1/2 mb-8" />
         <Card>
@@ -148,6 +157,11 @@ export default function TestReviewPage() {
         </Card>
       </div>
     );
+  }
+
+  if (!authLoading && !user) {
+     // Handled by useEffect redirect, showing skeleton or nothing while redirecting
+     return null;
   }
 
   if (error) {
@@ -163,60 +177,59 @@ export default function TestReviewPage() {
     );
   }
 
-  // Check if report and the specific answer detail exist
-  if (!testReport || !currentUserAnswerDetailed) {
+  if (!testReport) {
+      return (
+        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
+            <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Report Data Not Found</h1>
+            <p className="text-muted-foreground mb-6">Could not load the test report data for this attempt.</p>
+            <Button asChild variant="outline">
+                <Link href="/progress">Back to Progress</Link>
+            </Button>
+        </div>
+      );
+  }
+
+  if (!currentUserAnswerDetailed) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
-        <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Review Data Not Available</h1>
-        <p className="text-muted-foreground mb-6">We could not load the necessary data for this test review.</p>
-         <Button asChild>
-          <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>Back to Results</Link>
-        </Button>
+        <AlertTriangle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Question Data Error</h1>
+        <p className="text-muted-foreground mb-6">Could not load the details for this specific question ({currentQuestionReviewIndex + 1}).</p>
+        <Button onClick={() => setCurrentQuestionReviewIndex(0)} variant="outline">Go to First Question</Button>
       </div>
     );
   }
 
-  const totalQuestions = allAnswersFromReport.length || 0;
-  const optionKeys = ["A", "B", "C", "D"];
-  // Handle cases where answer might not start with "Option "
-   const correctOptionKey = currentUserAnswerDetailed.correctAnswer?.replace('Option ', '').trim();
-  const userSelectedOptionKey = currentUserAnswerDetailed?.userAnswer;
-  const isUserCorrect = userSelectedOptionKey === correctOptionKey;
-  const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
-
-   // Function to render content, handling both text and image, and applying MathJax transformation
-   const renderContentWithMathJax = (
+  // --- Render Content Functions (Now safe to call hooks within) ---
+  const renderContentWithMathJax = (
        textContent: string | undefined | null,
        imageUrl: string | undefined | null, // This is the absolute public URL from the report
        context: 'question' | 'explanation'
    ) => {
        let contentToRender: React.ReactNode = null;
-
-       // Use the image URL directly if available and seems like a valid URL path
        const finalImagePath = imageUrl && imageUrl.startsWith('/') ? imageUrl : null;
 
        if (finalImagePath) {
            contentToRender = (
                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4 cursor-pointer" onClick={() => handleViewImage(finalImagePath, `${context} Image`)}>
                    <Image
-                       src={finalImagePath} // Use the URL from the report
+                       src={finalImagePath}
                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
                        layout="fill"
                        objectFit="contain"
                        className="rounded-md border"
                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
                        onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
-                       unoptimized // Keep if local images might cause issues
+                       unoptimized
                    />
                 </div>
             );
        } else if (textContent) {
-           // Render using dangerouslySetInnerHTML for MathJax to process
            contentToRender = (
                <div
-                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" // Added class for targeting
-                   dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} // Replace delimiters
+                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+                   dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                 />
            );
        } else {
@@ -226,30 +239,15 @@ export default function TestReviewPage() {
        return contentToRender;
    };
 
-  const handleViewImage = (url: string | null, alt: string) => {
-      if (url) {
-          setImageToView({ url, alt });
-          setIsImageViewOpen(true);
-      }
-  }
-
- const optionsToDisplay = useMemo(() => {
-    if (!currentUserAnswerDetailed || !currentUserAnswerDetailed.options) {
-      return ['', '', '', '']; // Return an empty array if options are not available.
-    }
-    return currentUserAnswerDetailed.options;
-  }, [currentUserAnswerDetailed]);
-
+  // --- Main Render ---
   return (
     <>
-     {/* MathJax Script */}
      <Script
         id="mathjax-script-review" // Unique ID
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
-            // Initial typeset after script loads and component mounts
             typesetMathJax();
         }}
       />
@@ -261,7 +259,6 @@ export default function TestReviewPage() {
             </Link>
         </Button>
          <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">{testReport.testName || 'Test Review'}</h1>
-         {/* Placeholder for potential navigation buttons or info */}
          <div className="w-24"></div>
       </div>
 
@@ -269,10 +266,9 @@ export default function TestReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-             {/* Use total marks from report */}
-             <Badge variant="outline">Marks: {currentUserAnswerDetailed?.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
+             <Badge variant="outline">Marks: {currentUserAnswerDetailed.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
           </div>
-           {currentUserAnswerDetailed?.status && (
+           {currentUserAnswerDetailed.status && (
                 <Badge
                     variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
                     className={cn("text-xs w-fit mt-2", {
@@ -290,7 +286,7 @@ export default function TestReviewPage() {
         <CardContent className="space-y-4">
             {/* Render Question */}
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContentWithMathJax(currentUserAnswerDetailed?.questionText, currentUserAnswerDetailed?.questionImageUrl, 'question')}
+                 {renderContentWithMathJax(currentUserAnswerDetailed.questionText, currentUserAnswerDetailed.questionImageUrl, 'question')}
             </div>
 
           {/* Render Options */}
