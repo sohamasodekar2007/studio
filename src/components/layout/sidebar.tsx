@@ -12,6 +12,7 @@ import {
   SidebarGroup,
   SidebarSeparator,
   SidebarGroupLabel,
+  useSidebar, // Import useSidebar hook
 } from '@/components/ui/sidebar';
 import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon, BarChartHorizontal, FileClock, Target, Info, BookUser } from 'lucide-react'; // Added BookUser
 import Link from 'next/link';
@@ -20,11 +21,12 @@ import { useAuth } from '@/context/auth-context'; // Import useAuth
 import ThemeToggle from '@/components/theme-toggle';
 import Image from 'next/image'; // Import Image
 import TutorialGuide from './tutorial-guide'; // Import the new guide component
-import { useState } from 'react'; // Import useState
+import { useState, useEffect, useCallback } from 'react'; // Import useState, useEffect, useCallback
 import type { Step } from 'react-joyride';
-import { CallBackProps, STATUS } from 'react-joyride';
+import { CallBackProps, STATUS, ACTIONS, EVENTS } from 'react-joyride';
 
 // Define Tutorial Steps Configuration
+// Ensure IDs match the elements in the JSX below
 const tutorialSteps: Step[] = [
   {
     target: '#tutorial-target-dashboard',
@@ -112,6 +114,7 @@ export function AppSidebar() {
   const { user } = useAuth();
   const [runTutorial, setRunTutorial] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const { setOpen: setSidebarOpen, state: sidebarState } = useSidebar(); // Get sidebar control and state
 
 
   const isAdmin = user?.role === 'Admin'; // Check user role
@@ -136,33 +139,69 @@ export function AppSidebar() {
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
+    // Improved handling for parent routes
     if (['/tests', '/admin', '/dpp'].includes(href)) {
-      return pathname.startsWith(href);
+        // Check if pathname is exactly the href or starts with href followed by '/'
+        return pathname === href || pathname.startsWith(href + '/');
     }
-    if (href.startsWith('/tests/') && pathname.startsWith('/tests/')) return true;
-    if (href.startsWith('/dpp/') && pathname.startsWith('/dpp/')) return true;
-    if (href.startsWith('/friend-history/') && pathname.startsWith('/friend-history/')) return true;
+    // Specific check for dynamic routes under /tests or /dpp if needed, though startsWith might cover it
+    // Example: if (href === '/tests' && pathname.startsWith('/tests/')) return true;
 
     return false;
   };
 
-   const handleJoyrideCallback = (data: CallBackProps) => {
-    const { status, index, type } = data;
+  // Centralized callback handler in the parent component
+  const handleJoyrideCallback = useCallback((data: CallBackProps) => {
+    const { status, index, type, step, action } = data;
+    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
 
-    if (([STATUS.FINISHED, STATUS.SKIPPED] as string[]).includes(status)) {
-      // Reset state when the tour finishes or is skipped
+    // console.log("Joyride Callback:", data); // Debugging
+
+    if (finishedStatuses.includes(status)) {
       setRunTutorial(false);
       setStepIndex(0);
-    } else if (type === 'step:after' || type === 'error:target_not_found') {
-      // Update step index
-      setStepIndex(index + (status === STATUS.ERROR ? 0 : 1)); // Handle potential error state properly
+      // Optionally ensure sidebar returns to default state if modified
+      // setSidebarOpen(true); // Or based on your default preference
+    } else if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
+       // Ensure sidebar is open if the *next* step's target is likely inside the sidebar
+       // This is a heuristic, might need refinement based on your exact targets
+       const nextStepIndex = index + (action === ACTIONS.PREV ? -1 : 1);
+       const nextStep = tutorialSteps[nextStepIndex];
+       if (nextStep && typeof nextStep.target === 'string' && nextStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
+           console.log("Opening sidebar for next step target:", nextStep.target);
+           setSidebarOpen(true);
+           // Delay setting the step index slightly to allow sidebar animation
+           setTimeout(() => {
+               setStepIndex(nextStepIndex);
+           }, 300);
+       } else {
+           // Set the step index for the next step
+           setStepIndex(index + (action === ACTIONS.PREV ? -1 : 1));
+       }
+    } else if (type === EVENTS.TOUR_START) {
+        // Ensure sidebar is open when the tour starts if the first target needs it
+        const firstStep = tutorialSteps[0];
+         if (firstStep && typeof firstStep.target === 'string' && firstStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
+            setSidebarOpen(true);
+        }
     }
-  };
+  }, [setSidebarOpen, sidebarState]);
 
-  const startTutorial = () => {
-    setStepIndex(0);
-    setRunTutorial(true);
-  };
+
+  const startTutorial = useCallback(() => {
+    // Ensure sidebar is open before starting if the first step targets it
+    if (tutorialSteps[0]?.target && typeof tutorialSteps[0].target === 'string' && tutorialSteps[0].target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
+       setSidebarOpen(true);
+       // Delay starting the tutorial slightly to ensure sidebar is open
+       setTimeout(() => {
+          setStepIndex(0);
+          setRunTutorial(true);
+       }, 350); // Adjust delay as needed
+    } else {
+       setStepIndex(0);
+       setRunTutorial(true);
+    }
+  }, [setSidebarOpen, sidebarState]);
 
   return (
     <>
@@ -194,9 +233,11 @@ export function AppSidebar() {
 
         <SidebarContent className="flex-1 mt-2">
           <SidebarMenu>
+            {/* Main Navigation */}
             <SidebarGroup>
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Main Navigation</SidebarGroupLabel>
               <SidebarMenuItem>
+                {/* Ensure the Link has passHref and legacyBehavior for compatibility with SidebarMenuButton as 'a' */}
                 <Link href="/" passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive('/')} tooltip="Dashboard" id="tutorial-target-dashboard">
                     <Home />
@@ -303,6 +344,7 @@ export function AppSidebar() {
 
             <SidebarSeparator className="my-3" />
 
+            {/* AI Tools Section */}
             <SidebarGroup id="tutorial-target-ai-tools-group">
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">AI Tools</SidebarGroupLabel>
               <SidebarMenuItem>
@@ -323,6 +365,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
             </SidebarGroup>
 
+            {/* Admin Panel Link (Conditional) */}
             {isAdmin && (
               <>
                 <SidebarSeparator className="my-3" />
@@ -343,13 +386,15 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="mt-auto flex flex-col items-center gap-2 group-data-[state=collapsed]:gap-0">
+          {/* Theme Toggle */}
           <div className="w-full flex justify-center group-data-[state=collapsed]:my-2" id="tutorial-target-theme-toggle">
             <ThemeToggle />
           </div>
           <SidebarSeparator className="my-1 group-data-[state=collapsed]:hidden"/>
+          {/* Other Footer Items */}
           <SidebarMenu>
-            <SidebarMenuItem>
-                {/* Removed TutorialModal trigger */}
+             <SidebarMenuItem>
+                {/* Tutorial Button */}
                 <SidebarMenuButton onClick={startTutorial} tooltip="Start Tutorial" id="tutorial-target-start-tutorial">
                     <BookUser />
                     <span className="group-data-[state=collapsed]:hidden">Tutorial</span>
@@ -374,7 +419,8 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      {/* Render the TutorialGuide component */}
+
+      {/* Tutorial Guide Component */}
       <TutorialGuide
         run={runTutorial}
         steps={tutorialSteps}
