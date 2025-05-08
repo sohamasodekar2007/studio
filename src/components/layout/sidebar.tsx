@@ -13,7 +13,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon } from 'lucide-react'; // Added Notebook, Trophy, UserPlus, Users, UserCheckIcon
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon, BarChartHorizontal } from 'lucide-react'; // Added BarChartHorizontal
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context'; // Import useAuth
@@ -28,7 +28,7 @@ export function AppSidebar() {
 
   const isActive = (href: string) => {
     // Exact match for most top-level pages
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard', '/find-friends', '/friends-followers', '/friends-following'].includes(href)) { // Added new friend pages
+    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks', '/leaderboard', '/find-friends', '/friends-followers', '/friends-following', '/friends-compare'].includes(href)) { // Added /friends-compare
       return pathname === href;
     }
     // Starts with for tests, admin, and dpp as they have sub-routes
@@ -39,7 +39,7 @@ export function AppSidebar() {
     if (href.startsWith('/tests/') && pathname.startsWith('/tests/')) return true;
     if (href.startsWith('/dpp/') && pathname.startsWith('/dpp/')) return true;
     if (href.startsWith('/friend-history/') && pathname.startsWith('/friend-history/')) return true;
-    if (href.startsWith('/friends-compare/') && pathname.startsWith('/friends-compare/')) return true;
+    // Removed /friends-compare/ check here as it's handled by exact match
 
 
     return false;
@@ -152,6 +152,14 @@ export function AppSidebar() {
                         <SidebarMenuButton as="a" isActive={isActive('/friends-followers')} tooltip="Followers">
                             <Users />
                             <span className="group-data-[state=collapsed]:hidden">Followers</span>
+                        </SidebarMenuButton>
+                    </Link>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                    <Link href="/friends-compare" passHref legacyBehavior>
+                        <SidebarMenuButton as="a" isActive={isActive('/friends-compare')} tooltip="Compare">
+                            <BarChartHorizontal />
+                            <span className="group-data-[state=collapsed]:hidden">Compare Performance</span>
                         </SidebarMenuButton>
                     </Link>
                 </SidebarMenuItem>
