@@ -16,7 +16,8 @@ import { MoreHorizontal, Search, Edit, Trash2, FileText, Image as ImageIcon, Loa
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
-import { examOptions, classLevels } from '@/types';
+// Replace examOptions with exams
+import { exams, classLevels } from '@/types';
 import { Badge } from "@/components/ui/badge";
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
 import EditQuestionDialog from '@/components/admin/edit-question-dialog';
@@ -32,6 +33,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import Script from 'next/script'; // For MathJax
+import Image from 'next/image'; // Import Image
+
+// Helper function to construct image paths relative to the public directory
+const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
+    if (!filename) return null;
+    const basePath = '/question_bank_images'; // Base path within public
+    return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
+};
 
 
 export default function EditQuestionsPage() {
@@ -178,15 +187,19 @@ export default function EditQuestionsPage() {
    };
 
     const renderQuestionPreview = (q: QuestionBankItem) => {
-        if (q.type === 'image' && q.question.image) {
-            // Images are in public/question_bank_images/{subject}/{lesson}/images/{filename}
-            const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/images/${q.question.image}`;
+        const imagePath = constructImagePath(q.subject, q.lesson, q.question.image);
+        if (q.type === 'image' && imagePath) {
             return (
                 <span className="flex items-center gap-1 text-blue-600 hover:underline" title={`View Image: ${q.question.image}`}>
                     <ImageIcon className="h-4 w-4"/>
+                    {/* Display only ID for image questions */}
+                    <span className="font-mono text-xs">({q.id})</span>
+                    {/* Keep the link for debugging, but don't rely on it for primary view */}
+                     {/*
                     <a href={imagePath} target="_blank" rel="noopener noreferrer">
-                        [Image: {q.question.image.substring(0, 20)}...]
+                       [Image: {q.question.image?.substring(0, 20)}...]
                     </a>
+                    */}
                 </span>
             );
         }
@@ -206,6 +219,7 @@ export default function EditQuestionsPage() {
     <>
     {/* MathJax Script */}
      <Script
+        id="mathjax-script-edit-questions" // Unique ID
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
@@ -291,7 +305,8 @@ export default function EditQuestionsPage() {
                     </SelectTrigger>
                     <SelectContent>
                          <SelectItem value="all">All Exam Types</SelectItem>
-                        {examOptions.map(exam => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}
+                         {/* Use exams instead of examOptions */}
+                        {exams.map(exam => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}
                     </SelectContent>
                 </Select>
              </div>
