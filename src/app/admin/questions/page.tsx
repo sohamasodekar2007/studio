@@ -456,7 +456,7 @@ export default function AdminQuestionBankPage() {
                                     <CommandInput
                                         placeholder="Search or type new lesson..."
                                         value={field.value}
-                                        onValueChange={field.onChange}
+                                        onValueChange={field.onChange} // Update form value on input change
                                         disabled={isLoadingLessons || !selectedSubject}
                                     />
                                     <CommandList>
@@ -616,7 +616,7 @@ export default function AdminQuestionBankPage() {
                          <FormField control={form.control} name="optionD" render={({ field }) => ( <FormItem><FormLabel>Option D *</FormLabel><FormControl><Input {...field} placeholder="Option D Text" disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
                       </div>
                     </>
-                 ) : (
+                 ) : ( // Image Question
                     <FormField
                         control={form.control}
                         name="questionImage"
@@ -644,7 +644,7 @@ export default function AdminQuestionBankPage() {
                                     </div>
                                     {questionImagePreview && (
                                         <div className="relative h-40 w-auto border rounded-md overflow-hidden group">
-                                             <Image src={questionImagePreview} alt="Question Preview" height={160} width={300} style={{ objectFit: 'contain' }} data-ai-hint="question image"/>
+                                             <Image src={questionImagePreview} alt="Question Preview" height={160} width={300} style={{ objectFit: 'contain' }} data-ai-hint="question diagram"/>
                                              <Button
                                                  type="button"
                                                  variant="destructive"

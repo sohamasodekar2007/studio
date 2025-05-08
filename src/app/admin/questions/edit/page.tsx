@@ -41,7 +41,7 @@ const constructImagePath = (subject: string, lesson: string, filename: string | 
 
 export default function EditQuestionsPage() {
   const { toast } = useToast();
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]); // State for all available subjects
   const [lessons, setLessons] = useState<string[]>([]);
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -50,8 +50,8 @@ export default function EditQuestionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<QuestionBankItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
-  const [selectedLesson, setSelectedLesson] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>(''); // Tracks the SUBJECT filter selection
+  const [selectedLesson, setSelectedLesson] = useState<string>(''); // Tracks the LESSON filter selection
   const [selectedClass, setSelectedClass] = useState<ClassLevel | 'all'>('all');
   const [selectedExam, setSelectedExam] = useState<ExamOption | 'all'>('all');
   // const [useBothFilters, setUseBothFilters] = useState(false); // Kept for potential future use
@@ -68,10 +68,11 @@ export default function EditQuestionsPage() {
   }, [questions, typesetMathJax]); // Rerun when questions data changes
 
 
+   // Fetch ALL Subjects on mount
    const fetchSubjects = useCallback(async () => {
         setIsLoadingSubjects(true);
         try {
-            const fetchedSubjects = await getSubjects();
+            const fetchedSubjects = await getSubjects(); // Fetch all subjects
             setSubjects(fetchedSubjects);
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not load subjects." });
@@ -85,34 +86,36 @@ export default function EditQuestionsPage() {
         fetchSubjects();
     }, [fetchSubjects]);
 
+   // Fetch Lessons ONLY when a subject is selected in the filter
    const fetchLessons = useCallback(async () => {
-       if (selectedSubject) {
+       if (selectedSubject) { // Check if a subject filter is active
          setIsLoadingLessons(true);
-         setLessons([]);
-         setQuestions([]);
+         setLessons([]); // Clear previous lessons
+         setQuestions([]); // Clear questions when subject filter changes
          try {
            const fetchedLessons = await getLessonsForSubject(selectedSubject);
            setLessons(fetchedLessons);
-           setSelectedLesson('');
+           setSelectedLesson(''); // Reset lesson filter selection
          } catch (err) {
            toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` });
            setLessons([]);
          } finally {
            setIsLoadingLessons(false);
          }
-       } else {
+       } else { // No subject filter selected, clear lessons and questions
          setLessons([]);
          setSelectedLesson('');
          setQuestions([]);
        }
-   }, [selectedSubject, toast]);
+   }, [selectedSubject, toast]); // Re-run when selectedSubject filter changes
 
    useEffect(() => {
        fetchLessons();
    }, [fetchLessons]);
 
+   // Fetch Questions when BOTH subject and lesson filters are selected
    const fetchQuestions = useCallback(async () => {
-      if (selectedSubject && selectedLesson) {
+      if (selectedSubject && selectedLesson) { // Fetch only if both are selected
            setIsLoadingQuestions(true);
            setQuestions([]);
            const filters = {
@@ -132,16 +135,17 @@ export default function EditQuestionsPage() {
                 setIsLoadingQuestions(false);
            }
        } else {
-           setQuestions([]);
+           setQuestions([]); // Clear questions if subject or lesson filter is missing
        }
    }, [selectedSubject, selectedLesson, selectedClass, selectedExam, toast]);
 
    useEffect(() => {
+       // No need to trigger fetch if subject/lesson aren't both set
        if (selectedSubject && selectedLesson) {
            fetchQuestions();
        } else {
-           setQuestions([]);
-           setIsLoadingQuestions(false);
+           setQuestions([]); // Clear questions if filters incomplete
+           setIsLoadingQuestions(false); // Ensure loading stops
        }
    }, [selectedSubject, selectedLesson, selectedClass, selectedExam, fetchQuestions]);
 
@@ -173,7 +177,7 @@ export default function EditQuestionsPage() {
          const result = await deleteQuestion({ questionId: id, subject, lesson });
          if (result.success) {
            toast({ title: "Question Deleted", description: `${id} has been removed.` });
-           await fetchQuestions(); // Re-fetch questions
+           await fetchQuestions(); // Re-fetch questions for the current filter
          } else {
            throw new Error(result.message || 'Failed to delete question.');
          }
@@ -230,11 +234,12 @@ export default function EditQuestionsPage() {
              <CardTitle>Filter Questions</CardTitle>
          </CardHeader>
          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Subject Filter Dropdown - Now populates with all subjects */}
             <div className="space-y-1.5">
              <Label htmlFor="subject-filter">Subject *</Label>
              <Select
                value={selectedSubject}
-               onValueChange={setSelectedSubject}
+               onValueChange={setSelectedSubject} // Update subject filter state
                disabled={isLoadingSubjects}
              >
                <SelectTrigger id="subject-filter">
@@ -248,11 +253,12 @@ export default function EditQuestionsPage() {
              </Select>
             </div>
 
+            {/* Lesson Filter Dropdown - Populates based on selectedSubject */}
             <div className="space-y-1.5">
                 <Label htmlFor="lesson-filter">Lesson *</Label>
                 <Select
                     value={selectedLesson}
-                    onValueChange={setSelectedLesson}
+                    onValueChange={setSelectedLesson} // Update lesson filter state
                     disabled={isLoadingLessons || !selectedSubject || subjects.length === 0}
                 >
                     <SelectTrigger id="lesson-filter">
@@ -266,6 +272,7 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
+            {/* Class Filter Dropdown */}
             <div className="space-y-1.5">
                 <Label htmlFor="class-filter">Class</Label>
                 <Select
@@ -283,6 +290,7 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
+             {/* Exam Filter Dropdown */}
              <div className="space-y-1.5">
                 <Label htmlFor="exam-filter">Exam Type</Label>
                 <Select
