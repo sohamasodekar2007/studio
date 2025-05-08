@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react'; // Added useCallback
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +30,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+// Define the allowed admin email pattern and primary admin email
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
+const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+
+// Helper function to determine role based on email
+const getUserRole = (email: string | null): 'Admin' | 'User' => {
+    if (!email) return 'User';
+    return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
+};
+
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  // Ensure UserProfile type includes the optional role for display
+  const [users, setUsers] = useState<Array<UserProfile & { role?: 'Admin' | 'User' }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleting, setIsDeleting] = useState(false); // State for delete confirmation
@@ -41,20 +52,21 @@ export default function AdminUsersPage() {
   // State for managing dialogs
   const [dialogState, setDialogState] = useState<{
     type: 'edit' | 'reset' | 'role' | 'add' | null; // Added 'add'
-    user: UserProfile | null;
+    user: (UserProfile & { role?: 'Admin' | 'User' }) | null; // Use combined type
   }>({ type: null, user: null });
 
-  const fetchAllUsers = () => {
+
+  // Updated fetchAllUsers to assign role correctly
+  const fetchAllUsers = useCallback(() => {
      setIsLoading(true);
-     readUsers()
+     readUsers() // Fetches users without passwords
       .then(data => {
-        // Assign a default role for display if missing (adjust based on actual logic)
+        // Assign role based on email pattern
         const usersWithRoles = data.map(u => ({
             ...u,
-            // Example: Assign 'Admin' role based on email, 'User' otherwise
-            role: u.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User'
+            role: getUserRole(u.email), // Use the helper function
         }));
-        setUsers(usersWithRoles as UserProfile[]); // Cast back if needed, or update UserProfile type
+        setUsers(usersWithRoles);
       })
       .catch(error => {
         console.error("Failed to fetch users:", error);
@@ -64,12 +76,12 @@ export default function AdminUsersPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }
+  }, [toast]);
+
 
   useEffect(() => {
     fetchAllUsers();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only fetch on initial mount
+  }, [fetchAllUsers]); // Depend on the memoized fetch function
 
   const filteredUsers = useMemo(() => {
     return users.filter(user =>
@@ -77,7 +89,7 @@ export default function AdminUsersPage() {
         (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || // Search by model
-        ((user as any).role?.toLowerCase() || '').includes(searchTerm.toLowerCase()) // Search by role (adjust type if needed)
+        (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase()) // Search by assigned role
     );
   }, [users, searchTerm]);
 
@@ -105,7 +117,7 @@ export default function AdminUsersPage() {
        setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
 
        try {
-           const result = await deleteUserFromJson(userId);
+           const result = await deleteUserFromJson(userId.toString()); // Ensure userId is string
            if (!result.success) {
                setUsers(originalUsers); // Revert
                toast({ variant: "destructive", title: "Delete Failed", description: result.message });
@@ -113,7 +125,7 @@ export default function AdminUsersPage() {
                toast({ title: "User Deleted", description: "User has been successfully removed." });
                // No need to re-fetch, optimistic update succeeded
            }
-       } catch (error) {
+       } catch (error: any) {
            console.error("Failed to delete user:", error);
            setUsers(originalUsers); // Revert
            toast({ variant: "destructive", title: "Error", description: "Could not delete user." });
@@ -123,33 +135,31 @@ export default function AdminUsersPage() {
    };
 
    // Function to handle updates from Edit/Role dialogs
-   const handleUserUpdate = (updatedUser: UserProfile) => {
-     // Re-assign role based on email after potential update (e.g., if email could be changed in Edit, though it's currently disabled)
-     const role = updatedUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
-     setUsers(prevUsers =>
-       // Map through existing users, find the one with the matching ID, and replace it with the updated user profile
-       // Ensure the role is also updated based on the potentially updated email or other logic.
-       prevUsers.map(u => (u.id === updatedUser.id ? { ...updatedUser, role } : u))
-     );
-     closeDialog(); // Close the currently open dialog
-   };
+    const handleUserUpdate = (updatedUser: Omit<UserProfile, 'password'>) => {
+        // Re-assign role based on email after potential update
+        const role = getUserRole(updatedUser.email);
+        setUsers(prevUsers =>
+            prevUsers.map(u => (u.id === updatedUser.id ? { ...updatedUser, role } : u))
+        );
+        closeDialog(); // Close the currently open dialog
+    };
 
 
    // Function to handle adding a user from Add dialog
-   const handleUserAdded = (newUser: UserProfile) => {
+    const handleUserAdded = (newUser: Omit<UserProfile, 'password'>) => { // Receive user without password
        // Add role info for display
-       const role = newUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL ? 'Admin' : 'User';
+       const role = getUserRole(newUser.email);
        const userWithRole = { ...newUser, role };
        setUsers(prevUsers => [userWithRole, ...prevUsers]); // Add new user to the beginning of the list
        closeDialog();
    }
 
    // Dialog handlers
-   const openEditDialog = (user: UserProfile) => setDialogState({ type: 'edit', user });
-   const openResetDialog = (user: UserProfile) => setDialogState({ type: 'reset', user });
-   const openRoleDialog = (user: UserProfile) => setDialogState({ type: 'role', user });
-   const openAddDialog = () => setDialogState({ type: 'add', user: null }); // Open Add dialog
-   const closeDialog = () => setDialogState({ type: null, user: null });
+    const openEditDialog = (user: UserProfile & { role?: 'Admin' | 'User' }) => setDialogState({ type: 'edit', user });
+    const openResetDialog = (user: UserProfile & { role?: 'Admin' | 'User' }) => setDialogState({ type: 'reset', user });
+    const openRoleDialog = (user: UserProfile & { role?: 'Admin' | 'User' }) => setDialogState({ type: 'role', user });
+    const openAddDialog = () => setDialogState({ type: 'add', user: null }); // Open Add dialog
+    const closeDialog = () => setDialogState({ type: null, user: null });
 
 
   return (
@@ -207,10 +217,10 @@ export default function AdminUsersPage() {
                 ))
               ) : filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => {
-                 const isCurrentUserAdmin = (user as any).role === 'Admin';
+                 const isCurrentUserPrimaryAdmin = user.email === primaryAdminEmail;
                   return (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
+                    <TableCell className="font-medium">{user.name || 'N/A'} {isCurrentUserPrimaryAdmin ? '(Primary)' : ''}</TableCell>
                     <TableCell>{user.email || 'N/A'}</TableCell>
                     <TableCell>
                       {user.phone ? (
@@ -223,8 +233,8 @@ export default function AdminUsersPage() {
                       )}
                     </TableCell>
                      <TableCell>
-                       <Badge variant={isCurrentUserAdmin ? 'destructive' : 'secondary'}>
-                         {(user as any).role || 'User'}
+                       <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
+                         {user.role || 'User'}
                        </Badge>
                      </TableCell>
                       <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
@@ -234,7 +244,7 @@ export default function AdminUsersPage() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           {/* Disable actions for the primary admin user */}
-                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
+                          <Button aria-haspopup="true" size="icon" variant="ghost" disabled={isCurrentUserPrimaryAdmin}>
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Toggle menu</span>
                           </Button>
@@ -242,14 +252,14 @@ export default function AdminUsersPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>User Actions</DropdownMenuLabel>
                            {/* Enable buttons and add onClick handlers */}
-                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
+                          <DropdownMenuItem onClick={() => openEditDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
                              <Edit className="mr-2 h-4 w-4" /> Edit User
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
+                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                            </DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL}>
-                             <UserCheck className="mr-2 h-4 w-4" /> Change Role/Plan
+                           <DropdownMenuItem onClick={() => openRoleDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
+                             <UserCheck className="mr-2 h-4 w-4" /> Change Plan/Role
                            </DropdownMenuItem>
                           <DropdownMenuSeparator />
                            {/* Delete Confirmation Dialog Trigger */}
@@ -258,7 +268,7 @@ export default function AdminUsersPage() {
                                 <Button
                                   variant="ghost"
                                   className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
-                                  disabled={user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL || isDeleting} // Disable if admin or already deleting
+                                  disabled={isCurrentUserPrimaryAdmin || isDeleting} // Disable if primary admin or already deleting
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" /> Delete User
                                 </Button>
@@ -339,4 +349,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

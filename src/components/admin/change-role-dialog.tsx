@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -12,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar"; // Import Calendar
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Import Popover
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2, ShieldCheck } from "lucide-react"; // Added ShieldCheck
+import { CalendarIcon, Loader2, ShieldCheck, Trash2, UserMinus } from "lucide-react"; // Added UserMinus
 import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, type UserModel } from '@/types';
 import { updateUserInJson } from '@/actions/user-actions';
+import { Badge } from '@/components/ui/badge'; // Import Badge
 
 // Schema for changing user model and expiry date
 const changePlanSchema = z.object({
@@ -29,25 +31,34 @@ const changePlanSchema = z.object({
 
 type ChangePlanFormValues = z.infer<typeof changePlanSchema>;
 
+// Define the allowed admin email pattern and primary admin email
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
+const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+
+// Helper function to determine role based on email
+const getUserRole = (email: string | null): 'Admin' | 'User' => {
+    if (!email) return 'User';
+    return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
+};
+
 interface ChangeRoleDialogProps {
-  user: UserProfile; // This contains the role derived from email
+  user: UserProfile & { role?: 'Admin' | 'User' }; // Expect role from parent
   isOpen: boolean;
   onClose: () => void;
-  onUserUpdate: (updatedUser: UserProfile) => void; // Callback to update user list
+  onUserUpdate: (updatedUser: Omit<UserProfile, 'password'>) => void; // Callback to update user list
 }
 
 export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }: ChangeRoleDialogProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Determine if the user IS an admin based on the role passed from the parent
-  const isCurrentAdmin = user.role === 'Admin';
-  const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+  // Role is determined by email, not a separate field to change
+  const isCurrentAdmin = getUserRole(user.email) === 'Admin';
 
   const form = useForm<ChangePlanFormValues>({
     resolver: zodResolver(changePlanSchema),
     defaultValues: {
-      // If the user is currently an admin, default to 'combo' and long expiry, otherwise use their actual data
+      // Admins always have 'combo' and long expiry, cannot be changed via this form
       model: isCurrentAdmin ? 'combo' : (user.model || 'free'),
       expiry_date: isCurrentAdmin ? new Date('2099-12-31T00:00:00.000Z') : (user.expiry_date ? new Date(user.expiry_date) : null),
     },
@@ -59,11 +70,12 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
   const handlePlanUpdateSubmit = async (data: ChangePlanFormValues) => {
     setIsLoading(true);
 
+    // Prevent changing plan for ANY admin account via this form
     if (isCurrentAdmin) {
         toast({
             variant: 'destructive',
             title: 'Update Denied',
-            description: `Cannot change plan for an admin account (${user.email}). Manage admin status via role assignment.`,
+            description: `Cannot change plan for an admin account (${user.email}). Admins always have the Combo plan.`,
         });
         setIsLoading(false);
         return;
@@ -75,7 +87,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
        if (data.model === 'free') data.expiry_date = null;
 
        // Prepare the data payload specifically for the update action
-       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class' | 'role'>> = {
+       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class'>> = {
          model: data.model,
          expiry_date: expiryDateString,
        };
@@ -91,9 +103,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
          description: `${user.email}'s plan has been updated to ${data.model}.`,
        });
 
-       // Add the original role back for the callback, as updateUserInJson doesn't return it
-        const updatedUserWithRole = { ...result.user, role: user.role };
-       onUserUpdate(updatedUserWithRole);
+       onUserUpdate(result.user); // Update parent state
        onClose(); // Close dialog
 
     } catch (error: any) {
@@ -108,99 +118,18 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
     }
   };
 
-   // Function to handle the "Make Admin Equivalent" button click
-   const handleMakeAdmin = async () => {
-        if (user.email === primaryAdminEmail) {
-             toast({ variant: 'info', title: 'Already Primary Admin', description: 'This is the primary admin account.' });
-             return;
-        }
-         if (isCurrentAdmin) {
-             toast({ variant: 'info', title: 'Already Admin', description: `${user.email} already has admin privileges.` });
-             return;
-         }
-
-         setIsLoading(true);
-         // Set form values for admin-equivalent plan
-         const farFutureDate = new Date('2099-12-31T00:00:00.000Z');
-         const adminPlanValues: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class' | 'role'>> = {
-             model: 'combo',
-             expiry_date: farFutureDate.toISOString(),
-         };
-
-         try {
-             const result = await updateUserInJson(user.id, adminPlanValues);
-             if (!result.success || !result.user) {
-                throw new Error(result.message || 'Failed to grant admin privileges.');
-             }
-             toast({
-                title: 'Admin Privileges Granted',
-                description: `${user.email} now has admin-equivalent access (Combo Plan).`,
-             });
-             // Update parent state with new role for display
-              onUserUpdate({ ...result.user, role: 'Admin' });
-             onClose(); // Close dialog
-         } catch (error: any) {
-              console.error('Failed to make user admin:', error);
-             toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: error.message || 'Could not grant admin privileges.',
-             });
-         } finally {
-              setIsLoading(false);
-         }
-   };
-
-   // Function to handle removing admin privileges
-   const handleRemoveAdmin = async () => {
-       if (user.email === primaryAdminEmail) {
-           toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove privileges from the primary admin.' });
-           return;
-       }
-        if (!isCurrentAdmin) {
-            toast({ variant: 'info', title: 'Not an Admin', description: `${user.email} does not currently have admin privileges.` });
-            return;
-        }
-
-       setIsLoading(true);
-        // Reset to 'free' model and null expiry
-       const userPlanValues: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'name' | 'phone' | 'referral' | 'class' | 'role'>> = {
-           model: 'free',
-           expiry_date: null,
-       };
-
-       try {
-           const result = await updateUserInJson(user.id, userPlanValues);
-           if (!result.success || !result.user) {
-              throw new Error(result.message || 'Failed to remove admin privileges.');
-           }
-           toast({
-              title: 'Admin Privileges Removed',
-              description: `${user.email}'s plan has been reset to 'Free'.`,
-           });
-            // Update parent state with new role for display
-            onUserUpdate({ ...result.user, role: 'User' });
-           onClose(); // Close dialog
-       } catch (error: any) {
-            console.error('Failed to remove admin privileges:', error);
-           toast({
-              variant: 'destructive',
-              title: 'Update Failed',
-              description: error.message || 'Could not remove admin privileges.',
-           });
-       } finally {
-            setIsLoading(false);
-       }
-   };
-
+   // Note: Role is based on email. To make someone an admin, their email must be changed
+   // to the admin format (e.g., user-admin@edunexus.com).
+   // To remove admin, their email must be changed away from the admin format.
+   // This dialog now only handles Plan/Expiry for non-admin users.
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Manage User: {user.email}</DialogTitle>
+          <DialogTitle>Manage Plan: {user.email}</DialogTitle>
           <DialogDescription>
-            Adjust the user's subscription plan or admin status. Admin accounts always have the 'Combo' plan.
+             Adjust the user's subscription plan and expiry date. Role is determined by email format.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -209,8 +138,18 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
              {/* Display Current Role */}
             <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
                 <span className="text-sm font-medium">Current Role:</span>
-                 <Badge variant={isCurrentAdmin ? "destructive" : "secondary"}>{user.role}</Badge>
+                 <Badge variant={isCurrentAdmin ? "destructive" : "secondary"}>{isCurrentAdmin ? 'Admin' : 'User'}</Badge>
             </div>
+             {!isCurrentAdmin && (
+                <p className="text-xs text-muted-foreground">To make this user an admin, edit their email to follow the 'name-admin@edunexus.com' pattern.</p>
+             )}
+             {isCurrentAdmin && user.email !== primaryAdminEmail && (
+                 <p className="text-xs text-muted-foreground">To remove admin privileges, edit their email to remove the '-admin' suffix.</p>
+             )}
+              {isCurrentAdmin && user.email === primaryAdminEmail && (
+                 <p className="text-xs text-muted-foreground">Primary admin role cannot be removed.</p>
+             )}
+
 
             {/* User Model Select (Disabled for Admins) */}
             <FormField
@@ -218,7 +157,7 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
               name="model"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subscription Model {isCurrentAdmin ? '' : '*'}</FormLabel>
+                  <FormLabel>Subscription Model *</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
@@ -290,46 +229,15 @@ export default function ChangeRoleDialog({ user, isOpen, onClose, onUserUpdate }
               />
             )}
 
-            {/* Divider */}
-             <div className="pt-4 border-t">
-                 <p className="text-sm font-medium mb-2">Admin Actions</p>
-                 {user.email !== primaryAdminEmail ? (
-                     <div className="flex flex-col sm:flex-row gap-2">
-                         {!isCurrentAdmin ? (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={handleMakeAdmin}
-                                disabled={isLoading}
-                                size="sm"
-                            >
-                                <ShieldCheck className="mr-2 h-4 w-4" /> Grant Admin Privileges
-                            </Button>
-                         ) : (
-                             <Button
-                                type="button"
-                                variant="destructive"
-                                onClick={handleRemoveAdmin}
-                                disabled={isLoading}
-                                size="sm"
-                            >
-                                <ShieldCheck className="mr-2 h-4 w-4" /> Remove Admin Privileges
-                            </Button>
-                         )}
-                     </div>
-                  ) : (
-                     <p className="text-xs text-muted-foreground">Primary admin privileges cannot be modified.</p>
-                  )}
-             </div>
-
-
-            <DialogFooter className="pt-6 flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center w-full">
-                 {/* Button to update Plan (only if not admin) */}
-                 <Button type="submit" disabled={isLoading || isCurrentAdmin}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Update Plan
-                </Button>
+            <DialogFooter className="pt-6">
                 <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>Cancel</Button>
+                 {/* Only show Update Plan button for non-admins */}
+                 {!isCurrentAdmin && (
+                    <Button type="submit" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Update Plan
+                    </Button>
+                 )}
             </DialogFooter>
           </form>
         </Form>

@@ -1,3 +1,4 @@
+
 // src/actions/user-actions.ts
 'use server';
 
@@ -14,12 +15,13 @@ const SALT_ROUNDS = 10; // Cost factor for hashing
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
 const publicAvatarsPath = path.join(process.cwd(), 'public', 'avatars'); // Define avatar path
 
-// Define the default admin user details
-const defaultAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+// Define the default admin user details and pattern
+const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234'; // Fallback if not set in env
 const defaultAdminProfileBase: Omit<UserProfile, 'id' | 'createdAt' | 'password'> = {
-    email: defaultAdminEmail,
-    name: 'Admin User',
+    email: primaryAdminEmail,
+    name: 'Admin User (Primary)',
     phone: '0000000000', // Default placeholder phone
     referral: '',
     class: 'Dropper',
@@ -59,20 +61,30 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
     }
 }
 
-
 /**
  * Reads the users.json file. Ensures the default admin user exists.
  * Assigns UUID to users missing an ID.
  * Converts date fields to ISO strings if they are not already.
  * Hashes any plain text passwords found (migration).
+ * Assigns roles based on email.
  * Returns user profiles WITHOUT passwords for general use.
- * @returns A promise resolving to an array of UserProfile (without passwords) or an empty array on error.
+ * @returns A promise resolving to an array of UserProfile (with role, without passwords) or an empty array on error.
  */
-export async function readUsers(): Promise<Omit<UserProfile, 'password'>[]> {
+export async function readUsers(): Promise<Array<Omit<UserProfile, 'password'> & { role: 'Admin' | 'User' }>> {
     const usersWithPasswords = await readAndInitializeUsersInternal();
-    // Return users WITHOUT passwords for general use
-    return usersWithPasswords.map(({ password, ...userWithoutPassword }) => userWithoutPassword);
+    // Assign role and return users WITHOUT passwords
+    return usersWithPasswords.map(({ password, ...user }) => ({
+        ...user,
+        role: getUserRole(user.email) // Assign role based on email
+    }));
 }
+
+// Helper function to determine role based on email
+const getUserRole = (email: string | null): 'Admin' | 'User' => {
+    if (!email) return 'User';
+    return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
+};
+
 
 /**
  * INTERNAL HELPER: Reads the users.json file, performs initialization (adds admin, assigns IDs, formats dates, hashes passwords),
@@ -110,80 +122,91 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
   }
 
   // --- Ensure all users have string IDs, correct date formats, and hashed passwords ---
+  const processedUsers: UserProfile[] = [];
   for (const user of users) { // Use `for...of` for async operations within the loop
-    if (!user.id || typeof user.id !== 'string') {
-        user.id = uuidv4();
-        console.warn(`User ${user.email || 'unknown'} assigned new UUID: ${user.id}.`);
+    let currentUser = { ...user }; // Create a copy to modify
+
+    if (!currentUser.id || typeof currentUser.id !== 'string') {
+        currentUser.id = uuidv4();
+        console.warn(`User ${currentUser.email || 'unknown'} assigned new UUID: ${currentUser.id}.`);
         writeNeeded = true;
     }
 
     // Hash plain text passwords (migration)
-    if (user.password && !user.password.startsWith('$2a$') && !user.password.startsWith('$2b$')) {
-        console.warn(`User ${user.email || user.id} has plain text password. Hashing now.`);
+    if (currentUser.password && !currentUser.password.startsWith('$2a$') && !currentUser.password.startsWith('$2b$')) {
+        console.warn(`User ${currentUser.email || currentUser.id} has plain text password. Hashing now.`);
         try {
-            user.password = await bcrypt.hash(user.password, SALT_ROUNDS);
+            currentUser.password = await bcrypt.hash(currentUser.password, SALT_ROUNDS);
             writeNeeded = true;
         } catch (hashError) {
-            console.error(`Failed to hash password for user ${user.email || user.id}:`, hashError);
-            // Decide how to handle - remove password, keep plain, etc. For now, keep plain but log error.
+            console.error(`Failed to hash password for user ${currentUser.email || currentUser.id}:`, hashError);
+            // Keep plain but log error
         }
-    } else if (!user.password) {
-        // Handle users with no password - maybe assign a default temporary one or log?
-        console.warn(`User ${user.email || user.id} has no password set.`);
-        // Optionally set a default hashed password or leave as is
+    } else if (!currentUser.password) {
+        console.warn(`User ${currentUser.email || currentUser.id} has no password set.`);
+        // Assign a default random password or handle as needed
+        try {
+            const randomPassword = Math.random().toString(36).slice(-8);
+            console.warn(`Assigning temporary password "${randomPassword}" to user ${currentUser.email || currentUser.id}. Hashing...`);
+            currentUser.password = await bcrypt.hash(randomPassword, SALT_ROUNDS);
+            writeNeeded = true;
+        } catch (hashError) {
+            console.error(`Failed to hash temporary password for ${currentUser.email || currentUser.id}`, hashError);
+        }
     }
 
 
-    if (user.expiry_date && !(user.expiry_date instanceof Date) && isNaN(Date.parse(user.expiry_date))) {
-        console.warn(`User ${user.email || user.id} has invalid expiry_date format (${user.expiry_date}). Setting to null.`);
-        user.expiry_date = null;
+    if (currentUser.expiry_date && !(currentUser.expiry_date instanceof Date) && isNaN(Date.parse(currentUser.expiry_date))) {
+        console.warn(`User ${currentUser.email || currentUser.id} has invalid expiry_date format (${currentUser.expiry_date}). Setting to null.`);
+        currentUser.expiry_date = null;
         writeNeeded = true;
-    } else if (user.expiry_date instanceof Date) {
-        user.expiry_date = user.expiry_date.toISOString(); // Convert Date to ISO string
+    } else if (currentUser.expiry_date instanceof Date) {
+        currentUser.expiry_date = currentUser.expiry_date.toISOString(); // Convert Date to ISO string
         writeNeeded = true;
     }
 
-    if (user.createdAt && !(user.createdAt instanceof Date) && isNaN(Date.parse(user.createdAt))) {
-        console.warn(`User ${user.email || user.id} has invalid createdAt format (${user.createdAt}). Setting to current time.`);
-        user.createdAt = new Date().toISOString();
+    if (currentUser.createdAt && !(currentUser.createdAt instanceof Date) && isNaN(Date.parse(currentUser.createdAt))) {
+        console.warn(`User ${currentUser.email || currentUser.id} has invalid createdAt format (${currentUser.createdAt}). Setting to current time.`);
+        currentUser.createdAt = new Date().toISOString();
         writeNeeded = true;
-    } else if (user.createdAt instanceof Date) {
-        user.createdAt = user.createdAt.toISOString(); // Convert Date to ISO string
+    } else if (currentUser.createdAt instanceof Date) {
+        currentUser.createdAt = currentUser.createdAt.toISOString(); // Convert Date to ISO string
         writeNeeded = true;
-    } else if (!user.createdAt) {
-        user.createdAt = new Date().toISOString();
+    } else if (!currentUser.createdAt) {
+        currentUser.createdAt = new Date().toISOString();
         writeNeeded = true;
     }
 
     // Ensure model is valid, default to 'free' if not
-    if (!user.model || !['free', 'chapterwise', 'full_length', 'combo'].includes(user.model)) {
-        console.warn(`User ${user.email || user.id} has invalid model (${user.model}). Setting to 'free'.`);
-        user.model = 'free';
+    if (!currentUser.model || !['free', 'chapterwise', 'full_length', 'combo'].includes(currentUser.model)) {
+        console.warn(`User ${currentUser.email || currentUser.id} has invalid model (${currentUser.model}). Setting to 'free'.`);
+        currentUser.model = 'free';
         writeNeeded = true;
     }
     // Nullify expiry_date if model is 'free'
-    if (user.model === 'free' && user.expiry_date !== null) {
-        console.warn(`User ${user.email || user.id} is 'free' model but has expiry_date. Setting to null.`);
-        user.expiry_date = null;
+    if (currentUser.model === 'free' && currentUser.expiry_date !== null) {
+        console.warn(`User ${currentUser.email || currentUser.id} is 'free' model but has expiry_date. Setting to null.`);
+        currentUser.expiry_date = null;
         writeNeeded = true;
     }
      // Ensure avatarUrl is present, default to null if missing
-    if (user.avatarUrl === undefined) {
-         user.avatarUrl = null;
+    if (currentUser.avatarUrl === undefined) {
+         currentUser.avatarUrl = null;
          writeNeeded = true;
     }
+
+    processedUsers.push(currentUser); // Add processed user to new array
 
   } // End of for...of loop
 
   // --- Ensure Default Admin User Exists and is Correct (with hashed password) ---
-   const adminUserIndex = users.findIndex(u => u.email === defaultAdminEmail);
-   const adminId = users[adminUserIndex]?.id || uuidv4();
-   let adminPasswordHash = users[adminUserIndex]?.password;
+   const adminUserIndex = processedUsers.findIndex(u => u.email === primaryAdminEmail);
+   let adminPasswordHash = adminUserIndex !== -1 ? processedUsers[adminUserIndex].password : undefined;
    let adminNeedsPasswordUpdate = false;
 
     // Check if admin needs password hash generation or update
-    if (!adminPasswordHash || !adminPasswordHash.startsWith('$2a$')) {
-         console.warn(`Hashing default admin password for ${defaultAdminEmail}.`);
+    if (!adminPasswordHash || !adminPasswordHash.startsWith('$2a$') && !adminPasswordHash.startsWith('$2b$')) {
+         console.warn(`Hashing default admin password for ${primaryAdminEmail}.`);
         try {
              adminPasswordHash = await bcrypt.hash(defaultAdminPassword, SALT_ROUNDS);
              adminNeedsPasswordUpdate = true;
@@ -196,7 +219,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
         // Check if the stored hash matches the current default password
          const passwordMatch = await bcrypt.compare(defaultAdminPassword, adminPasswordHash);
          if (!passwordMatch) {
-             console.warn(`Admin password in .env has changed. Updating hash for ${defaultAdminEmail}.`);
+             console.warn(`Admin password in .env has changed. Updating hash for ${primaryAdminEmail}.`);
              try {
                  adminPasswordHash = await bcrypt.hash(defaultAdminPassword, SALT_ROUNDS);
                  adminNeedsPasswordUpdate = true;
@@ -208,67 +231,59 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
          }
     }
 
-
-   const defaultAdminUserWithId: UserProfile = {
-       ...defaultAdminProfileBase,
-       id: adminId,
-       password: adminPasswordHash, // Store the hash
-       createdAt: users[adminUserIndex]?.createdAt || new Date().toISOString(), // Preserve original or set new
-       expiry_date: defaultAdminProfileBase.expiry_date, // Ensure it's ISO
-       avatarUrl: users[adminUserIndex]?.avatarUrl === undefined ? null : users[adminUserIndex]?.avatarUrl, // Ensure avatarUrl exists
-   };
-
-  if (adminUserIndex !== -1) {
-    let adminNeedsFieldUpdate = false;
-    const currentAdmin = users[adminUserIndex];
+   if (adminUserIndex !== -1) {
+    let adminNeedsFieldUpdate = adminNeedsPasswordUpdate; // Start with password update flag
+    const currentAdmin = processedUsers[adminUserIndex];
 
      if (adminNeedsPasswordUpdate) { // Only update if hash was generated/updated
          currentAdmin.password = adminPasswordHash;
-         adminNeedsFieldUpdate = true;
      }
      // Check other fields for necessary updates
      if (currentAdmin.model !== 'combo') {
-         console.warn(`Admin user ${defaultAdminEmail} model incorrect. Setting to 'combo'.`);
+         console.warn(`Admin user ${primaryAdminEmail} model incorrect. Setting to 'combo'.`);
          currentAdmin.model = 'combo';
          adminNeedsFieldUpdate = true;
      }
-      if (currentAdmin.expiry_date !== defaultAdminUserWithId.expiry_date) {
-         console.warn(`Admin user ${defaultAdminEmail} expiry date incorrect. Setting default.`);
-         currentAdmin.expiry_date = defaultAdminUserWithId.expiry_date;
+      if (currentAdmin.expiry_date !== defaultAdminProfileBase.expiry_date) {
+         console.warn(`Admin user ${primaryAdminEmail} expiry date incorrect. Setting default.`);
+         currentAdmin.expiry_date = defaultAdminProfileBase.expiry_date;
          adminNeedsFieldUpdate = true;
       }
-       if (currentAdmin.id !== adminId) {
-           currentAdmin.id = adminId;
-           adminNeedsFieldUpdate = true;
-       }
         if (!currentAdmin.createdAt || (currentAdmin.createdAt instanceof Date) || isNaN(Date.parse(currentAdmin.createdAt))) {
-             currentAdmin.createdAt = defaultAdminUserWithId.createdAt;
+             currentAdmin.createdAt = new Date().toISOString(); // Set a valid creation date if missing/invalid
              adminNeedsFieldUpdate = true;
         }
          if (currentAdmin.avatarUrl === undefined) {
              currentAdmin.avatarUrl = null;
              adminNeedsFieldUpdate = true;
          }
-     if (adminNeedsFieldUpdate || adminNeedsPasswordUpdate) {
-         users[adminUserIndex] = { ...currentAdmin }; // Ensure a new object for re-rendering if needed
+     if (adminNeedsFieldUpdate) {
+         processedUsers[adminUserIndex] = { ...currentAdmin }; // Ensure a new object reference if updated
          writeNeeded = true;
      }
   } else {
-    console.warn(`Default admin user (${defaultAdminEmail}) not found. Adding.`);
-    users.push(defaultAdminUserWithId);
+    console.warn(`Default admin user (${primaryAdminEmail}) not found. Adding.`);
+    // Create the full admin profile
+     const defaultAdminUserWithId: UserProfile = {
+       ...defaultAdminProfileBase,
+       id: uuidv4(), // Generate new ID for the admin
+       password: adminPasswordHash, // Store the hash
+       createdAt: new Date().toISOString(), // Set creation date
+   };
+    processedUsers.push(defaultAdminUserWithId);
     writeNeeded = true;
   }
 
   if (writeNeeded) {
-      const writeSuccess = await writeUsers(users);
+      const writeSuccess = await writeUsers(processedUsers);
       if (writeSuccess) {
-          console.log("users.json created or updated with default admin user details and user field checks.");
+          console.log("users.json created or updated with checks and default admin user details.");
       } else {
           console.error("Failed to write updated users.json file.");
           // Potentially throw error here if critical
       }
   }
-  return users;
+  return processedUsers; // Return the processed list
 }
 
 // Export the internal function so it can be used by auth-context
@@ -281,7 +296,7 @@ export { readAndInitializeUsersInternal as readUsersWithPasswordsInternal };
  * @returns A promise resolving to the UserProfile if found, otherwise null.
  */
 export async function findUserByEmailInternal(
-  email: string,
+  email: string | null, // Allow null email
 ): Promise<UserProfile | null> {
   if (!email) {
     return null;
@@ -319,12 +334,13 @@ export async function saveUserToJson(
 
     const userToSave: UserProfile = {
         ...userProfileData,
-        expiry_date: userProfileData.expiry_date instanceof Date
-                        ? userProfileData.expiry_date.toISOString()
-                        : (userProfileData.expiry_date ? new Date(userProfileData.expiry_date).toISOString() : null),
-        createdAt: userProfileData.createdAt instanceof Date
-                        ? userProfileData.createdAt.toISOString()
-                        : (userProfileData.createdAt ? new Date(userProfileData.createdAt).toISOString() : new Date().toISOString()),
+        // Ensure dates are correctly formatted or null
+        expiry_date: userProfileData.expiry_date
+                        ? (userProfileData.expiry_date instanceof Date ? userProfileData.expiry_date.toISOString() : new Date(userProfileData.expiry_date).toISOString())
+                        : null,
+        createdAt: userProfileData.createdAt
+                        ? (userProfileData.createdAt instanceof Date ? userProfileData.createdAt.toISOString() : new Date(userProfileData.createdAt).toISOString())
+                        : new Date().toISOString(), // Default createdAt if missing
         model: userProfileData.model || 'free',
         email: userProfileData.email,
         name: userProfileData.name || null,
@@ -375,9 +391,11 @@ export async function saveUserToJson(
  * Adds a new user to the users.json file. Checks for existing email first.
  * Assigns a UUID. Sets default 'free' model. Hashes the password.
  * @param newUserProfileData - The user profile data for the new user (password should be plain text).
- * @returns A promise resolving with success status and optional message.
+ * @returns A promise resolving with success status, optional message, and the created user profile (without password).
  */
-export async function addUserToJson(newUserProfileData: Omit<UserProfile, 'id' | 'createdAt'> & { password: string }): Promise<{ success: boolean; message?: string; user?: UserProfile }> {
+export async function addUserToJson(
+    newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'avatarUrl' | 'referral'> & { password: string }
+): Promise<{ success: boolean; message?: string; user?: Omit<UserProfile, 'password'> }> {
     if (!newUserProfileData.email || !newUserProfileData.password) {
         return { success: false, message: "Email and password are required for new user." };
     }
@@ -387,18 +405,20 @@ export async function addUserToJson(newUserProfileData: Omit<UserProfile, 'id' |
          const hashedPassword = await bcrypt.hash(newUserProfileData.password, SALT_ROUNDS);
 
          const userToAdd: UserProfile = {
-             ...newUserProfileData,
+             id: uuidv4(), // Generate new UUID
+             email: newUserProfileData.email,
              password: hashedPassword, // Store the hashed password
-             id: uuidv4(),
-             createdAt: new Date().toISOString(),
-             model: newUserProfileData.model || 'free',
-             expiry_date: newUserProfileData.model === 'free' ? null : (newUserProfileData.expiry_date ? new Date(newUserProfileData.expiry_date).toISOString() : null),
-             class: newUserProfileData.class || null,
-             phone: newUserProfileData.phone || null,
              name: newUserProfileData.name || null,
-             referral: newUserProfileData.referral || '',
-             avatarUrl: newUserProfileData.avatarUrl === undefined ? null : newUserProfileData.avatarUrl,
+             phone: newUserProfileData.phone || null,
+             class: newUserProfileData.class || null,
+             model: newUserProfileData.model || 'free',
+             // Correctly handle expiry date based on model
+             expiry_date: newUserProfileData.model === 'free' ? null : (newUserProfileData.expiry_date ? new Date(newUserProfileData.expiry_date).toISOString() : null),
+             createdAt: new Date().toISOString(),
+             avatarUrl: null, // Default avatar to null
+             referral: '', // Default referral to empty
         };
+         if (userToAdd.model === 'free') userToAdd.expiry_date = null; // Ensure expiry is null for free
 
         let users = await readAndInitializeUsersInternal();
 
@@ -416,7 +436,8 @@ export async function addUserToJson(newUserProfileData: Omit<UserProfile, 'id' |
         }
     } catch (error: any) {
         console.error('Error adding user to JSON:', error);
-        return { success: false, message: `Failed to add user. Reason: ${error.message}` };
+         // Provide more specific error message if possible
+         return { success: false, message: `Failed to add user. Reason: ${error.message || 'Unknown error'}` };
     }
 }
 
@@ -428,7 +449,7 @@ export async function addUserToJson(newUserProfileData: Omit<UserProfile, 'id' |
  * Converts Date objects for expiry_date to ISO strings before saving.
  * @param userId The ID of the user to update (string).
  * @param updatedData Partial user profile data to update.
- * @returns A promise resolving with success status, optional message, and the updated user profile.
+ * @returns A promise resolving with success status, optional message, and the updated user profile (without password).
  */
 export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'email' | 'password' | 'createdAt'>>): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> { // Return Omit<...>
     if (!userId || typeof userId !== 'string') {
@@ -480,7 +501,7 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
 }
 
 /**
- * Deletes a user from the users.json file by ID. Prevents deletion of the default admin user.
+ * Deletes a user from the users.json file by ID. Prevents deletion of the primary admin user.
  * Also deletes the user's avatar image if it exists.
  * @param userId The ID of the user to delete (string).
  * @returns A promise resolving with success status and optional message.
@@ -498,8 +519,8 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
         if (!userToDelete) {
              return { success: false, message: `User with ID ${userId} not found.` };
         }
-        if (userToDelete.email === defaultAdminEmail) {
-            return { success: false, message: `Cannot delete the primary admin user (${defaultAdminEmail}).` };
+        if (userToDelete.email === primaryAdminEmail) {
+            return { success: false, message: `Cannot delete the primary admin user (${primaryAdminEmail}).` };
         }
 
         // --- Delete Avatar Image ---
@@ -602,11 +623,5 @@ async function initializeDataStore() {
 initializeDataStore();
 
 
-// ---- Missing Function Body from Previous Edits ----
-// It seems like the checkUserSession function logic (related to AuthProvider)
-// was incorrectly placed here in a previous edit. It should be within the AuthProvider context.
-// I am removing the misplaced code block entirely from this actions file.
-// The AuthProvider context already contains the correct `checkUserSession` logic.
-// ---- End Removed Block ----
-
 // Ensure the file ends cleanly without any misplaced code blocks.
+
