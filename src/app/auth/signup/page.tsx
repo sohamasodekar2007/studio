@@ -9,14 +9,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone } from "lucide-react"; // Removed Send icon
+import { GraduationCap, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
 import { useAuth } from '@/context/auth-context';
-// Removed OTP actions as OTP system is removed
-// import { generateOtp, verifyOtp } from '@/actions/otp-actions';
-import Image from 'next/image'; // Import Image
+import { sendWelcomeEmail } from '@/actions/otp-actions'; // Still needed for welcome email
+import Image from 'next/image';
 
 // Updated schema without OTP
 const signupSchema = z.object({
@@ -37,9 +36,6 @@ export default function SignupPage() {
   const { toast } = useToast();
   const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  // Removed OTP-related state
-  // const [isOtpLoading, setIsOtpLoading] = useState(false);
-  // const [otpSent, setOtpSent] = useState(false);
 
 
   const form = useForm<SignupFormValues>({
@@ -51,13 +47,8 @@ export default function SignupPage() {
       academicStatus: undefined,
       password: "",
       confirmPassword: "",
-      // Removed OTP default value
-      // otp: "",
     },
   });
-
-  // Removed OTP handling logic
-  // const handleSendOtp = useCallback(async () => { ... });
 
 
   // Updated onSubmit function without OTP verification
@@ -225,7 +216,6 @@ export default function SignupPage() {
                 )}
               />
 
-              {/* Removed OTP Field */}
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               {/* Sign Up button */}

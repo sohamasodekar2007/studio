@@ -1,4 +1,4 @@
-{'use client'; // Needed for dynamic date
+'use client'; // Needed for dynamic date
 
 import { useState, useEffect } from 'react';
 
