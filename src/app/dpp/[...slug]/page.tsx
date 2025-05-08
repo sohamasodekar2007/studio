@@ -185,7 +185,12 @@ export default function DppLessonPage() {
            // Note: This doesn't clear the persistent progress, only the current selection UI
            const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
            if (nextQuestionId) {
-               setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
+               // Check if there's an existing answer for the next question in this session
+               // If not, initialize it to null. Otherwise, keep the existing session answer.
+                setUserAnswers(prev => ({
+                    ...prev,
+                    [nextQuestionId]: prev[nextQuestionId] !== undefined ? prev[nextQuestionId] : null
+                 }));
            }
        } else {
            // Optionally handle end of DPP (e.g., show summary, navigate back)
@@ -198,7 +203,9 @@ export default function DppLessonPage() {
    const renderQuestionContent = (q: QuestionBankItem) => {
        if (q.type === 'image' && q.question.image) {
            // Construct the correct path relative to the public folder
+           // Ensure segments are properly encoded in case they contain special characters
            const imagePath = `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.question.image)}`;
+           console.log("Rendering Image Path:", imagePath); // Log the constructed path
            return (
                 <div className="relative w-full max-w-lg h-64 mx-auto my-4"> {/* Adjust size as needed */}
                     <Image
@@ -209,12 +216,10 @@ export default function DppLessonPage() {
                        className="rounded border"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2} // Prioritize first few images
-                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add basic error handling
+                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if(fallback) fallback.classList.remove('hidden'); }} // Add better error handling
                     />
                     {/* Fallback text if image fails to load */}
-                    <noscript>
-                        <p className="text-center text-muted-foreground text-sm mt-2">[Image: {q.question.image}]</p>
-                    </noscript>
+                    <p className="hidden text-center text-muted-foreground text-sm mt-2">[Image: {q.question.image}]</p>
                 </div>
            );
        } else if (q.type === 'text' && q.question.text) {
@@ -286,7 +291,7 @@ export default function DppLessonPage() {
         const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
         const hasImage = q.explanation.image && q.explanation.image.trim().length > 0;
         // Construct the correct path relative to the public folder
-        const imagePath = hasImage ? `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.explanation.image!)}` : null;
+         const imagePath = hasImage ? `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.explanation.image!)}` : null;
 
         if (!hasText && !hasImage) return null; // No explanation to show
 
@@ -308,11 +313,9 @@ export default function DppLessonPage() {
                                  objectFit="contain"
                                  className="rounded border"
                                  data-ai-hint="explanation image"
-                                 onError={(e) => { console.error(`Error loading explanation image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Add error handling
+                                 onError={(e) => { console.error(`Error loading explanation image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if(fallback) fallback.classList.remove('hidden');}} // Add error handling
                              />
-                              <noscript>
-                                 <p className="text-center text-muted-foreground text-sm mt-2">[Explanation Image: {q.explanation.image}]</p>
-                             </noscript>
+                             <p className="hidden text-center text-muted-foreground text-sm mt-2">[Explanation Image: {q.explanation.image}]</p>
                           </div>
                      )}
                  </CardContent>
@@ -534,3 +537,4 @@ export default function DppLessonPage() {
     </>
   );
 }
+
