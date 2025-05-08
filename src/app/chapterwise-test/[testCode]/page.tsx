@@ -306,20 +306,25 @@ export default function ChapterwiseTestPage() {
    // Function to render question content (text or image)
    const renderQuestionContent = (question: TestQuestion) => {
      // Check if image_url exists and prioritize it
-     if (question.question_image_url) {
+     // Ensure the URL starts with '/' to signify it's relative to the public folder
+     const imageUrl = question.question_image_url?.startsWith('/') ? question.question_image_url : null;
+
+     if (imageUrl) {
        return (
          <Image
-           src={question.question_image_url} // Use the direct URL
+           src={imageUrl} // Use the verified URL
            alt={`Question ${currentQuestionIndex + 1}`}
            width={600} // Adjust as needed
            height={400} // Adjust as needed
            className="rounded-md border max-w-full h-auto mx-auto my-4" // Added margin
-           data-ai-hint="question diagram" // Keep hint if useful
+           data-ai-hint="question diagram"
            priority={currentQuestionIndex < 3} // Prioritize loading initial images
+           onError={(e) => { console.error(`Error loading image: ${imageUrl}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Simplified onError
+           unoptimized // Good for local dev server
          />
        );
      }
-     // Fallback to question text if image_url is not present
+     // Fallback to question text if image_url is not present or invalid
      else if (question.question_text) {
        return (
          <div
@@ -363,6 +368,7 @@ export default function ChapterwiseTestPage() {
         strategy="lazyOnload"
         onLoad={() => {
           console.log('MathJax loaded for test page');
+          // Initial typeset after script loads and component mounts
           typesetMathJax();
         }}
       />
