@@ -1,7 +1,7 @@
 // src/app/progress/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react'; // Added useCallback
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -9,22 +9,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, History, Eye, Loader2, RefreshCw } from 'lucide-react'; // Added Loader2, RefreshCw
+import { AlertTriangle, History, Eye, Loader2, RefreshCw } from 'lucide-react';
 import type { TestResultSummary } from '@/types';
-import { getAllTestReportsForUser } from '@/actions/test-report-actions'; // Import the new action
+import { getAllTestReportsForUser } from '@/actions/test-report-actions';
 
 export default function ProgressPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  // State holds partial summaries as some data might be missing if parsing failed on backend
   const [testHistory, setTestHistory] = useState<Array<Partial<TestResultSummary> & { attemptTimestamp: number }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // useCallback to memoize the fetch function
   const fetchTestHistory = useCallback(async () => {
     if (!user || !user.id) {
-        if (!authLoading) setIsLoading(false); // Stop loading if auth is done and no user
+        if (!authLoading) setIsLoading(false);
         return;
     };
 
@@ -33,23 +31,19 @@ export default function ProgressPage() {
     console.log("ProgressPage: Fetching test history for user:", user.id);
 
     try {
-        // Fetch history using the server action
         const history = await getAllTestReportsForUser(user.id);
-
-        // Ensure attemptTimestamp is present for key generation (should be, as it's startTime)
         const validatedHistory = history.filter(h => h.attemptTimestamp !== undefined) as Array<Partial<TestResultSummary> & { attemptTimestamp: number }>;
-
         setTestHistory(validatedHistory);
         console.log("ProgressPage: Processed test history:", validatedHistory);
 
     } catch (err: any) {
       console.error("Error fetching test history:", err);
       setError(err.message || "Failed to load your test history.");
-      setTestHistory([]); // Clear history on error
+      setTestHistory([]);
     } finally {
       setIsLoading(false);
     }
-  }, [user, authLoading]); // Add authLoading dependency
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -59,7 +53,7 @@ export default function ProgressPage() {
     if (user) {
         fetchTestHistory();
     }
-  }, [user, authLoading, router, fetchTestHistory]); // Run fetchTestHistory when dependencies change
+  }, [user, authLoading, router, fetchTestHistory]);
 
   if (isLoading || authLoading) {
     return (
@@ -158,13 +152,9 @@ export default function ProgressPage() {
                 </TableHeader>
                 <TableBody>
                   {testHistory.map((attempt) => (
-                    <TableRow key={attempt.attemptTimestamp}>{/* Remove whitespace here */}
-                      <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell>
-                      <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
-                      <TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
-                      <TableCell className="hidden lg:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2"> {/* Ensure buttons stay together */}
+                    <TableRow key={attempt.attemptTimestamp}>
+                      <TableCell className="font-medium">{attempt.testName || 'N/A'}</TableCell><TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell><TableCell className="hidden lg:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell><TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
                           <Button variant="secondary" size="sm" asChild>
                             <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
                               View Result
