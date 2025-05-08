@@ -38,7 +38,7 @@ export default function NotebooksListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newNotebookName, setNewNotebookName] = useState('');
-  const [isCreating, setIsCreating] = useState(isCreating);
+  const [isCreating, setIsCreating] = useState(false); // Initialize to false
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
   const fetchNotebookData = useCallback(async () => {
