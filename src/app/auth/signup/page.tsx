@@ -1,4 +1,4 @@
-{'use client';
+'use client';
 
 import { useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
@@ -9,15 +9,16 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone, Send } from "lucide-react"; // Added Send icon
+import { GraduationCap, Loader2, Phone } from "lucide-react"; // Removed Send icon
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
 import { useAuth } from '@/context/auth-context';
-import { generateOtp, verifyOtp } from '@/actions/otp-actions'; // Import OTP actions
+// Removed OTP actions as OTP system is removed
+// import { generateOtp, verifyOtp } from '@/actions/otp-actions';
 import Image from 'next/image'; // Import Image
 
-// Updated schema with phone number and class selection
+// Updated schema without OTP
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
@@ -25,8 +26,6 @@ const signupSchema = z.object({
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
-  // OTP field is optional initially, required in step 2
-  otp: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -38,8 +37,9 @@ export default function SignupPage() {
   const { toast } = useToast();
   const { signUp, loading: authLoading, initializationError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [isOtpLoading, setIsOtpLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
+  // Removed OTP-related state
+  // const [isOtpLoading, setIsOtpLoading] = useState(false);
+  // const [otpSent, setOtpSent] = useState(false);
 
 
   const form = useForm<SignupFormValues>({
@@ -51,69 +51,25 @@ export default function SignupPage() {
       academicStatus: undefined,
       password: "",
       confirmPassword: "",
-      otp: "",
+      // Removed OTP default value
+      // otp: "",
     },
   });
 
-  // Function to handle OTP generation
-  const handleSendOtp = useCallback(async () => {
-    // Trigger validation for fields required before sending OTP
-    const nameValid = await form.trigger("name");
-    const emailValid = await form.trigger("email");
-    const phoneValid = await form.trigger("phoneNumber");
-    const statusValid = await form.trigger("academicStatus");
-    const passValid = await form.trigger("password");
-    const confirmValid = await form.trigger("confirmPassword");
-
-    if (!nameValid || !emailValid || !phoneValid || !statusValid || !passValid || !confirmValid) {
-      toast({ variant: "destructive", title: "Validation Error", description: "Please fill all required fields correctly before sending OTP." });
-      return;
-    }
-
-    setIsOtpLoading(true);
-    const email = form.getValues("email");
-    try {
-      const result = await generateOtp(email);
-      if (result.success) {
-        toast({ title: "OTP Sent", description: result.message });
-        setOtpSent(true);
-      } else {
-        throw new Error(result.message || "Failed to send OTP.");
-      }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "OTP Error", description: error.message });
-    } finally {
-      setIsOtpLoading(false);
-    }
-  }, [form, toast]);
+  // Removed OTP handling logic
+  // const handleSendOtp = useCallback(async () => { ... });
 
 
-  // Function to handle final form submission
+  // Updated onSubmit function without OTP verification
   const onSubmit = async (data: SignupFormValues) => {
     if (initializationError) {
       toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
       return;
     }
 
-    if (!otpSent) {
-      toast({ variant: "destructive", title: "OTP Required", description: "Please send and verify the OTP first." });
-      return;
-    }
-    if (!data.otp || data.otp.length !== 6) {
-      form.setError("otp", { message: "Please enter the 6-digit OTP." });
-      return;
-    }
-
     setIsLoading(true);
     try {
-      // 1. Verify OTP
-      const otpVerification = await verifyOtp(data.email, data.otp);
-      if (!otpVerification.success) {
-        form.setError("otp", { message: otpVerification.message });
-        throw new Error(otpVerification.message);
-      }
-
-      // 2. Proceed with signup if OTP is correct
+      // Directly call signUp without OTP step
       await signUp(
         data.email,
         data.password,
@@ -123,18 +79,17 @@ export default function SignupPage() {
       );
       // Success toast and redirection handled by AuthContext
     } catch (error: any) {
-      // Error toast handled by AuthContext or OTP verification
+      // Error toast handled by AuthContext or thrown error
       console.error("Signup page submission error:", error.message);
-       if (!error.message.includes("OTP")) { // Avoid duplicate OTP errors
-           toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
-       }
+       // Removed duplicate toast as error is handled in AuthContext
+       // toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
     } finally {
       setIsLoading(false);
     }
   };
 
   // Update combinedLoading
-  const combinedLoading = isLoading || authLoading || isOtpLoading;
+  const combinedLoading = isLoading || authLoading; // Removed isOtpLoading
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -147,8 +102,17 @@ export default function SignupPage() {
                   alt="EduNexus Logo"
                   width={48}
                   height={48}
-                  className="h-12 w-12" // Adjust size as needed
+                  className="h-12 w-12 dark:hidden" // Hide on dark mode
+                  unoptimized
               />
+             <Image
+                src="/EduNexus-logo-white.jpg" // White logo for dark theme
+                alt="EduNexus Logo"
+                width={48} // Adjust size as needed
+                height={48}
+                className="h-12 w-12 hidden dark:block" // Show only on dark mode
+                unoptimized // Good for local images
+            />
           </div>
           <CardTitle className="text-2xl font-bold">Join EduNexus</CardTitle> {/* Updated Title */}
           <CardDescription>Create your account to start practicing.</CardDescription>
@@ -261,41 +225,11 @@ export default function SignupPage() {
                 )}
               />
 
-              {/* OTP Field */}
-              <FormField
-                control={form.control}
-                name="otp"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Enter OTP</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <FormControl>
-                        <Input
-                          placeholder="6-digit code"
-                          {...field}
-                          disabled={!otpSent || combinedLoading}
-                          maxLength={6}
-                        />
-                      </FormControl>
-                       <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSendOtp}
-                        disabled={otpSent || isOtpLoading || combinedLoading || !form.formState.isValid}
-                      >
-                        {isOtpLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4"/>}
-                        {otpSent ? 'Sent' : 'Send OTP'}
-                      </Button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+              {/* Removed OTP Field */}
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               {/* Sign Up button */}
-              <Button type="submit" className="w-full" disabled={!otpSent || combinedLoading}>
+              <Button type="submit" className="w-full" disabled={combinedLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign Up
               </Button>
