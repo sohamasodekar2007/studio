@@ -67,7 +67,7 @@ export default function NotebooksPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, selectedNotebookId]); // Add selectedNotebookId dependency
+  }, [user?.id, selectedNotebookId]); // Ensure userId is included if used
 
   useEffect(() => {
     if (!authLoading) { // Wait for auth state to settle
@@ -110,7 +110,11 @@ export default function NotebooksPage() {
                fetchNotebookData(); // Refresh data
                // If the deleted notebook was selected, reset selection
                 if (selectedNotebookId === notebookId) {
-                    setSelectedNotebookId(null);
+                    // Find the index of the deleted notebook
+                    const deletedIndex = notebookData?.notebooks.findIndex(n => n.id === notebookId) ?? -1;
+                    // Select the previous notebook if possible, otherwise the next, or null if list becomes empty
+                     const nextSelectionIndex = deletedIndex > 0 ? deletedIndex - 1 : (notebookData?.notebooks.length ?? 0 > 1 ? 0 : -1);
+                     setSelectedNotebookId(nextSelectionIndex !== -1 ? notebookData?.notebooks[nextSelectionIndex].id ?? null : null);
                 }
            } else {
                throw new Error(result.message || "Failed to delete notebook.");
@@ -206,27 +210,37 @@ export default function NotebooksPage() {
                 <Button size="sm" onClick={handleCreateNotebook} disabled={isCreating || !newNotebookName.trim()}>
                   {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
                 </Button>
+                 <Button variant="ghost" size="sm" onClick={() => setShowCreateForm(false)} disabled={isCreating}>
+                    Cancel
+                </Button>
               </div>
             )}
              <ScrollArea className="h-[calc(100vh-300px)] mt-4"> {/* Adjust height as needed */}
                  <div className="space-y-1 pr-2">
                  {(notebookData?.notebooks || []).length > 0 ? (
-                     notebookData?.notebooks.map((notebook) => (
-                        <Button
-                            key={notebook.id}
-                            variant={selectedNotebookId === notebook.id ? "secondary" : "ghost"}
-                            className="w-full justify-start text-sm h-9"
-                            onClick={() => setSelectedNotebookId(notebook.id)}
-                         >
-                            <Notebook className="mr-2 h-4 w-4 flex-shrink-0" />
-                             <span className="truncate flex-grow text-left">{notebook.name}</span>
+                    notebookData?.notebooks.map((notebook) => (
+                        <div key={notebook.id} className="flex items-center justify-between w-full rounded-md hover:bg-muted/50">
+                            <Button // Button for selecting the notebook
+                                variant="ghost"
+                                className={`flex-grow justify-start text-sm h-9 px-2 ${selectedNotebookId === notebook.id ? 'bg-secondary hover:bg-secondary text-secondary-foreground' : ''}`}
+                                onClick={() => setSelectedNotebookId(notebook.id)}
+                             >
+                                <Notebook className="mr-2 h-4 w-4 flex-shrink-0" />
+                                <span className="truncate flex-grow text-left">{notebook.name}</span>
+                            </Button>
+                            {/* Delete action next to the select button */}
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto flex-shrink-0 text-muted-foreground hover:text-destructive" onClick={(e) => e.stopPropagation()} >
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 ml-1 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                                        // onClick={(e) => e.stopPropagation()} // Keep stopPropagation if needed, though maybe not necessary anymore
+                                    >
                                         <Trash2 className="h-3.5 w-3.5"/>
                                     </Button>
                                 </AlertDialogTrigger>
-                                <AlertDialogContent>
+                                 <AlertDialogContent>
                                      <AlertDialogHeader>
                                         <AlertDialogTitle>Delete Notebook?</AlertDialogTitle>
                                         <AlertDialogDescription>
@@ -239,7 +253,7 @@ export default function NotebooksPage() {
                                      </AlertDialogFooter>
                                 </AlertDialogContent>
                              </AlertDialog>
-                        </Button>
+                        </div>
                      ))
                  ) : (
                      <p className="text-sm text-muted-foreground text-center py-4">No notebooks yet. Create one!</p>
