@@ -13,6 +13,7 @@ import type { UserNotebookData, Notebook, BookmarkedQuestion } from '@/types';
 import { getUserNotebooks, createNotebook, deleteNotebook, removeQuestionFromNotebook } from '@/actions/notebook-actions'; // Import actions
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 import {
   AlertDialog,
   AlertDialogAction,

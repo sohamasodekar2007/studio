@@ -1,0 +1,23 @@
+{
+  "userId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "notebooks": [
+    {
+      "id": "ba9c63b2-7657-4054-9065-351ac858407b",
+      "name": "MY BOOKMARK",
+      "createdAt": 1746683566597
+    }
+  ],
+  "bookmarkedQuestions": {
+    "ba9c63b2-7657-4054-9065-351ac858407b": [
+      {
+        "questionId": "Q_1746514262075",
+        "subject": "Physics",
+        "lesson": "Mathematics in Physics",
+        "addedAt": 1746683571057,
+        "tags": [
+          "Tricky"
+        ]
+      }
+    ]
+  }
+}
