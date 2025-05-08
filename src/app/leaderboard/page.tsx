@@ -42,11 +42,14 @@ export default function LeaderboardPage() {
                 const sortedPoints = allPoints.sort((a, b) => b.totalPoints - a.totalPoints);
 
                 // Combine points with user profile data and assign rank
-                const rankedData = sortedPoints.map((pointsEntry, index) => ({
-                    ...pointsEntry,
-                    rank: index + 1,
-                    userProfile: userMap.get(pointsEntry.userId) || null, // Get profile from map
-                }));
+                // Filter out admin users before ranking
+                const rankedData = sortedPoints
+                    .filter(pointsEntry => userMap.get(pointsEntry.userId)?.role !== 'Admin') // Exclude admins
+                    .map((pointsEntry, index) => ({
+                        ...pointsEntry,
+                        rank: index + 1,
+                        userProfile: userMap.get(pointsEntry.userId) || null, // Get profile from map
+                    }));
 
                 setLeaderboard(rankedData);
 
@@ -63,8 +66,9 @@ export default function LeaderboardPage() {
 
     const getInitials = (name?: string | null, email?: string | null) => {
         if (name) return name.charAt(0).toUpperCase();
-        if (email) return email.charAt(0).toUpperCase();
-        return <User className="h-4 w-4"/>;
+        // If no name, fallback to email initial, but email is now removed from display
+        // if (email) return email.charAt(0).toUpperCase();
+        return <User className="h-4 w-4"/>; // Generic fallback
     }
 
 
@@ -110,7 +114,8 @@ export default function LeaderboardPage() {
                             </TableHeader>
                             <TableBody>
                                 {leaderboard.map((entry) => {
-                                    const avatarSrc = entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : `https://avatar.vercel.sh/${entry.userProfile?.email || entry.userId}.png`;
+                                    // Construct avatar source using fallback logic
+                                    const avatarSrc = entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : `https://avatar.vercel.sh/${entry.userId}.png`; // Fallback to userId for vercel avatar
                                     return (
                                         <TableRow key={entry.userId}>
                                             <TableCell className="font-medium text-center">
@@ -126,8 +131,10 @@ export default function LeaderboardPage() {
                                                         <AvatarFallback>{getInitials(entry.userProfile?.name, entry.userProfile?.email)}</AvatarFallback>
                                                     </Avatar>
                                                     <div>
+                                                        {/* Display only the name */}
                                                         <p className="font-medium text-sm truncate">{entry.userProfile?.name || 'Anonymous User'}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">{entry.userProfile?.email || 'No Email'}</p>
+                                                        {/* Removed email display */}
+                                                        {/* <p className="text-xs text-muted-foreground truncate">{entry.userProfile?.email || 'No Email'}</p> */}
                                                     </div>
                                                 </div>
                                             </TableCell>
