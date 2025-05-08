@@ -8,15 +8,15 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye } from 'lucide-react';
 import Link from 'next/link';
-import type { TestResultSummary, QuestionStatus, TestQuestion } from '@/types'; // Removed GeneratedTest import
+import type { TestResultSummary, QuestionStatus } from '@/types'; // Import relevant types
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getTestReport } from '@/actions/test-report-actions'; // Import action to get specific report
+import { getTestReport } from '@/actions/test-report-actions'; // Action to get specific report
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
-import ImageViewDialog from '@/components/notebooks/image-view-dialog';
+import ImageViewDialog from '@/components/notebooks/image-view-dialog'; // Import the image viewer dialog
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -34,10 +34,8 @@ const OPTION_STYLES = {
   correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
 };
 
-// Removed constructImagePath helper as paths should be directly in reportData
 
 export default function TestReviewPage() {
-  // --- Hooks called unconditionally at the top ---
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -51,7 +49,7 @@ export default function TestReviewPage() {
 
   const testCode = params.testCode as string;
   const userId = searchParams.get('userId');
-  const attemptTimestampStr = searchParams.get('attemptTimestamp'); // Get timestamp as string
+  const attemptTimestampStr = searchParams.get('attemptTimestamp');
 
   const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
@@ -77,13 +75,11 @@ export default function TestReviewPage() {
     setError(null);
     try {
         const reportData = await getTestReport(userId, testCode, attemptTimestamp);
-
         if (!reportData) {
             throw new Error(`Test attempt data not found for this attempt.`);
         }
-         console.log("Fetched report data:", reportData); // Debug log
+        console.log("Fetched report data for review:", reportData);
         setTestReport(reportData);
-
     } catch (err: any) {
       console.error("Error fetching review data:", err);
       setError(err.message || "Failed to load test review.");
@@ -92,7 +88,6 @@ export default function TestReviewPage() {
     }
   }, [testCode, userId, attemptTimestampStr]);
 
-  // --- Effects ---
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -105,26 +100,28 @@ export default function TestReviewPage() {
         return;
     }
     fetchReviewData();
-  }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchReviewData]);
+  }, [user, authLoading, router, testCode, userId, attemptTimestampStr, fetchReviewData]);
 
   useEffect(() => {
-      if (testReport) {
+      // Only typeset if report data is present
+      if (testReport && testReport.detailedAnswers && testReport.detailedAnswers.length > 0) {
           typesetMathJax();
       }
-  }, [currentQuestionReviewIndex, testReport, typesetMathJax]);
+  }, [currentQuestionReviewIndex, testReport, typesetMathJax]); // Depend on index and data
 
-  // --- Memoized values (called after hooks) ---
+  // Memoized values
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
   const currentUserAnswerDetailed = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
-  // Updated correctAnswer logic
+
   const correctOptionKey = useMemo(() => {
     const answer = currentUserAnswerDetailed?.correctAnswer;
     if (!answer) return undefined;
     // Handle both "Option X" and just "X" formats
     return answer.startsWith("Option ") ? answer.replace('Option ', '').trim() : answer.trim();
   }, [currentUserAnswerDetailed]);
+
   const userSelectedOptionKey = useMemo(() => currentUserAnswerDetailed?.selectedOption, [currentUserAnswerDetailed]);
   const isUserCorrect = useMemo(() => userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
   const questionStatus = useMemo(() => currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited, [currentUserAnswerDetailed]);
@@ -133,13 +130,11 @@ export default function TestReviewPage() {
     if (!currentUserAnswerDetailed || !currentUserAnswerDetailed.options) {
       return ['', '', '', ''];
     }
-    // Ensure options array has 4 elements, padding with empty strings if necessary
     const opts = currentUserAnswerDetailed.options;
     return Array.from({ length: 4 }, (_, i) => opts[i] ?? '');
   }, [currentUserAnswerDetailed]);
 
-
-  // --- Event Handlers ---
+  // Event Handlers
   const handleViewImage = (url: string | null, alt: string) => {
       if (url) {
           setImageToView({ url, alt });
@@ -147,28 +142,28 @@ export default function TestReviewPage() {
       }
   }
 
-   // --- Conditional Rendering (Moved after all hooks) ---
+   // Conditional Rendering
   if (isLoading || authLoading) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl">
-        {/* Skeleton remains the same */}
-        <Skeleton className="h-10 w-3/4 mb-4" />
-        <Skeleton className="h-8 w-1/2 mb-8" />
+        <Skeleton className="h-8 w-1/4 mb-4" />
+        <Skeleton className="h-10 w-full mb-6" />
         <Card>
           <CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-5/6" />
-            <Skeleton className="h-10 w-1/4 mt-4" />
+            <Skeleton className="h-40 w-full mb-4" />
+            <Skeleton className="h-10 w-full mb-2" />
+            <Skeleton className="h-10 w-full mb-2" />
+            <Skeleton className="h-10 w-full" />
           </CardContent>
+           <CardFooter><Skeleton className="h-10 w-24 ml-auto" /></CardFooter>
         </Card>
       </div>
     );
   }
 
   if (!authLoading && !user) {
-     // Handled by useEffect redirect, showing skeleton or nothing while redirecting
-     return null;
+     return null; // Redirect handled by useEffect
   }
 
   if (error) {
@@ -178,7 +173,7 @@ export default function TestReviewPage() {
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
         <Button asChild variant="outline">
-          <Link href="/tests">Go to Test Series</Link>
+          <Link href="/progress">Back to Progress</Link>
         </Button>
       </div>
     );
@@ -197,54 +192,51 @@ export default function TestReviewPage() {
       );
   }
 
-  if (!currentUserAnswerDetailed) {
+   if (!currentUserAnswerDetailed) {
+    // This can happen momentarily if report loads but the index is out of bounds initially
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
-        <AlertTriangle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Question Data Error</h1>
-        <p className="text-muted-foreground mb-6">Could not load the details for this specific question ({currentQuestionReviewIndex + 1}).</p>
-        <Button onClick={() => setCurrentQuestionReviewIndex(0)} variant="outline">Go to First Question</Button>
+        <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading question data...</p>
       </div>
     );
   }
 
-  // --- Render Content Functions (Now safe to call hooks within) ---
+  // Render Content Functions
    const renderContentWithMathJax = (
         textContent: string | undefined | null,
         imageUrl: string | undefined | null, // This is the absolute public URL from the report
         context: 'question' | 'explanation'
     ) => {
-        let contentToRender: React.ReactNode = null;
-        // Ensure the image URL is valid (starts with /)
-        const finalImagePath = imageUrl && imageUrl.startsWith('/') ? imageUrl : null;
+        // Use the image URL directly from the report data
+        const finalImagePath = imageUrl; // No need to construct again
 
         if (finalImagePath) {
-            contentToRender = (
-                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4 cursor-pointer" onClick={() => handleViewImage(finalImagePath, `${context} Image`)}>
+            return (
+                 <div className="relative w-full max-w-lg h-64 mx-auto md:h-80 lg:h-96 my-4">
                     <Image
                         src={finalImagePath}
                         alt={context === 'question' ? "Question Image" : "Explanation Image"}
                         layout="fill"
                         objectFit="contain"
-                        className="rounded-md border"
+                        className="rounded-md border cursor-pointer"
                         data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                        onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
                         unoptimized
+                        onClick={() => handleViewImage(finalImagePath, `${context} Image`)} // Open dialog on click
+                        onError={(e) => { console.error(`Error loading image: ${finalImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                  </div>
              );
         } else if (textContent) {
-            contentToRender = (
+            return (
                 <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
                     dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                  />
             );
         } else {
-            contentToRender = <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
+            return <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
         }
-
-        return contentToRender;
     };
 
   // --- Main Render ---
@@ -256,8 +248,7 @@ export default function TestReviewPage() {
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
-            // Initial typeset after script loads and component mounts
-            typesetMathJax();
+            typesetMathJax(); // Initial typeset
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -275,7 +266,8 @@ export default function TestReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-             <Badge variant="outline">Marks: {currentUserAnswerDetailed.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
+            {/* Use marks from the detailed answer if available, fallback to calculation */}
+             <Badge variant="outline">Marks: {currentUserAnswerDetailed?.marks ?? (testReport?.totalMarks ? (testReport.totalMarks / totalQuestions) : 1)}</Badge>
           </div>
            {currentUserAnswerDetailed.status && (
                 <Badge
@@ -295,7 +287,12 @@ export default function TestReviewPage() {
         <CardContent className="space-y-4">
             {/* Render Question */}
             <div className="mb-4 pb-4 border-b border-border">
-                 {renderContentWithMathJax(currentUserAnswerDetailed.questionText, currentUserAnswerDetailed.questionImageUrl, 'question')}
+                {/* Pass the URLs directly from the report data */}
+                 {renderContentWithMathJax(
+                    currentUserAnswerDetailed.questionText,
+                    currentUserAnswerDetailed.questionImageUrl,
+                    'question'
+                 )}
             </div>
 
           {/* Render Options */}
@@ -307,15 +304,13 @@ export default function TestReviewPage() {
               const isCorrect = correctOptionKey === optionKey;
 
               let optionStyleClass = OPTION_STYLES.base;
-              if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
-              else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
-              else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
-
-              // If it's an image question, use different styling for the correct option label
-              if (!currentUserAnswerDetailed.questionText && currentUserAnswerDetailed.questionImageUrl && isCorrect) {
-                  optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption)
-              }
-
+               if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
+               else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
+               else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
+                // Style correct option label for image questions differently
+                if (!currentUserAnswerDetailed.questionText && currentUserAnswerDetailed.questionImageUrl && isCorrect) {
+                  optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
+                }
 
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
@@ -337,7 +332,11 @@ export default function TestReviewPage() {
                  <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
               </h4>
               <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
-                 {renderContentWithMathJax(currentUserAnswerDetailed.explanationText, currentUserAnswerDetailed.explanationImageUrl, 'explanation')}
+                 {renderContentWithMathJax(
+                    currentUserAnswerDetailed.explanationText,
+                    currentUserAnswerDetailed.explanationImageUrl,
+                    'explanation'
+                 )}
               </div>
             </div>
           )}
