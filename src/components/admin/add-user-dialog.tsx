@@ -24,6 +24,10 @@ import { v4 as uuidv4 } from 'uuid'; // To generate unique IDs
 const userRoles = ['User', 'Admin'] as const;
 type UserRole = typeof userRoles[number];
 
+// Regex to match the allowed admin email pattern
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
+const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com'; // Fallback just in case
+
 // Schema for adding a new user
 const addUserSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -41,12 +45,24 @@ const addUserSchema = z.object({
 }).refine(data => data.model === 'free' || (data.model !== 'free' && data.expiry_date), {
   message: "Expiry date is required for paid models.",
   path: ["expiry_date"],
-}).refine(data => !(data.role === 'Admin' && data.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL), { // Refine: Check admin role and email
-    message: `Admin role can only be assigned to the email: ${process.env.NEXT_PUBLIC_ADMIN_EMAIL}`,
+}).refine(data => {
+    // If role is Admin, email MUST be the primary admin email OR match the allowed pattern
+    if (data.role === 'Admin') {
+      return data.email === primaryAdminEmail || adminEmailPattern.test(data.email);
+    }
+    return true; // Allow any email for 'User' role initially (second refine checks conflicts)
+}, {
+    message: `Admin role can only be assigned to ${primaryAdminEmail} or emails matching the pattern 'username-admin@edunexus.com'.`,
     path: ["role"], // Show error message on the role field
-}).refine(data => !(data.role === 'User' && data.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL), { // Refine: Check user role and admin email
-    message: `The email ${process.env.NEXT_PUBLIC_ADMIN_EMAIL} is reserved for the Admin role.`,
-    path: ["role"], // Show error message on the role field
+}).refine(data => {
+    // If role is User, email CANNOT be the primary admin email OR match the admin pattern
+    if (data.role === 'User') {
+        return data.email !== primaryAdminEmail && !adminEmailPattern.test(data.email);
+    }
+    return true;
+}, {
+    message: `This email format is reserved for Admin roles.`,
+    path: ["email"], // Show error on email field if User tries to use reserved format
 });
 
 
@@ -84,7 +100,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
   const onSubmit = async (data: AddUserFormValues) => {
     setIsLoading(true);
     try {
-      // Validation is now handled by Zod schema refinement
+      // Validation is handled by Zod schema
 
       // Format expiry_date to ISO string or null
       const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
@@ -99,7 +115,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         class: data.class,
         model: data.role === 'Admin' ? 'combo' : data.model, // Admins always get combo model
         expiry_date: data.role === 'Admin' ? '2099-12-31T00:00:00.000Z' : expiryDateString, // Long expiry for admin
-        // We don't include 'role' here; it's inferred or handled elsewhere if needed for storage beyond auth context display
+        // 'role' is not stored directly in users.json in this setup, it's inferred for display
       };
 
 
@@ -115,10 +131,13 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
       });
 
        // Prepare data for the callback (including the role for display)
-      const userForCallback: UserProfile = {
+       // The 'role' here is derived based on the email pattern for consistency
+       const roleForDisplay = (result.user.email === primaryAdminEmail || adminEmailPattern.test(result.user.email ?? '')) ? 'Admin' : 'User';
+       const userForCallback: UserProfile = {
           ...result.user,
-          role: data.role, // Add the selected role for display in the parent component
+          role: roleForDisplay, // Add the assigned role for display in the parent component
       };
+
 
       onUserAdded(userForCallback); // Pass the user with the role back to the parent
       form.reset(); // Reset form fields
@@ -194,7 +213,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                 <FormItem>
                   <FormLabel>Email Address *</FormLabel>
                   <FormControl>
-                    <Input type="email" {...field} placeholder="user@example.com" disabled={isLoading} />
+                    <Input type="email" {...field} placeholder="user@example.com or name-admin@edunexus.com" disabled={isLoading} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
