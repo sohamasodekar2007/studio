@@ -7,7 +7,7 @@
  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
  import { Progress } from '@/components/ui/progress';
- import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye } from 'lucide-react'; // Added Eye
+ import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye, Users } from 'lucide-react'; // Added Users icon
  import Link from 'next/link';
  import type { TestResultSummary, GeneratedTest, UserProfile, ChapterwiseTestJson } from '@/types'; // Import ChapterwiseTestJson
  import { Skeleton } from '@/components/ui/skeleton';
@@ -19,7 +19,6 @@
  import { predictRank, type PredictRankOutput } from '@/ai/flows/predict-rank-flow';
  import { useToast } from '@/hooks/use-toast';
  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
- // Import Label from recharts
  import { ResponsiveContainer, PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Label } from 'recharts';
  import {
    ChartContainer,
@@ -28,21 +27,13 @@
    type ChartConfig, // Import ChartConfig type
  } from "@/components/ui/chart"; // Import ShadCN chart components
 
- // Placeholder data for charts - Replace with real data later
- const overviewChartData = [
-     { name: 'Correct', value: 0, fill: 'hsl(var(--chart-2))' }, // Green
-     { name: 'Incorrect', value: 0, fill: 'hsl(var(--chart-5))' }, // Red
-     { name: 'Unattempted', value: 0, fill: 'hsl(var(--chart-3))' }, // Gray/Orange
- ];
- const overviewChartConfig = {
-    value: { label: "Questions" },
-    Correct: { label: "Correct", color: "hsl(var(--chart-2))" },
-    Incorrect: { label: "Incorrect", color: "hsl(var(--chart-5))" },
-    Unattempted: { label: "Unattempted", color: "hsl(var(--chart-3))" },
+ const chartConfig = {
+   value: { label: "Questions" },
+   Correct: { label: "Correct", color: "hsl(var(--chart-2))" }, // Green
+   Incorrect: { label: "Incorrect", color: "hsl(var(--chart-5))" }, // Red
+   Unattempted: { label: "Unattempted", color: "hsl(var(--chart-3))" }, // Gray/Orange
  } satisfies ChartConfig;
 
-
- // Removed placeholder for section-wise performance (not applicable here)
 
  export default function TestResultsPage() {
    const params = useParams();
@@ -57,13 +48,14 @@
 
    const [results, setResults] = useState<TestResultSummary | null>(null);
    const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null); // Use GeneratedTest type
-   const [leaderboardData, setLeaderboardData] = useState<Array<TestResultSummary & { rank?: number }>>([]); // For top ranks display
+   const [allAttempts, setAllAttempts] = useState<Array<TestResultSummary & { rank?: number }>>([]); // Store all attempts
    const [isLoading, setIsLoading] = useState(true);
    const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
    const [error, setError] = useState<string | null>(null);
    const [isRankingDialogOpen, setIsRankingDialogOpen] = useState(false);
    const [isLoadingRankPrediction, setIsLoadingRankPrediction] = useState(false);
    const [rankPrediction, setRankPrediction] = useState<PredictRankOutput | null>(null);
+
 
    // --- Fetching Data ---
    const fetchTestAndResults = useCallback(async () => {
@@ -85,6 +77,7 @@
        setError(null);
        setRankPrediction(null);
        try {
+         // Fetch report and definition in parallel
          const [reportData, testDefData] = await Promise.all([
            getTestReport(userId, testCode, attemptTimestamp),
            getGeneratedTestByCode(testCode).catch(() => null) // Don't fail if definition is missing
@@ -92,25 +85,16 @@
 
          if (!reportData) throw new Error(`Could not find results for this attempt.`);
 
-         // Ensure it's a chapterwise test for this page
+         // Ensure it's a chapterwise test for this page (or handle differently if needed)
          if (testDefData && testDefData.testType !== 'chapterwise') {
-             console.warn("Attempting to view non-chapterwise test results on chapterwise page. Redirecting or showing error might be appropriate.");
-             setError("This results page is for chapterwise tests only.");
-             setTestDefinition(null);
-             setResults(null);
-             setIsLoading(false);
+             console.warn("Viewing non-chapterwise results on chapterwise page. Redirecting...");
+             // Redirect to a generic results page or dashboard might be better
+             router.push('/progress'); // Example redirect
              return;
          }
 
          setTestDefinition(testDefData as ChapterwiseTestJson | null); // Cast to specific type if needed
          setResults(reportData);
-
-         // Update overview chart data based on results
-         if (reportData.totalQuestions > 0) {
-             overviewChartData[0].value = reportData.correct ?? 0;
-             overviewChartData[1].value = reportData.incorrect ?? 0;
-             overviewChartData[2].value = reportData.unanswered ?? 0;
-         }
 
        } catch (err: any) {
          setError(err.message || "Failed to load test results.");
@@ -119,24 +103,26 @@
        } finally {
          setIsLoading(false);
        }
-   }, [testCode, userId, attemptTimestampStr]);
+   }, [testCode, userId, attemptTimestampStr, router]); // Added router to dependencies
 
-   // Fetch Leaderboard (Top 5-6 for display)
-   const fetchLeaderboardData = useCallback(async () => {
+   // Fetch ALL attempts for ranking and stats
+   const fetchAllAttemptsData = useCallback(async () => {
        if (!testCode) return;
-       setIsLoadingLeaderboard(true);
+       setIsLoadingLeaderboard(true); // Use this state to indicate loading all attempts
        try {
-           const allAttempts = await getAllReportsForTest(testCode);
-           const sorted = allAttempts.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+           const attempts = await getAllReportsForTest(testCode);
+           const sorted = attempts.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
                                   .map((att, index) => ({ ...att, rank: index + 1 }));
-           setLeaderboardData(sorted.slice(0, 6)); // Get top 6
+           setAllAttempts(sorted); // Store all ranked attempts
+           console.log(`Fetched ${sorted.length} total attempts for ranking.`);
        } catch (err) {
-            console.error("Error fetching leaderboard:", err);
-           // Don't set main error, just log it
+            console.error("Error fetching all attempts:", err);
+           // Don't set main error, just log it or show a subtle indicator
+           toast({ variant: "destructive", title: "Ranking Error", description: "Could not load full ranking data."})
        } finally {
            setIsLoadingLeaderboard(false);
        }
-   }, [testCode]);
+   }, [testCode, toast]);
 
    useEffect(() => {
      if (authLoading) return;
@@ -151,9 +137,9 @@
       }
       if (user) {
           fetchTestAndResults();
-          fetchLeaderboardData(); // Fetch leaderboard after main data
+          fetchAllAttemptsData(); // Fetch all attempts after main data
       }
-   }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchTestAndResults, fetchLeaderboardData]);
+   }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchTestAndResults, fetchAllAttemptsData]);
 
 
    // --- Calculations & Placeholders ---
@@ -161,25 +147,49 @@
    const duration = results?.duration || testDefinition?.duration || 0;
    const totalQs = results?.totalQuestions ?? 0;
    const totalPossibleMarks = results?.totalMarks || totalQs || 0;
-   const userRank = leaderboardData.find(entry => entry.userId === userId)?.rank ?? 'N/A'; // Find user's rank
-   const totalAttempts = leaderboardData.length > 0 ? '210' : 'N/A'; // Placeholder total attempts for rank display
-   const percentile = results?.percentage ? (results.percentage * 0.95).toFixed(2) : 'N/A'; // Placeholder percentile calc
+
+    // Calculate Rank and Percentile from all attempts
+    const userRankData = useMemo(() => allAttempts.find(entry => entry.userId === userId && entry.attemptTimestamp === parseInt(attemptTimestampStr ?? '0', 10)), [allAttempts, userId, attemptTimestampStr]);
+    const userRank = userRankData?.rank ?? 'N/A';
+    const totalStudents = allAttempts.length;
+    const percentile = useMemo(() => {
+       if (typeof userRank === 'number' && totalStudents > 0) {
+           return (((totalStudents - userRank) / totalStudents) * 100).toFixed(1); // Common percentile formula
+       }
+       return 'N/A';
+    }, [userRank, totalStudents]);
+
+   const accuracy = results?.percentage ? results.percentage.toFixed(1) : 'N/A'; // Use actual percentage
    const timePerQues = totalQs > 0 && results?.timeTakenMinutes ? `${(results.timeTakenMinutes * 60 / totalQs).toFixed(0)}s` : 'N/A';
    const chapterwiseSubject = (testDefinition as ChapterwiseTestJson)?.test_subject?.[0] || 'Subject'; // Get the single subject
 
-
-    // Placeholder Topper Data (replace with actual fetch logic)
-    const topperData = leaderboardData.length > 0 ? {
-        name: leaderboardData[0].user?.name ?? 'Topper',
-        score: leaderboardData[0].score ?? 0,
-        accuracy: leaderboardData[0].percentage ? (leaderboardData[0].percentage).toFixed(2) : 'N/A', // Use actual percentage
-        correct: leaderboardData[0].correct ?? 0,
-        incorrect: leaderboardData[0].incorrect ?? 0,
-        time: leaderboardData[0].timeTakenMinutes ? `${leaderboardData[0].timeTakenMinutes} min` : 'N/A'
-    } : null;
+   // Dynamic chart data
+   const overviewChartData = useMemo(() => [
+        { name: 'Correct', value: results?.correct ?? 0, fill: 'hsl(var(--chart-2))' },
+        { name: 'Incorrect', value: results?.incorrect ?? 0, fill: 'hsl(var(--chart-5))' },
+        { name: 'Unattempted', value: results?.unanswered ?? 0, fill: 'hsl(var(--chart-3))' },
+   ], [results]);
 
 
-    if (isLoading || authLoading) {
+    // Top 5 Leaderboard Data (derived from all attempts)
+    const topLeaderboardData = useMemo(() => allAttempts.slice(0, 5), [allAttempts]);
+
+    // Topper Data (derived from all attempts)
+    const topperData = useMemo(() => {
+        if (allAttempts.length === 0) return null;
+        const topper = allAttempts[0]; // Already sorted
+        return {
+            name: topper.user?.name ?? 'Topper',
+            score: topper.score ?? 0,
+            accuracy: topper.percentage ? topper.percentage.toFixed(1) : 'N/A',
+            correct: topper.correct ?? 0,
+            incorrect: topper.incorrect ?? 0,
+            time: topper.timeTakenMinutes ? `${topper.timeTakenMinutes} min` : 'N/A'
+        };
+    }, [allAttempts]);
+
+
+    if (isLoading || authLoading || isLoadingLeaderboard) { // Combine loading states
         // More detailed skeleton matching the new layout
         return (
             <div className="container mx-auto py-6 px-4 max-w-7xl space-y-6">
@@ -258,7 +268,6 @@
                  <h1 className="text-2xl font-bold mt-1">Your performance report for {results.testName || testCode}</h1>
             </div>
              <div className="flex gap-2">
-                {/* Removed Reading Mode button */}
                 <Button variant="default" size="sm" asChild>
                      <Link href={`/chapterwise-test-review/${results.testCode}?userId=${user?.id}&attemptTimestamp=${results.attemptTimestamp}`}>
                         <Eye className="mr-1.5 h-4 w-4" /> View Solution
@@ -269,20 +278,23 @@
 
         {/* Top Metrics Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="text-center p-4">
-                <CardDescription className="text-xs mb-1">SCORE</CardDescription>
+            <Card className="text-center p-4 bg-card border hover:shadow-md transition-shadow">
+                <CardDescription className="text-xs mb-1 flex items-center justify-center gap-1 text-muted-foreground"><BarChart2 className="h-3 w-3"/> SCORE</CardDescription>
                 <CardTitle className="text-2xl font-bold">{results.score ?? 'N/A'} <span className="text-sm font-normal text-muted-foreground">/ {totalPossibleMarks}</span></CardTitle>
             </Card>
-            <Card className="text-center p-4">
-                <CardDescription className="text-xs mb-1">ACCURACY</CardDescription>
-                <CardTitle className="text-2xl font-bold">{results.percentage?.toFixed(2) ?? 'N/A'}%</CardTitle>
+            <Card className="text-center p-4 bg-card border hover:shadow-md transition-shadow">
+                <CardDescription className="text-xs mb-1 flex items-center justify-center gap-1 text-muted-foreground"><Gauge className="h-3 w-3"/> ACCURACY</CardDescription>
+                <CardTitle className="text-2xl font-bold">{accuracy}%</CardTitle>
             </Card>
-            <Card className="text-center p-4">
-                <CardDescription className="text-xs mb-1">RANK</CardDescription>
-                <CardTitle className="text-2xl font-bold">{userRank} <span className="text-sm font-normal text-muted-foreground">/ {totalAttempts}</span></CardTitle>
+            <Card className="text-center p-4 bg-card border hover:shadow-md transition-shadow">
+                <CardDescription className="text-xs mb-1 flex items-center justify-center gap-1 text-muted-foreground"><ListOrdered className="h-3 w-3"/> RANK</CardDescription>
+                <CardTitle className="text-2xl font-bold">
+                    {userRank}
+                    <span className="text-sm font-normal text-muted-foreground"> / {totalStudents}</span>
+                </CardTitle>
             </Card>
-             <Card className="text-center p-4">
-                <CardDescription className="text-xs mb-1">PERCENTILE</CardDescription>
+             <Card className="text-center p-4 bg-card border hover:shadow-md transition-shadow">
+                <CardDescription className="text-xs mb-1 flex items-center justify-center gap-1 text-muted-foreground"><TrendingUp className="h-3 w-3"/> PERCENTILE</CardDescription>
                 <CardTitle className="text-2xl font-bold">{percentile}%</CardTitle>
             </Card>
         </div>
@@ -291,15 +303,20 @@
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              {/* Leaderboard */}
              <Card className="md:col-span-1">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="text-base font-semibold">Leaderboard</CardTitle>
+                    <Button variant="link" size="sm" className="text-xs h-auto p-0" onClick={() => setIsRankingDialogOpen(true)}>View All</Button>
                  </CardHeader>
                  <CardContent className="p-0">
                     {isLoadingLeaderboard ? <Skeleton className="h-40 w-full" /> : (
                         <ul className="divide-y">
-                             {leaderboardData.map((entry) => (
+                             {topLeaderboardData.map((entry) => (
                                  <li key={entry.attemptTimestamp} className="flex items-center justify-between px-4 py-2 text-sm">
-                                     <span className="font-medium">{entry.rank}. {entry.user?.name ?? 'Anonymous'}</span>
+                                     <span className="font-medium flex items-center gap-1.5">
+                                         {entry.rank}.
+                                         <UserCircle className="h-4 w-4 text-muted-foreground" />
+                                         {entry.user?.name ?? 'Anonymous'}
+                                      </span>
                                      <span className="text-muted-foreground">{entry.score ?? 'N/A'} / {entry.totalMarks ?? entry.totalQuestions}</span>
                                  </li>
                              ))}
@@ -309,13 +326,13 @@
              </Card>
 
             {/* Overview Chart */}
-            <Card className="md:col-span-1">
+            <Card className="md:col-span-1 flex flex-col">
                 <CardHeader className="items-center pb-0">
                     <CardTitle>Overview</CardTitle>
                      <CardDescription>Based on questions attempted</CardDescription>
                 </CardHeader>
-                 <CardContent className="flex-1 pb-0">
-                    <ChartContainer config={overviewChartConfig} className="mx-auto aspect-square h-[200px]">
+                 <CardContent className="flex-1 pb-0 flex items-center justify-center">
+                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[200px] w-full">
                         <PieChart>
                             <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                             <Pie data={overviewChartData} dataKey="value" nameKey="name" innerRadius={60} strokeWidth={5}>
@@ -339,7 +356,7 @@
                         </PieChart>
                      </ChartContainer>
                 </CardContent>
-                 <CardFooter className="flex-col gap-2 text-sm pt-0">
+                 <CardFooter className="flex-col gap-2 text-sm pt-4"> {/* Increased pt */}
                     <div className="flex items-center gap-2 font-medium leading-none">
                         Hover over chart for details
                      </div>
@@ -365,8 +382,8 @@
                                 </TableRow>
                              </TableHeader>
                             <TableBody>
-                                <TableRow><TableCell>Score</TableCell><TableCell className="text-right font-medium">{results.score?.toFixed(2)}</TableCell><TableCell className="text-right">{topperData.score.toFixed(2)}</TableCell></TableRow>
-                                <TableRow><TableCell>Accuracy</TableCell><TableCell className="text-right font-medium">{results.percentage?.toFixed(2)}%</TableCell><TableCell className="text-right">{topperData.accuracy}%</TableCell></TableRow>
+                                <TableRow><TableCell>Score</TableCell><TableCell className="text-right font-medium">{results.score?.toFixed(1)}</TableCell><TableCell className="text-right">{topperData.score.toFixed(1)}</TableCell></TableRow>
+                                <TableRow><TableCell>Accuracy</TableCell><TableCell className="text-right font-medium">{accuracy}%</TableCell><TableCell className="text-right">{topperData.accuracy}%</TableCell></TableRow>
                                 <TableRow><TableCell>Correct</TableCell><TableCell className="text-right font-medium">{results.correct}</TableCell><TableCell className="text-right">{topperData.correct}</TableCell></TableRow>
                                 <TableRow><TableCell>Incorrect</TableCell><TableCell className="text-right font-medium">{results.incorrect}</TableCell><TableCell className="text-right">{topperData.incorrect}</TableCell></TableRow>
                                 <TableRow><TableCell>Total Time</TableCell><TableCell className="text-right font-medium">{results.timeTakenMinutes} min</TableCell><TableCell className="text-right">{topperData.time}</TableCell></TableRow>
@@ -411,7 +428,7 @@
                  </div>
                 {/* Simple message */}
                  <p className="text-sm text-muted-foreground my-4 text-center">
-                    You scored <span className="font-semibold text-primary">{results.score?.toFixed(0)}/{totalPossibleMarks}</span> with an accuracy of <span className="font-semibold text-primary">{results.percentage?.toFixed(1)}%</span>. Keep practicing!
+                    You scored <span className="font-semibold text-primary">{results.score?.toFixed(0)}/{totalPossibleMarks}</span> with an accuracy of <span className="font-semibold text-primary">{accuracy}%</span>. Keep practicing!
                 </p>
 
             </CardContent>
@@ -444,8 +461,6 @@
                          <p className="text-xs text-muted-foreground">UNATTEMPTED</p>
                     </div>
                  </div>
-                  {/* Time Spent Deciding - Removed as it's less relevant for single subject */}
-                 {/* Efficiency Chart Placeholder - Removed as less relevant for single subject */}
              </CardContent>
         </Card>
 
@@ -469,6 +484,7 @@
               isOpen={isRankingDialogOpen}
               onClose={() => setIsRankingDialogOpen(false)}
               test={testDefinition}
+              // Pass function to fetch ALL attempts for the ranking dialog
               fetchTestAttempts={() => getAllReportsForTest(testCode)}
             />
          )}
