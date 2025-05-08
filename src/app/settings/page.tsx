@@ -1,3 +1,4 @@
+// src/app/settings/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from 'react';
@@ -16,7 +17,7 @@ import { User, Loader2, AlertTriangle, Star, CalendarClock, Upload, X } from 'lu
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { getUserById, updateUserInJson, updateUserPasswordInJson, findUserByEmailInternal } from '@/actions/user-actions';
+import { getUserById, updateUserInJson, updateUserPasswordInJson, findUserByEmailInternal } from '@/actions/user-actions'; // Use updated user actions
 import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +94,6 @@ export default function SettingsPage() {
     },
   });
 
-
   // Effect to fetch the full user profile
   useEffect(() => {
     if (!isMounted) return; // Don't run on server
@@ -110,6 +110,7 @@ export default function SettingsPage() {
               phone: profile.phone || "",
               avatarFile: null,
             });
+            // Construct the correct path relative to the public directory
             setAvatarPreview(profile.avatarUrl ? `/avatars/${profile.avatarUrl}` : null);
           } else {
             console.error("Settings: User found in context but not in backend data.");
@@ -131,7 +132,6 @@ export default function SettingsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, router, toast, isMounted]); // Add isMounted
 
-
   const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -148,6 +148,7 @@ export default function SettingsPage() {
       setAvatarPreview(URL.createObjectURL(file));
     } else {
       profileForm.setValue("avatarFile", null);
+       // Revert to original stored avatar or null if none exists
       setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null);
     }
     if (event.target) event.target.value = "";
@@ -155,7 +156,7 @@ export default function SettingsPage() {
 
   const removeAvatar = () => {
     profileForm.setValue("avatarFile", null);
-    setAvatarPreview(null);
+    setAvatarPreview(null); // Set preview to null immediately
     if (avatarInputRef.current) avatarInputRef.current.value = "";
     profileForm.clearErrors("avatarFile");
     toast({ title: "Avatar Removed", description: "Click 'Save Profile Changes' to confirm." });
@@ -168,60 +169,67 @@ export default function SettingsPage() {
       return;
     }
     setIsLoadingProfile(true);
-    let newAvatarFilename: string | null = fullUserProfile.avatarUrl || null; // Ensure null if undefined
-    let oldAvatarFilename: string | null = fullUserProfile.avatarUrl || null;
+    let newAvatarFilename: string | null = fullUserProfile.avatarUrl || null; // Start with current filename
+    const oldAvatarFilename = fullUserProfile.avatarUrl || null;
+    let avatarChanged = false;
 
     try {
-        // Avatar Upload Logic (Simulated)
+        // Check if a new file was uploaded
         if (data.avatarFile instanceof File) {
+            avatarChanged = true;
             console.warn("Simulating avatar upload. File would be handled here in a real backend.");
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
             const extension = data.avatarFile.name.split('.').pop();
-            newAvatarFilename = `avatar-${user.id}-${uniqueSuffix}.${extension}`;
+            newAvatarFilename = `avatar-${user.id}-${uniqueSuffix}.${extension}`; // Generate new filename
             console.log(`Simulated: Save new avatar as ${newAvatarFilename}`);
             if (oldAvatarFilename) console.log(`Simulated: Delete old avatar ${oldAvatarFilename}`);
-            // TODO: Add actual file upload logic here (e.g., to public/avatars via server action)
-            // You'd need a server action that takes the FormData, saves the file,
-            // deletes the old one, and returns the new filename.
-             // Example (conceptual):
-             // const uploadFormData = new FormData();
-             // uploadFormData.append('avatar', data.avatarFile);
-             // uploadFormData.append('userId', user.id);
-             // if (oldAvatarFilename) uploadFormData.append('oldAvatarFilename', oldAvatarFilename);
-             // const uploadResult = await uploadAvatarAction(uploadFormData); // Replace with actual action
-             // if (!uploadResult.success) throw new Error(uploadResult.message);
-             // newAvatarFilename = uploadResult.filename;
-        } else if (avatarPreview === null && oldAvatarFilename !== null) {
+            // --- Backend Upload/Delete ---
+            // In a real app, call a server action here to:
+            // 1. Upload data.avatarFile
+            // 2. Delete oldAvatarFilename if it exists
+            // 3. Return the actual newAvatarFilename from the server action
+            // const uploadResult = await uploadAvatarAction(formData); // Example
+            // if (!uploadResult.success) throw new Error('Avatar upload failed');
+            // newAvatarFilename = uploadResult.filename;
+            // --- End Backend ---
+        }
+        // Check if the avatar was marked for removal (preview is null but file input wasn't set)
+        else if (avatarPreview === null && oldAvatarFilename !== null && !data.avatarFile) {
+            avatarChanged = true;
             console.log("Avatar marked for removal.");
-            newAvatarFilename = null;
-            // TODO: Add logic to delete the old file via server action if needed
-            // Example (conceptual):
-            // if (oldAvatarFilename) await deleteAvatarAction(user.id, oldAvatarFilename);
+            newAvatarFilename = null; // Set filename to null
+             // --- Backend Delete ---
+             // Call a server action here to delete oldAvatarFilename
+             // if (oldAvatarFilename) await deleteAvatarAction(user.id, oldAvatarFilename); // Example
+             // --- End Backend ---
         }
 
-        // Data to update (excluding avatar initially, will be added based on upload/removal)
-        const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'class' | 'model' | 'expiry_date' | 'referral' | 'avatarUrl'>> = {
-            name: data.name,
-            phone: data.phone,
-        };
+        // Only proceed with update if data actually changed
+        const nameChanged = data.name !== (fullUserProfile.name || '');
+        const phoneChanged = data.phone !== (fullUserProfile.phone || '');
 
-         // Add the potentially updated avatarUrl
-        const finalPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password'>> = {
-            ...updatedDataPayload,
-            avatarUrl: newAvatarFilename, // Set the final avatar filename (or null)
-        };
+        if (!nameChanged && !phoneChanged && !avatarChanged) {
+            toast({ title: "No Changes Detected", description: "No profile information was modified." });
+            setIsLoadingProfile(false);
+            return;
+        }
 
+        // Prepare payload for update (excluding fields not being updated directly)
+        const updatePayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'email' | 'password' | 'class' | 'model' | 'expiry_date' | 'referral' | 'role' | 'totalPoints'>> = {};
+        if (nameChanged) updatePayload.name = data.name;
+        if (phoneChanged) updatePayload.phone = data.phone;
+        if (avatarChanged) updatePayload.avatarUrl = newAvatarFilename;
 
         // Call the server action to update the user's JSON data
-        const updateResult = await updateUserInJson(user.id, finalPayload);
+        const updateResult = await updateUserInJson(user.id, updatePayload);
 
         if (!updateResult.success || !updateResult.user) {
             throw new Error(updateResult.message || "Failed to save profile updates.");
         }
 
         // Refresh the user context and update local state
-        await refreshUser();
-        setFullUserProfile(updateResult.user); // Update local state with the new user data
+        await refreshUser(); // Refresh context to reflect changes everywhere
+        setFullUserProfile(updateResult.user); // Update local state for this component
         toast({ title: "Profile Updated", description: "Your profile info has been saved." });
         profileForm.reset({ name: updateResult.user.name || "", phone: updateResult.user.phone || "", avatarFile: null });
         setAvatarPreview(updateResult.user.avatarUrl ? `/avatars/${updateResult.user.avatarUrl}` : null); // Update preview
@@ -229,8 +237,8 @@ export default function SettingsPage() {
     } catch (error: any) {
         console.error("Profile update failed:", error);
         toast({ variant: 'destructive', title: "Update Failed", description: error.message });
-        // Revert preview on error ONLY if it wasn't explicitly removed
-        if (!(avatarPreview === null && oldAvatarFilename !== null)) {
+        // Revert preview on error ONLY if it wasn't explicitly removed and an avatar file was being processed
+         if (data.avatarFile && !(avatarPreview === null && oldAvatarFilename !== null)) {
              setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null);
         }
     } finally {
@@ -245,11 +253,10 @@ export default function SettingsPage() {
         }
         setIsLoadingPassword(true);
         try {
-             // 1. Verify Current Password (Fetch user with password hash from backend)
-             // Important: Use an internal function that returns the password hash
-             const userWithPassword = await findUserByEmailInternal(user.email); // Use internal function
+             // Fetch user with password hash from backend using the internal function
+             const userWithPassword = await findUserByEmailInternal(user.email);
              if (!userWithPassword || !userWithPassword.password) {
-                throw new Error("Could not verify current password.");
+                throw new Error("Could not verify current password. User data missing.");
              }
 
              // Compare plaintext current password with the stored hash
@@ -259,7 +266,7 @@ export default function SettingsPage() {
                  throw new Error("Incorrect current password.");
              }
 
-             // 2. Update Password in JSON (Action handles hashing the *new* password)
+             // Call action to update password in JSON (it handles hashing the new password)
              const result = await updateUserPasswordInJson(user.id, data.newPassword);
              if (!result.success) {
                  throw new Error(result.message || "Failed to update password.");
@@ -292,7 +299,7 @@ export default function SettingsPage() {
     }
   };
 
-   // Corrected rendering logic for loading state
+   // Loading state for the entire page until user profile is fetched
    if (!isMounted || loading || (user && !fullUserProfile)) {
      return (
        <div className="space-y-6 max-w-3xl mx-auto">
@@ -309,7 +316,25 @@ export default function SettingsPage() {
            </CardContent>
            <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
          </Card>
-         {/* Other skeletons... */}
+         <Separator />
+         <Card>
+            <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/3" /></CardHeader>
+            <CardContent className="space-y-4">
+                 <Skeleton className="h-10 w-full" />
+                 <Skeleton className="h-10 w-full" />
+                 <Skeleton className="h-10 w-full" />
+            </CardContent>
+            <CardFooter><Skeleton className="h-10 w-32" /></CardFooter>
+         </Card>
+          <Separator />
+          <Card>
+             <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/3" /></CardHeader>
+             <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+             </CardContent>
+             <CardFooter><Skeleton className="h-10 w-36" /></CardFooter>
+          </Card>
        </div>
      );
    }
@@ -318,10 +343,9 @@ export default function SettingsPage() {
     return null; // Redirect handled by useEffect
   }
 
-   // Correctly construct avatarSrc using the fetched fullUserProfile
-   const currentAvatarFilename = fullUserProfile?.avatarUrl || null; // Use the state
-   const displayAvatarSrc = avatarPreview || (currentAvatarFilename ? `/avatars/${currentAvatarFilename}` : `https://avatar.vercel.sh/${user.email || user.id}.png`);
-   const avatarKey = currentAvatarFilename || user.email || user.id; // Key for Vercel Avatars or fallback
+  // Construct avatar source ensuring fallback mechanism
+  const displayAvatarSrc = avatarPreview ?? (fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png`);
+  const avatarKey = fullUserProfile?.avatarUrl || user.email || user.id; // Unique key for Vercel/fallback
 
 
   return (
@@ -340,12 +364,12 @@ export default function SettingsPage() {
               <FormField
                 control={profileForm.control}
                 name="avatarFile"
-                render={({ field }) => (
+                render={({ field }) => ( // No need to use field directly here, state manages file
                   <FormItem>
                     <FormLabel>Profile Picture</FormLabel>
                     <div className="flex items-center gap-4">
                        <Avatar className="h-16 w-16">
-                         <AvatarImage src={displayAvatarSrc} alt={user.name || user.email || 'User Avatar'} key={displayAvatarSrc} /> {/* Add key to force re-render on src change */}
+                         <AvatarImage src={displayAvatarSrc} alt={user.name || user.email || 'User Avatar'} key={avatarKey} /> {/* Use key */}
                          <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
                        </Avatar>
                       <Input
@@ -360,7 +384,8 @@ export default function SettingsPage() {
                       <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={isLoadingProfile}>
                         <Upload className="mr-2 h-4 w-4" /> Change
                       </Button>
-                      {avatarPreview && (
+                      {/* Show remove button only if there's a preview or a stored avatar */}
+                      {(avatarPreview || fullUserProfile?.avatarUrl) && (
                         <Button type="button" variant="ghost" size="sm" onClick={removeAvatar} disabled={isLoadingProfile} className="text-destructive hover:text-destructive">
                           <X className="mr-1 h-4 w-4" /> Remove
                         </Button>
@@ -485,7 +510,6 @@ export default function SettingsPage() {
             <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
               <span>Email Notifications</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                {/* Updated brand name */}
                 Send emails about test results and EduNexus updates.
               </span>
             </Label>
@@ -495,7 +519,6 @@ export default function SettingsPage() {
             <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
               <span>In-App Notifications</span>
               <span className="font-normal leading-snug text-muted-foreground">
-                {/* Updated brand name */}
                 Show notifications within the EduNexus platform.
               </span>
             </Label>

@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    readUsersWithPasswordsInternal, // Use the internal function to get hash
+    findUserByEmailInternal, // Use this internal function to get hash for login
     saveUserToJson,
     readUsers,
     getUserById,
@@ -39,6 +39,8 @@ interface AuthContextProps {
     academicStatus?: UserAcademicStatus | null
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
+  // Add updateUserData function
+  updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void;
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -49,6 +51,7 @@ const AuthContext = createContext<AuthContextProps>({
   logout: async () => { console.warn('Auth not initialized or logout function not implemented'); },
   signUp: async () => { console.warn('Auth not initialized or signUp function not implemented'); },
   refreshUser: async () => { console.warn('Auth not initialized or refreshUser function not implemented'); },
+  updateUserData: () => { console.warn('Auth not initialized or updateUserData function not implemented'); },
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -194,9 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-        // Fetch the full user profile including password hash using internal action
-        // Ensure readUsersWithPasswordsInternal expects only email
-        const foundUser = await readUsersWithPasswordsInternal(email);
+        // Use the correct action to find user by email including password hash
+        const foundUser = await findUserByEmailInternal(email);
 
         if (foundUser && foundUser.password) {
             // Compare the provided password with the stored hash
@@ -265,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
         // Check if user already exists locally using the internal function
-        const existingUser = await readUsersWithPasswordsInternal(email); // Use internal fetch
+        const existingUser = await findUserByEmailInternal(email); // Use internal fetch
 
         if (existingUser) {
              console.warn(`AuthProvider: Signup attempt failed - email ${email} already exists.`);
@@ -370,6 +372,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, pathname, router, isMounted, toast]);
 
 
+  // Function to update user context state locally (e.g., after profile update)
+  const updateUserData = (updatedUser: Omit<UserProfile, 'password'>) => {
+    if (user && user.id === updatedUser.id) {
+        console.log("AuthProvider: Updating local user context state...");
+        const contextUser = mapUserProfileToContextUser(updatedUser);
+        setUser(contextUser);
+         // Also update local storage
+        localStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+    }
+  }
+
+
   // --- UI Loading State ---
    // Show skeleton only during the initial loading phase AND if not on an auth page
    // AND if the component is mounted (to prevent SSR flash)
@@ -406,7 +420,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AuthContext.Provider value={{ user, loading, initializationError, login, logout, signUp, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, initializationError, login, logout, signUp, refreshUser, updateUserData }}>
       {children}
     </AuthContext.Provider>
   );
