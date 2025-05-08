@@ -1,7 +1,8 @@
-// src/app/admin/questions/page.tsx
 'use client';
 
-import React, { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
+import React from 'react';
+
+import { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -375,6 +376,7 @@ export default function AdminQuestionBankPage() {
   };
 
     return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <ClipboardList className="h-8 w-8 text-primary" />
@@ -445,83 +447,9 @@ export default function AdminQuestionBankPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Lesson Name *</FormLabel>
-                    <Popover open={lessonPopoverOpen} onOpenChange={setLessonPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={lessonPopoverOpen}
-                            className={cn(
-                              "w-full justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isLoading || isLoadingLessons || !selectedSubject}
-                          >
-                             {field.value
-                               ? field.value // Show selected or typed value directly
-                               : (isLoadingLessons ? "Loading..." : "Select or type Lesson")}
-                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command shouldFilter={true}>
-                          <CommandInput
-                            placeholder="Search or add lesson..."
-                            // Update form value directly on input change for new lessons
-                             onValueChange={(search) => field.onChange(search)}
-                             value={field.value || ''} // Ensure CommandInput receives the value
-                             disabled={isLoadingLessons}
-                          />
-                          <CommandList>
-                             {isLoadingLessons ? (
-                                <CommandItem value="loading" disabled>Loading lessons...</CommandItem>
-                             ) : lessons.length === 0 && selectedSubject ? (
-                                <CommandEmpty>No lessons found. Type to add new.</CommandEmpty>
-                             ) : !selectedSubject ? (
-                                <CommandEmpty>Select Subject first.</CommandEmpty>
-                             ) : null }
-
-                              {!isLoadingLessons && lessons.map((lesson) => (
-                                <CommandItem
-                                  value={lesson} // Use lesson name directly
-                                  key={lesson}
-                                  onSelect={() => {
-                                    form.setValue("lesson", lesson);
-                                    setLessonPopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      lesson === field.value ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  {lesson}
-                                </CommandItem>
-                              ))}
-                               {/* Show the typed value as an option to add if it doesn't exist */}
-                               {field.value && !lessons.includes(field.value) && !isLoadingLessons && (
-                                   <CommandItem
-                                      value={field.value}
-                                      onSelect={() => {
-                                          // No need to add to lessons state here, just confirm selection
-                                          form.setValue("lesson", field.value);
-                                          setLessonPopoverOpen(false);
-                                      }}
-                                      className="text-muted-foreground italic"
-                                   >
-                                      <Check className={cn("mr-2 h-4 w-4 opacity-0")} />
-                                      Add new: "{field.value}"
-                                   </CommandItem>
-                               )}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
+                  <>
+                         Select or type Lesson
+                  </>
                   </FormItem>
                 )}
               />
@@ -625,46 +553,26 @@ export default function AdminQuestionBankPage() {
                         </FormItem>
                         )}
                     />
-                    <FormField
-                        control={form.control}
-                        name="pyqDate"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-col">
-                            <FormLabel>PYQ Date *</FormLabel>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                <FormControl>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    disabled={isLoading}
-                                    >
-                                    {field.value ? (
-                                        format(field.value, "PPP") // Format date nicely
-                                    ) : (
-                                        <span>Pick PYQ date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                    mode="single"
-                                    selected={field.value ?? undefined}
-                                    onSelect={field.onChange}
-                                    disabled={isLoading}
-                                    initialFocus
-                                />
-                                </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
+                    <>
+                            
+                                
+                                    
+                                        Pick PYQ date
+                                    
+                                
+                                
+                                
+                                    
+                                        
+                                        
+                                    
+                                
+                            
+                            
+                            
+                        </>
+                        
+                    
                      <FormField
                         control={form.control}
                         name="pyqShift"
@@ -704,22 +612,16 @@ export default function AdminQuestionBankPage() {
                         className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
                         // disabled={isLoading} // Re-enable if needed, but often type selection shouldn't be disabled by loading
                     >
-                        <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                                <RadioGroupItem value="text" />
-                            </FormControl>
-                            <FormLabel className="font-normal flex items-center gap-2">
-                                <FileText className="h-4 w-4" /> Add Text Question
-                            </FormLabel>
-                        </FormItem>
-                         <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                                <RadioGroupItem value="image" />
-                            </FormControl>
-                            <FormLabel className="font-normal flex items-center gap-2">
-                                <ImagePlus className="h-4 w-4" /> Add Image Question
-                            </FormLabel>
-                        </FormItem>
+                        <>
+                            
+                                
+                                
+                            </>
+                            <>
+                               
+                                
+                            </>
+                        
                     </RadioGroup>
                    </FormControl>
                    <FormMessage />
@@ -742,18 +644,19 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
                         <FormControl>
-                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
+                         <>
+                        </>
                         </FormControl>
                         <FormMessage />
                     </FormItem>
                     )}
                 />
-                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <FormField control={form.control} name="optionA" render={({ field }) => (<FormItem><FormLabel>Option A *</FormLabel><FormControl><Input placeholder="Option A" {...field} disabled={isLoading}/></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="optionB" render={({ field }) => (<FormItem><FormLabel>Option B *</FormLabel><FormControl><Input placeholder="Option B" {...field} disabled={isLoading}/></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="optionC" render={({ field }) => (<FormItem><FormLabel>Option C *</FormLabel><FormControl><Input placeholder="Option C" {...field} disabled={isLoading}/></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="optionD" render={({ field }) => (<FormItem><FormLabel>Option D *</FormLabel><FormControl><Input placeholder="Option D" {...field} disabled={isLoading}/></FormControl><FormMessage /></FormItem>)} />
-                 </div>
+                 <>
+                    
+                    
+                    
+                    
+                 </>
                 </>
              ) : (
                 <FormField
@@ -763,52 +666,24 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Image *</FormLabel>
                         <FormControl>
-                             <div className="flex items-center gap-4">
-                                <Input
-                                    id="question-image-upload"
-                                    type="file"
-                                    accept={ACCEPTED_IMAGE_TYPES.join(',')}
-                                    ref={questionFileInputRef}
-                                    onChange={(e) => handleFileChange(e, 'questionImage', setQuestionImagePreview)}
-                                    className="hidden"
-                                    disabled={isLoading}
-                                />
-                                 <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => questionFileInputRef.current?.click()}
-                                    disabled={isLoading}
-                                >
-                                    <Upload className="mr-2 h-4 w-4" /> Upload Image
-                                </Button>
-                                 {/* Paste Button */}
-                                 <Button
-                                     type="button"
-                                     variant="outline"
-                                     onClick={() => handlePasteImage('questionImage', setQuestionImagePreview)}
-                                     disabled={isLoading}
-                                 >
-                                     <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
-                                 </Button>
+                             <>
+                                 
+                                    Upload Image
+                                </>
+                                 <>
+                                     Paste
+                                 </>
                                  {questionImagePreview && (
-                                    <div className="relative h-24 w-auto border rounded-md overflow-hidden">
-                                        <Image src={questionImagePreview} alt="Question Preview" height={96} width={150} style={{ objectFit: 'contain' }} />
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="icon"
-                                            className="absolute top-1 right-1 h-5 w-5 opacity-70 hover:opacity-100 z-10"
-                                            onClick={() => removeImage('questionImage', setQuestionImagePreview, questionFileInputRef)}
-                                            disabled={isLoading}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </Button>
-                                    </div>
+                                    <>
+                                         
+                                             
+                                         
+                                     </>
                                  )}
-                            </div>
+                            </>
                         </FormControl>
                          <FormMessage />
-                         <p className="text-xs text-muted-foreground">Max 4MB. JPG, PNG, WEBP only. Options A, B, C, D are assumed to be in the image.</p>
+                         
                     </FormItem>
                     )}
                 />
@@ -828,16 +703,22 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Correct Answer *</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                        <FormControl>
-                            <SelectTrigger className="w-full md:w-[180px]">
-                            <SelectValue placeholder="Select Correct Option" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {["A", "B", "C", "D"].map((opt) => <SelectItem key={opt} value={opt}>Option {opt}</SelectItem>)}
-                        </SelectContent>
-                        </Select>
+                        <>
+                            
+                                
+                                    Option A
+                                </>
+                                <>
+                                    Option B
+                                </>
+                                <>
+                                    Option C
+                                </>
+                                <>
+                                    Option D
+                                </>
+                            
+                        </>
                         <FormMessage />
                     </FormItem>
                     )}
@@ -849,10 +730,10 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
-                        <FormControl>
-                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
-                        </FormControl>
-                        <FormMessage />
+                        <>
+                        </>
+                        
+                        
                     </FormItem>
                     )}
                 />
@@ -864,66 +745,41 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Explanation Image (Optional)</FormLabel>
                         <FormControl>
-                             <div className="flex items-center gap-4">
-                                <Input
-                                    id="explanation-image-upload"
-                                    type="file"
-                                    accept={ACCEPTED_IMAGE_TYPES.join(',')}
-                                    ref={explanationFileInputRef}
-                                    onChange={(e) => handleFileChange(e, 'explanationImage', setExplanationImagePreview)}
-                                    className="hidden"
-                                    disabled={isLoading}
-                                />
-                                 <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => explanationFileInputRef.current?.click()}
-                                    disabled={isLoading}
-                                >
-                                    <Upload className="mr-2 h-4 w-4" /> Upload Image
-                                </Button>
+                             <>
+                                
+                                     Upload Image
+                                </>
                                  {/* Paste Button */}
-                                <Button
-                                     type="button"
-                                     variant="outline"
-                                     onClick={() => handlePasteImage('explanationImage', setExplanationImagePreview)}
-                                     disabled={isLoading}
-                                 >
-                                     <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
-                                </Button>
+                                 <>
+                                     Paste
+                                 </>
                                  {explanationImagePreview && (
-                                    <div className="relative h-24 w-auto border rounded-md overflow-hidden">
-                                        <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} />
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="icon"
-                                            className="absolute top-1 right-1 h-5 w-5 opacity-70 hover:opacity-100 z-10"
-                                            onClick={() => removeImage('explanationImage', setExplanationImagePreview, explanationFileInputRef)}
-                                            disabled={isLoading}
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </Button>
-                                    </div>
+                                    <>
+                                         
+                                             
+                                         
+                                     </>
                                  )}
-                            </div>
+                            </>
                         </FormControl>
                          <FormMessage />
-                          <p className="text-xs text-muted-foreground">Max 4MB. JPG, PNG, WEBP only.</p>
+                          
                     </FormItem>
                     )}
                 />
             </CardContent>
             <CardFooter>
-                 <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                 <>
+                    
                     Save Question
-                </Button>
+                </>
             </CardFooter>
           </Card>
 
         </form>
       </Form>
     </div>
+    </>
   );
 }
+//add validation for all and make this to that it will
