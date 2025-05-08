@@ -22,6 +22,14 @@ import { useToast } from '@/hooks/use-toast'; // Import useToast
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
+// Helper function to construct image paths relative to the public directory
+const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
+    if (!filename) return null;
+    // Ensure the path starts correctly and encode components
+    const basePath = '/question_bank_images'; // Base path within public
+    return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
+};
+
 export default function DppLessonPage() {
   const params = useParams();
   const router = useRouter();
@@ -155,9 +163,7 @@ export default function DppLessonPage() {
            if (!result.success) {
                throw new Error(result.message || "Failed to save attempt.");
            }
-           // Optionally refetch progress to update UI immediately, or update local state
-           // For simplicity, we'll rely on the next page load or manual refresh for now
-           // Or, update local dppProgress state optimistically:
+           // Optimistically update local progress state
            const newAttempt: DppAttempt = { timestamp: Date.now(), selectedOption: selected, isCorrect: correct };
            setDppProgress(prev => {
                const newAttempts = { ...(prev?.questionAttempts || {}) };
@@ -181,19 +187,12 @@ export default function DppLessonPage() {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
-           // Reset the selected answer for the new question in the current session state
-           // Note: This doesn't clear the persistent progress, only the current selection UI
+           // Reset session answer for the new question if it wasn't already answered in this session
            const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
-           if (nextQuestionId) {
-               // Check if there's an existing answer for the next question in this session
-               // If not, initialize it to null. Otherwise, keep the existing session answer.
-                setUserAnswers(prev => ({
-                    ...prev,
-                    [nextQuestionId]: prev[nextQuestionId] !== undefined ? prev[nextQuestionId] : null
-                 }));
+           if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
+               setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
            }
        } else {
-           // Optionally handle end of DPP (e.g., show summary, navigate back)
            toast({ title: "DPP Completed", description: "You've reached the end of this set."});
            router.push('/dpp'); // Example: Navigate back to list
        }
@@ -201,11 +200,9 @@ export default function DppLessonPage() {
 
    // Function to render question content (text or image)
    const renderQuestionContent = (q: QuestionBankItem) => {
-       if (q.type === 'image' && q.question.image) {
-           // Construct the correct path relative to the public folder
-           // Ensure segments are properly encoded in case they contain special characters
-           const imagePath = `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.question.image)}`;
-           console.log("Rendering Image Path:", imagePath); // Log the constructed path
+       const imagePath = constructImagePath(q.subject, q.lesson, q.question.image);
+
+       if (q.type === 'image' && imagePath) {
            return (
                 <div className="relative w-full max-w-lg h-64 mx-auto my-4"> {/* Adjust size as needed */}
                     <Image
@@ -216,10 +213,10 @@ export default function DppLessonPage() {
                        className="rounded border"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2} // Prioritize first few images
-                       onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if(fallback) fallback.classList.remove('hidden'); }} // Add better error handling
+                       onError={(e) => { console.error(`Error loading question image: ${imagePath}`, e); }} // Simplified error logging
+                       unoptimized // Keep this if local images might cause issues
                     />
-                    {/* Fallback text if image fails to load */}
-                    <p className="hidden text-center text-muted-foreground text-sm mt-2">[Image: {q.question.image}]</p>
+                    {/* Consider adding a fallback text display on error if needed */}
                 </div>
            );
        } else if (q.type === 'text' && q.question.text) {
@@ -289,9 +286,8 @@ export default function DppLessonPage() {
     // Function to render explanation
     const renderExplanation = (q: QuestionBankItem) => {
         const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
-        const hasImage = q.explanation.image && q.explanation.image.trim().length > 0;
-        // Construct the correct path relative to the public folder
-         const imagePath = hasImage ? `/question_bank_images/${encodeURIComponent(q.subject)}/${encodeURIComponent(q.lesson)}/images/${encodeURIComponent(q.explanation.image!)}` : null;
+        const explanationImagePath = constructImagePath(q.subject, q.lesson, q.explanation.image);
+        const hasImage = !!explanationImagePath;
 
         if (!hasText && !hasImage) return null; // No explanation to show
 
@@ -304,18 +300,19 @@ export default function DppLessonPage() {
                      {hasText && (
                          <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                      )}
-                     {hasImage && imagePath && (
+                     {hasImage && (
                           <div className="relative w-full max-w-lg h-64 mx-auto mt-4">
                              <Image
-                                 src={imagePath} // Use the correctly constructed path
+                                 src={explanationImagePath!} // Assert non-null as hasImage is true
                                  alt={`Explanation Image`}
                                  layout="fill"
                                  objectFit="contain"
                                  className="rounded border"
                                  data-ai-hint="explanation image"
-                                 onError={(e) => { console.error(`Error loading explanation image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; const fallback = (e.target as HTMLImageElement).nextElementSibling; if(fallback) fallback.classList.remove('hidden');}} // Add error handling
+                                 onError={(e) => { console.error(`Error loading explanation image: ${explanationImagePath}`, e); }} // Simplified error logging
+                                 unoptimized // Keep this if local images might cause issues
                              />
-                             <p className="hidden text-center text-muted-foreground text-sm mt-2">[Explanation Image: {q.explanation.image}]</p>
+                             {/* Consider adding a fallback text display on error if needed */}
                           </div>
                      )}
                  </CardContent>

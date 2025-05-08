@@ -49,7 +49,8 @@ async function saveImage(
 
         await fs.writeFile(filePath, fileBuffer);
         console.log(`Image saved to public path: ${filePath}`);
-        return uniqueFilename; // Return only the filename
+        // Return only the filename (e.g., Q_123_abc.png)
+        return uniqueFilename;
 
     } catch (error) {
         console.error(`Error saving ${prefix} image:`, error);
@@ -87,6 +88,7 @@ export async function addQuestionToBank(
         const optionD = formData.get('optionD') as string | null;
         const correctAnswer = formData.get('correctAnswer') as "A" | "B" | "C" | "D";
         const explanationText = formData.get('explanationText') as string | null;
+        const questionMarks = parseInt(formData.get('marks') as string || '1', 10); // Get marks
 
         const questionImageFile = formData.get('questionImage') as File | null;
         const explanationImageFile = formData.get('explanationImage') as File | null;
@@ -98,8 +100,8 @@ export async function addQuestionToBank(
         const pyqShift = formData.get('pyqShift') as PyqShift | null;
 
         // --- Basic Validation ---
-        if (!subject || !lesson || !classLevel || !examType || !difficulty || !questionType || !correctAnswer) {
-            return { success: false, question: null, error: 'Missing required base fields.' };
+        if (!subject || !lesson || !classLevel || !examType || !difficulty || !questionType || !correctAnswer || isNaN(questionMarks) || questionMarks <= 0) {
+             return { success: false, question: null, error: 'Missing required base fields or invalid marks.' };
         }
         if (questionType === 'text' && (!questionText || !optionA || !optionB || !optionC || !optionD)) {
              return { success: false, question: null, error: 'Text question requires question text and all options.' };
@@ -122,6 +124,7 @@ export async function addQuestionToBank(
         // --- Handle Image Uploads (saves to public directory) ---
         let questionImageFilename: string | null = null;
         if (questionType === 'image' && questionImageFile) {
+            // Pass subject and lesson to saveImage
             questionImageFilename = await saveImage(questionImageFile, subject, lesson, 'Q');
             if (!questionImageFilename) {
                 return { success: false, question: null, error: 'Failed to save question image.' };
@@ -130,6 +133,7 @@ export async function addQuestionToBank(
 
         let explanationImageFilename: string | null = null;
         if (explanationImageFile) {
+             // Pass subject and lesson to saveImage
             explanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E');
              if (!explanationImageFilename) {
                  console.warn('Failed to save explanation image, but proceeding with question save.');
@@ -153,7 +157,8 @@ export async function addQuestionToBank(
             type: questionType,
             question: {
                 text: questionType === 'text' ? questionText : null,
-                image: questionType === 'image' ? questionImageFilename : null, // Just the filename
+                // Store ONLY the filename in the JSON
+                image: questionType === 'image' ? questionImageFilename : null,
             },
             options: questionType === 'image' ? { A: 'A', B: 'B', C: 'C', D: 'D' } : {
                 A: optionA || '',
@@ -164,7 +169,8 @@ export async function addQuestionToBank(
             correct: correctAnswer,
             explanation: {
                 text: explanationText || null,
-                image: explanationImageFilename, // Just the filename
+                 // Store ONLY the filename in the JSON
+                image: explanationImageFilename,
             },
             isPyq: isPyq,
             pyqDetails: isPyq && pyqExam && pyqDateString && pyqShift ? {
@@ -172,6 +178,7 @@ export async function addQuestionToBank(
                 date: pyqDateString, // Store as YYYY-MM-DD string
                 shift: pyqShift,
             } : null,
+            marks: questionMarks, // Store marks
             created: nowISO,
             modified: nowISO,
         };
@@ -195,7 +202,7 @@ export async function addQuestionToBank(
  * Images are saved/deleted from `public/question_bank_images`.
  * JSON is updated in `src/data/question_bank`.
  *
- * @param formData - FormData containing questionId, subject, lesson, correctAnswer, explanationText, and optional new explanationImage.
+ * @param formData - FormData containing questionId, subject, lesson, correctAnswer, explanationText, marks, and optional new explanationImage.
  * @returns A promise resolving with success status, the updated question object (or null on failure), and optional error message.
  */
 export async function updateQuestionDetails(
@@ -211,12 +218,10 @@ export async function updateQuestionDetails(
         const explanationText = formData.get('explanationText') as string | null;
         const explanationImageFile = formData.get('explanationImage') as File | null;
         const removeExplanationImage = formData.get('removeExplanationImage') === 'true';
+        const marks = parseInt(formData.get('marks') as string || '1', 10); // Get marks
 
-        // Note: PYQ details are not currently updatable via this function.
-        // They are set only during creation. If needed, add fields to update PYQ status/details.
-
-        if (!questionId || !subject || !lesson || !correctAnswer) {
-            return { success: false, question: null, error: 'Missing required fields for update.' };
+        if (!questionId || !subject || !lesson || !correctAnswer || isNaN(marks) || marks <= 0) {
+            return { success: false, question: null, error: 'Missing required fields for update or invalid marks.' };
         }
 
         // Paths for JSON and public images
@@ -237,7 +242,9 @@ export async function updateQuestionDetails(
         const existingExplanationImageFilename = existingQuestion.explanation.image;
         let newExplanationImageFilename: string | null = existingExplanationImageFilename;
 
+        // Logic for handling explanation image update/removal
         if (explanationImageFile) { // New image uploaded
+            console.log("New explanation image uploaded.");
             if (existingExplanationImageFilename) {
                 try {
                     await fs.unlink(path.join(publicLessonImagesDir, existingExplanationImageFilename));
@@ -246,30 +253,36 @@ export async function updateQuestionDetails(
                     if (delError.code !== 'ENOENT') console.warn(`Could not delete old public explanation image ${existingExplanationImageFilename}:`, delError);
                 }
             }
-            newExplanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E'); // Saves to public
+            // Save the new image to public path, pass subject/lesson
+            newExplanationImageFilename = await saveImage(explanationImageFile, subject, lesson, 'E');
             if (!newExplanationImageFilename) {
                 console.warn('Failed to save new explanation image, update proceeding without image change.');
-                newExplanationImageFilename = null;
+                newExplanationImageFilename = existingExplanationImageFilename; // Keep old if save fails
+            } else {
+                 console.log(`New explanation image saved as: ${newExplanationImageFilename}`);
             }
-        } else if (removeExplanationImage && existingExplanationImageFilename) { // Remove existing image
+        } else if (removeExplanationImage && existingExplanationImageFilename) { // Remove existing image explicitly marked
+             console.log("Removing existing explanation image.");
              try {
                  await fs.unlink(path.join(publicLessonImagesDir, existingExplanationImageFilename));
                  console.log(`Deleted existing public explanation image: ${existingExplanationImageFilename}`);
                  newExplanationImageFilename = null;
              } catch (delError: any) {
                  if (delError.code !== 'ENOENT') console.warn(`Could not delete existing public explanation image ${existingExplanationImageFilename}:`, delError);
-                 newExplanationImageFilename = null;
+                 newExplanationImageFilename = null; // Set to null even if delete failed
              }
         }
+        // If no new file AND not removing, newExplanationImageFilename remains the existing one
 
         const nowISO = new Date().toISOString();
         const updatedQuestion: QuestionBankItem = {
-            ...existingQuestion, // Retain all existing data, including PYQ details
+            ...existingQuestion,
             correct: correctAnswer,
             explanation: {
                 text: explanationText || null,
-                image: newExplanationImageFilename, // Store just the filename
+                image: newExplanationImageFilename, // Store just the filename (or null if removed)
             },
+            marks: marks, // Update marks
             modified: nowISO,
         };
 
