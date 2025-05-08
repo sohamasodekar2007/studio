@@ -7,17 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// Popover and Label are not directly used but might be part of a larger form setup, keeping them.
-// import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-// import { Label } from "@/components/ui/label";
-// import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label"; // Import Label
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Search, Edit, Trash2, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
-// Replace examOptions with exams
-import { exams, classLevels } from '@/types';
+import { exams, classLevels } from '@/types'; // Import exams and classLevels
 import { Badge } from "@/components/ui/badge";
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
 import EditQuestionDialog from '@/components/admin/edit-question-dialog';
@@ -194,12 +190,6 @@ export default function EditQuestionsPage() {
                     <ImageIcon className="h-4 w-4"/>
                     {/* Display only ID for image questions */}
                     <span className="font-mono text-xs">({q.id})</span>
-                    {/* Keep the link for debugging, but don't rely on it for primary view */}
-                     {/*
-                    <a href={imagePath} target="_blank" rel="noopener noreferrer">
-                       [Image: {q.question.image?.substring(0, 20)}...]
-                    </a>
-                    */}
                 </span>
             );
         }
@@ -305,8 +295,7 @@ export default function EditQuestionsPage() {
                     </SelectTrigger>
                     <SelectContent>
                          <SelectItem value="all">All Exam Types</SelectItem>
-                         {/* Use exams instead of examOptions */}
-                        {exams.map(exam => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}
+                         {exams.map(exam => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}
                     </SelectContent>
                 </Select>
              </div>
