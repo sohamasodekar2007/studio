@@ -69,7 +69,7 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
                   // Use attemptTimestamp for the key as it's guaranteed unique per attempt
                   <TableRow key={attempt.attemptTimestamp}>
                     <TableCell>{attempt.user?.name || 'N/A'}</TableCell>
-                    <TableCell>{attempt.user?.email || 'N/A'}</TableCell> {/* Display Email */}
+                    <TableCell>{attempt.user?.email || 'N/A'}</TableCell>{/* Display Email */}
                     {/* Display total marks if available */}
                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
                     <TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
