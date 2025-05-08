@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Import useState and useEffect
 import Joyride, { type Step, type CallBackProps, STATUS } from 'react-joyride';
 import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/components/ui/sidebar'; // Import useSidebar
@@ -15,6 +15,13 @@ interface TutorialGuideProps {
 const TutorialGuide: React.FC<TutorialGuideProps> = ({ run, steps, stepIndex, handleJoyrideCallback }) => {
     const router = useRouter();
     const { setOpen: setSidebarOpen } = useSidebar(); // Get sidebar control
+    const [isMounted, setIsMounted] = useState(false); // State to track client-side mount
+
+    useEffect(() => {
+        // This effect runs only on the client after the component mounts
+        setIsMounted(true);
+    }, []);
+
 
     const handleCallback = (data: CallBackProps) => {
         const { status, index, step, type } = data;
@@ -44,6 +51,10 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ run, steps, stepIndex, ha
         handleJoyrideCallback(data);
     };
 
+    // Render Joyride only after the component has mounted on the client
+    if (!isMounted) {
+        return null; // Render nothing on the server or during the initial client render before mount
+    }
 
   return (
     <Joyride
