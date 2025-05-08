@@ -1,7 +1,7 @@
 // src/app/admin/questions/page.tsx
 'use client';
 
-import { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
+import React, { useState, useRef, type ChangeEvent, useEffect, useCallback } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -18,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
 import { Calendar } from "@/components/ui/calendar"; // Import Calendar
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // For Combobox and Date Picker
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from '@/hooks/use-toast';
 import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon } from "lucide-react";
 import {
     type QuestionBankItem, questionTypes, difficultyLevels, examOptions, classLevels, type QuestionType,
@@ -374,7 +374,7 @@ export default function AdminQuestionBankPage() {
     }
   };
 
-  return (
+    return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <ClipboardList className="h-8 w-8 text-primary" />
@@ -702,7 +702,7 @@ export default function AdminQuestionBankPage() {
                         onValueChange={field.onChange}
                         defaultValue={field.value}
                         className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
-                        disabled={isLoading}
+                        // disabled={isLoading} // Re-enable if needed, but often type selection shouldn't be disabled by loading
                     >
                         <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl>
@@ -742,7 +742,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Question Text *</FormLabel>
                         <FormControl>
-                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
+                         <Textarea placeholder="Enter the question here. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -850,7 +850,7 @@ export default function AdminQuestionBankPage() {
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
                         <FormControl>
-                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading} />
+                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={5} disabled={isLoading} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
