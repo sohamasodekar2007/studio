@@ -183,7 +183,7 @@ export default function AdminQuestionBankPage() {
             setIsLoadingLessons(true);
             setLessons([]); // Clear previous lessons
             form.setValue('lesson', ''); // Reset lesson selection in form
-            getLessonsForSubject(selectedSubject)
+            getLessonsForSubject(selectedSubject) // Re-enable fetch
                 .then(setLessons)
                 .catch(err => toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` }))
                 .finally(() => setIsLoadingLessons(false));
@@ -204,12 +204,12 @@ export default function AdminQuestionBankPage() {
       if (file.size > MAX_FILE_SIZE) {
         form.setError(fieldName, { type: 'manual', message: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` });
         setPreview(null);
-        return;
+        return false;
       }
       if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
         form.setError(fieldName, { type: 'manual', message: 'Invalid file type. Use JPG, PNG, or WEBP.' });
         setPreview(null);
-        return;
+        return false;
       }
 
       form.clearErrors(fieldName); // Clear previous errors
@@ -217,9 +217,11 @@ export default function AdminQuestionBankPage() {
       const reader = new FileReader();
       reader.onloadend = () => setPreview(reader.result as string);
       reader.readAsDataURL(file);
+      return true;
     } else {
       form.setValue(fieldName, null);
       setPreview(null);
+       return false;
     }
   }, [form]); // Include form in dependencies
 
@@ -280,8 +282,10 @@ export default function AdminQuestionBankPage() {
         const fileExtension = imageBlob.type.split('/')[1] || 'png'; // Default to png if type is generic
         const fileName = `pasted_image_${timestamp}.${fileExtension}`;
         const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
-        processImageFile(imageFile, fieldName, setPreview); // Use the processing callback
-        toast({ title: "Image Pasted Successfully!" });
+        const success = processImageFile(imageFile, fieldName, setPreview); // Use the processing callback
+        if(success) {
+            toast({ title: "Image Pasted Successfully!" });
+        }
       } else {
         toast({
           variant: "destructive",
@@ -356,7 +360,7 @@ export default function AdminQuestionBankPage() {
             if (questionFileInputRef.current) questionFileInputRef.current.value = "";
             if (explanationFileInputRef.current) explanationFileInputRef.current.value = "";
              // Refresh lessons for the current subject in case a new one was added
-            if (!lessons.includes(data.lesson)) {
+            if (selectedSubject && !lessons.includes(data.lesson)) { // Re-enable refresh
                 getLessonsForSubject(data.subject).then(setLessons);
             }
         } else {
@@ -376,7 +380,7 @@ export default function AdminQuestionBankPage() {
   };
 
     return (
-    <>
+     <> {/* Wrap in React Fragment */}
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <ClipboardList className="h-8 w-8 text-primary" />
@@ -395,202 +399,156 @@ export default function AdminQuestionBankPage() {
               <CardDescription>Categorize the question using the fields below.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="subject"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Subject *</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isLoadingSubjects}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}
-                         {isLoadingSubjects && <SelectItem value="loading" disabled>Loading...</SelectItem>}
-                         {!isLoadingSubjects && subjects.length === 0 && <SelectItem value="no-subjects" disabled>No subjects found</SelectItem>}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+               {/* Subject Dropdown */}
                <FormField
-                control={form.control}
-                name="class"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Class *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Class" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {classLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               {/* Lesson Name Combobox */}
-               <FormField
-                control={form.control}
-                name="lesson"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Lesson Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Lesson Name" {...field} disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="examType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Primary Exam Type *</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Exam" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="difficulty"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Difficulty *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Difficulty" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {difficultyLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormItem>
-                     <FormLabel className="flex items-center gap-1">
-                        <TagIcon className="h-4 w-4 text-muted-foreground" /> Tags (comma-separated)
-                     </FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., algebra, geometry" {...field} disabled={isLoading} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               {/* PYQ Checkbox */}
-                <FormField
-                  control={form.control}
-                  name="isPyq"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 shadow-sm md:col-span-3">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={isLoading}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>
-                          Is this a Previous Year Question (PYQ)?
-                        </FormLabel>
+                    control={form.control}
+                    name="subject"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Subject *</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); }} value={field.value} disabled={isLoading || isLoadingSubjects}>
+                        <FormControl>
+                            <SelectTrigger><SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>{subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
+                        </Select>
                         <FormMessage />
-                      </div>
                     </FormItem>
-                  )}
+                    )}
+                />
+               {/* Class Dropdown */}
+               <FormField
+                    control={form.control}
+                    name="class"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Class Level *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger></FormControl>
+                        <SelectContent>{classLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+               {/* Lesson Name Combobox */}
+                <FormField
+                    control={form.control}
+                    name="lesson"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Lesson Name *</FormLabel>
+                        <Popover open={lessonPopoverOpen} onOpenChange={setLessonPopoverOpen}>
+                            <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")} disabled={isLoading || isLoadingLessons || !selectedSubject}>
+                                {field.value ? lessons.find(l => l === field.value) || field.value : (isLoadingLessons ? "Loading..." : "Select or type Lesson")}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                            <Command shouldFilter={false}> {/* Allow custom input */}
+                                <CommandInput
+                                    placeholder="Search or type new lesson..."
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    disabled={isLoadingLessons || !selectedSubject}
+                                />
+                                <CommandList>
+                                {isLoadingLessons ? (<CommandItem disabled>Loading...</CommandItem>) : lessons.length === 0 && selectedSubject ? (<CommandEmpty>No existing lessons. Type to create new.</CommandEmpty>) : !selectedSubject ? (<CommandEmpty>Select Subject first.</CommandEmpty>) : null }
+                                <CommandGroup>
+                                    {lessons.map((lesson) => (
+                                    <CommandItem value={lesson} key={lesson} onSelect={() => { form.setValue("lesson", lesson); setLessonPopoverOpen(false); }}>
+                                        <Check className={cn("mr-2 h-4 w-4", lesson === field.value ? "opacity-100" : "opacity-0")} />
+                                        {lesson}
+                                    </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                                </CommandList>
+                            </Command>
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+                 {/* Exam Type Dropdown */}
+                 <FormField
+                    control={form.control}
+                    name="examType"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Exam Type Tag *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl>
+                        <SelectContent>{examOptions.map((exam) => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                {/* Difficulty Dropdown */}
+                <FormField
+                    control={form.control}
+                    name="difficulty"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Difficulty *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Difficulty" /></SelectTrigger></FormControl>
+                        <SelectContent>{difficultyLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                {/* Tags Input */}
+                <FormField
+                    control={form.control}
+                    name="tags"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Tags (comma-separated)</FormLabel>
+                        <FormControl>
+                            <div className="relative">
+                                <TagIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                                <Input {...field} placeholder="e.g., algebra, pyq, important" className="pl-10" disabled={isLoading}/>
+                            </div>
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+
+                {/* PYQ Checkbox */}
+                <FormField
+                    control={form.control}
+                    name="isPyq"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 md:col-span-3">
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isLoading} /></FormControl>
+                        <div className="space-y-1 leading-none">
+                        <FormLabel>Is this a Previous Year Question (PYQ)?</FormLabel>
+                        </div>
+                    </FormItem>
+                    )}
                 />
                 {/* Conditional PYQ Fields */}
                 {isPyqChecked && (
                     <>
-                    <FormField
-                        control={form.control}
-                        name="pyqExam"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>PYQ Exam *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select PYQ Exam" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {examOptions.map((ex) => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}
-                            </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    
-                     
-                        
-                            Pick PYQ date
-                        
-                    
-                        
-                            
-                            
-                        
-                    
-                
-                    
-                     <FormField
-                        control={form.control}
-                        name="pyqShift"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>PYQ Shift *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select Shift" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {pyqShifts.map((shift) => <SelectItem key={shift} value={shift}>{shift}</SelectItem>)}
-                            </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
+                     <FormField control={form.control} name="pyqExam" render={({ field }) => ( <FormItem><FormLabel>PYQ Exam *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select PYQ Exam" /></SelectTrigger></FormControl><SelectContent>{examOptions.map((exam) => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem> )} />
+                     <FormField control={form.control} name="pyqDate" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>PYQ Date *</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isLoading}><CalendarIcon className="mr-2 h-4 w-4 opacity-50" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} disabled={(date) => date > new Date() || isLoading} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem> )} />
+                     <FormField control={form.control} name="pyqShift" render={({ field }) => ( <FormItem><FormLabel>PYQ Shift *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Shift" /></SelectTrigger></FormControl><SelectContent>{pyqShifts.map((shift) => <SelectItem key={shift} value={shift}>{shift}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem> )} />
                     </>
-                )}
+                 )}
             </CardContent>
           </Card>
 
           {/* --- Question Type Selection --- */}
-           <FormField
+          <FormField
                 control={form.control}
                 name="questionType"
                 render={({ field }) => (
@@ -598,25 +556,23 @@ export default function AdminQuestionBankPage() {
                    <FormLabel className="text-lg font-semibold">Select Question Type *</FormLabel>
                    <FormControl>
                     <RadioGroup
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-4"
-                        // disabled={isLoading} // Re-enable if needed, but often type selection shouldn't be disabled by loading
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
+                      disabled={isLoading}
                     >
-                        <>
-                            
-                                
-                                
-                            
-                            
-                               
-                                
-                            
-                        
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl><RadioGroupItem value="text" /></FormControl>
+                        <FormLabel className="font-normal flex items-center gap-2"><FileText className="h-4 w-4"/> Text Question</FormLabel>
+                      </FormItem>
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl><RadioGroupItem value="image" /></FormControl>
+                        <FormLabel className="font-normal flex items-center gap-2"><ImagePlus className="h-4 w-4"/> Image Question</FormLabel>
+                      </FormItem>
                     </RadioGroup>
                    </FormControl>
-                   <FormMessage />
-                 </FormItem>
+                  <FormMessage />
+                </FormItem>
                 )}
             />
 
@@ -626,28 +582,15 @@ export default function AdminQuestionBankPage() {
                 <CardTitle>Question Content</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-             {questionType === 'text' ? (
+              {questionType === 'text' ? (
                 <>
-                <FormField
-                    control={form.control}
-                    name="questionText"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Question Text *</FormLabel>
-                        <FormControl>
-                         
-                        
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-                 
-                    
-                    
-                    
-                    
-                 
+                  <FormField control={form.control} name="questionText" render={({ field }) => ( <FormItem><FormLabel>Question Text *</FormLabel><FormControl><Textarea placeholder="Type the question here. Use $...$ or $$...$$ for MathJax." {...field} rows={5} disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                     <FormField control={form.control} name="optionA" render={({ field }) => ( <FormItem><FormLabel>Option A *</FormLabel><FormControl><Input {...field} placeholder="Option A Text" disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
+                     <FormField control={form.control} name="optionB" render={({ field }) => ( <FormItem><FormLabel>Option B *</FormLabel><FormControl><Input {...field} placeholder="Option B Text" disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
+                     <FormField control={form.control} name="optionC" render={({ field }) => ( <FormItem><FormLabel>Option C *</FormLabel><FormControl><Input {...field} placeholder="Option C Text" disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
+                     <FormField control={form.control} name="optionD" render={({ field }) => ( <FormItem><FormLabel>Option D *</FormLabel><FormControl><Input {...field} placeholder="Option D Text" disabled={isLoading}/></FormControl><FormMessage /></FormItem> )} />
+                  </div>
                 </>
              ) : (
                 <FormField
@@ -656,25 +599,45 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Question Image *</FormLabel>
-                        <FormControl>
-                             
-                                 
-                                    Upload Image
-                                
-                                 
-                                     Paste
-                                 
-                                 {questionImagePreview && (
-                                    
-                                         
-                                             
-                                         
-                                     
-                                 )}
-                            
-                        </FormControl>
-                         <FormMessage />
-                         
+                         <FormControl>
+                            <div className="flex flex-col items-start gap-4">
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        id="question-image-upload"
+                                        type="file"
+                                        accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                                        ref={questionFileInputRef}
+                                        onChange={(e) => handleFileChange(e, 'questionImage', setQuestionImagePreview)}
+                                        className="hidden"
+                                        disabled={isLoading}
+                                    />
+                                    <Button type="button" variant="outline" size="sm" onClick={() => questionFileInputRef.current?.click()} disabled={isLoading}>
+                                        <Upload className="mr-2 h-4 w-4" /> Choose Image
+                                    </Button>
+                                    <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage('questionImage', setQuestionImagePreview)} disabled={isLoading}>
+                                        <ClipboardPaste className="mr-2 h-4 w-4" /> Paste Image
+                                    </Button>
+                                </div>
+                                {questionImagePreview && (
+                                    <div className="relative h-40 w-auto border rounded-md overflow-hidden group">
+                                         <Image src={questionImagePreview} alt="Question Preview" height={160} width={300} style={{ objectFit: 'contain' }} data-ai-hint="question image"/>
+                                         <Button
+                                             type="button"
+                                             variant="destructive"
+                                             size="icon"
+                                             className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
+                                             onClick={() => removeImage('questionImage', setQuestionImagePreview, questionFileInputRef)}
+                                             disabled={isLoading}
+                                             title="Remove Image"
+                                         >
+                                             <X className="h-3 w-3" />
+                                         </Button>
+                                     </div>
+                                )}
+                            </div>
+                         </FormControl>
+                        <FormMessage />
+                         <p className="text-xs text-muted-foreground">Max 4MB. JPG, PNG, WEBP.</p>
                     </FormItem>
                     )}
                 />
@@ -694,22 +657,16 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Correct Answer *</FormLabel>
-                        
-                            
-                                
-                                    Option A
-                                
-                                
-                                    Option B
-                                
-                                
-                                    Option C
-                                
-                                
-                                    Option D
-                                
-                            
-                        
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                        <FormControl>
+                            <SelectTrigger className="w-full md:w-[180px]">
+                            <SelectValue placeholder="Select Correct Option" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {["A", "B", "C", "D"].map((opt) => <SelectItem key={opt} value={opt}>Option {opt}</SelectItem>)}
+                        </SelectContent>
+                        </Select>
                         <FormMessage />
                     </FormItem>
                     )}
@@ -721,9 +678,8 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Explanation Text</FormLabel>
-                        
-                        
-                        
+                        <FormControl><Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} rows={4} disabled={isLoading}/></FormControl>
+                        <FormMessage />
                     </FormItem>
                     )}
                 />
@@ -734,35 +690,54 @@ export default function AdminQuestionBankPage() {
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Explanation Image (Optional)</FormLabel>
-                        <FormControl>
-                             
-                                
-                                     Upload Image
-                                
-                                 {/* Paste Button */}
-                                 
-                                     Paste
-                                 
+                         <FormControl>
+                            <div className="flex flex-col items-start gap-4">
+                                <div className="flex items-center gap-2">
+                                     <Input
+                                         id="explanation-image-upload"
+                                         type="file"
+                                         accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                                         ref={explanationFileInputRef}
+                                         onChange={(e) => handleFileChange(e, 'explanationImage', setExplanationImagePreview)}
+                                         className="hidden"
+                                         disabled={isLoading}
+                                     />
+                                     <Button type="button" variant="outline" size="sm" onClick={() => explanationFileInputRef.current?.click()} disabled={isLoading}>
+                                         <Upload className="mr-2 h-4 w-4" /> Choose Image
+                                     </Button>
+                                     <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage('explanationImage', setExplanationImagePreview)} disabled={isLoading}>
+                                         <ClipboardPaste className="mr-2 h-4 w-4" /> Paste Image
+                                     </Button>
+                                </div>
                                  {explanationImagePreview && (
-                                    
-                                         
-                                             
-                                         
-                                     
+                                    <div className="relative h-40 w-auto border rounded-md overflow-hidden group">
+                                         <Image src={explanationImagePreview} alt="Explanation Preview" height={160} width={300} style={{ objectFit: 'contain' }} data-ai-hint="explanation image"/>
+                                         <Button
+                                             type="button"
+                                             variant="destructive"
+                                             size="icon"
+                                             className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
+                                             onClick={() => removeImage('explanationImage', setExplanationImagePreview, explanationFileInputRef)}
+                                             disabled={isLoading}
+                                             title="Remove Image"
+                                         >
+                                             <X className="h-3 w-3" />
+                                         </Button>
+                                     </div>
                                  )}
-                            
-                        </FormControl>
-                         <FormMessage />
-                          
+                            </div>
+                         </FormControl>
+                        <FormMessage />
+                         <p className="text-xs text-muted-foreground">Max 4MB. JPG, PNG, WEBP.</p>
                     </FormItem>
                     )}
                 />
             </CardContent>
             <CardFooter>
-                 
-                    
+                 <Button type="submit" disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save Question
-                
+                </Button>
             </CardFooter>
           </Card>
 
@@ -772,22 +747,3 @@ export default function AdminQuestionBankPage() {
     </>
   );
 }
-//add validation for all and make this to that it will.
-
-i have created this question page in next js, please make a validation in this 
-
-for each fields 
-
-1) all fields are required and show message in realtime for each fields when they will be created and also follow that
- * Images are saved relative to the publicImagesBasePath
-         const imagesDir = path.join(publicImagesBasePath, subject, lesson, 'images');
-         await ensureDirExists(imagesDir);
-
-         const fileBuffer = Buffer.from(await file.arrayBuffer());
-         const fileExtension = path.extname(file.name).substring(1);
-         const uniqueFilename = await generateUniqueFilename(prefix, fileExtension, fileBuffer);
-         const filePath = path.join(imagesDir, uniqueFilename);
-
-         await fs.writeFile(filePath, fileBuffer);
-         console.log(`Image saved to public path: ${filePath}`);
-         return uniqueFilename; // Return only the filename this code and do the same for explantio image
