@@ -66,6 +66,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
       users = [];
       writeNeeded = true;
     } else {
+      // Explicitly cast to UserProfile[] and handle potential missing roles later
       users = parsedUsers as UserProfile[];
     }
   } catch (error: any) {
@@ -92,16 +93,18 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
     }
 
     // Assign Role if missing or invalid, based on email pattern
-    const expectedRole = getRoleFromEmail(currentUser.email);
-    if (!currentUser.role || !['Admin', 'User'].includes(currentUser.role) || currentUser.role !== expectedRole) {
-       if (currentUser.role && currentUser.role !== expectedRole) {
-            console.warn(`User ${currentUser.email || currentUser.id} role (${currentUser.role}) doesn't match email pattern expectation (${expectedRole}). Correcting to ${expectedRole}.`);
-       } else if (!currentUser.role) {
-           console.warn(`User ${currentUser.email || currentUser.id} missing role. Assigning role: ${expectedRole}.`);
-       }
-       currentUser.role = expectedRole;
-       userModified = true;
-    }
+     // Ensure role exists and is valid, assign based on email if needed
+     if (currentUser.role === undefined || (currentUser.role !== 'Admin' && currentUser.role !== 'User')) {
+         currentUser.role = getRoleFromEmail(currentUser.email);
+         console.warn(`User ${currentUser.email || currentUser.id} missing or invalid role. Assigning role: ${currentUser.role}.`);
+         userModified = true;
+     } else {
+        // Verify existing role matches expectation from email (except for manual overrides)
+        // const expectedRole = getRoleFromEmail(currentUser.email);
+        // If a role is explicitly set, we trust it for now, unless it's the primary admin.
+        // Role changes are handled explicitly by updateUserRole.
+     }
+
 
     // Hash plain text passwords
     if (currentUser.password && !currentUser.password.startsWith('$2a$') && !currentUser.password.startsWith('$2b$')) {
@@ -185,8 +188,13 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
     const currentAdmin = processedUsers[adminUserIndex];
     let adminModified = false;
     if (adminNeedsUpdate) { currentAdmin.password = adminPasswordHash; adminModified = true; }
-    if (currentAdmin.role !== 'Admin') { currentAdmin.role = 'Admin'; adminModified = true; console.warn("Correcting primary admin role."); }
-    if (currentAdmin.model !== 'combo') { currentAdmin.model = 'combo'; adminModified = true; console.warn("Correcting primary admin model.");}
+    // Ensure primary admin always has the Admin role
+    if (currentAdmin.role !== 'Admin') {
+      currentAdmin.role = 'Admin';
+      adminModified = true;
+      console.warn("Correcting primary admin role to 'Admin'.");
+    }
+    if (currentAdmin.model !== 'combo') { currentAdmin.model = 'combo'; adminModified = true; console.warn("Correcting primary admin model to 'combo'.");}
     if (currentAdmin.expiry_date !== '2099-12-31T00:00:00.000Z') { currentAdmin.expiry_date = '2099-12-31T00:00:00.000Z'; adminModified = true; }
     if (adminModified) { writeNeeded = true; }
   } else {
@@ -224,16 +232,16 @@ export { readAndInitializeUsersInternal as readUsersWithPasswordsInternal };
  * Assigns UUID to users missing an ID.
  * Converts date fields to ISO strings if they are not already.
  * Hashes any plain text passwords found (migration).
- * Assigns roles based on email.
+ * Assigns roles based on email pattern or uses explicitly stored role.
  * Returns user profiles WITHOUT passwords but WITH roles for general use.
  * @returns A promise resolving to an array of UserProfile (with role, without passwords) or an empty array on error.
  */
 export async function readUsers(): Promise<Array<Omit<UserProfile, 'password'>>> {
-  const usersWithPasswords = await readAndInitializeUsersInternal();
-  // Return users WITHOUT passwords but WITH roles
-  return usersWithPasswords.map(({ password, ...user }) => ({
+  const usersWithData = await readAndInitializeUsersInternal();
+  // Return users WITHOUT passwords but ensure role exists
+  return usersWithData.map(({ password, ...user }) => ({
     ...user,
-    role: user.role || getRoleFromEmail(user.email) // Ensure role exists
+    role: user.role // The role should be set during initialization
   }));
 }
 
@@ -261,25 +269,25 @@ export async function findUserByEmailInternal(
 
 /**
  * Adds a new user to the users.json file. Checks for existing email first.
- * Assigns a UUID. Sets default 'free' model. Hashes the password. Assigns role.
- * @param newUserProfileData - The user profile data for the new user (password should be plain text). Role property will be ignored and calculated based on email.
+ * Assigns a UUID. Sets default 'free' model. Hashes the password. Assigns role based on the 'role' parameter.
+ * @param newUserProfileData - The user profile data for the new user (password should be plain text). Includes the 'role' to assign.
  * @returns A promise resolving with success status, optional message, and the created user profile (without password, but with role).
  */
 export async function addUserToJson(
-  newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'avatarUrl' | 'referral' | 'role'> & { password: string }
+  newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'avatarUrl' | 'referral'> & { password: string; role: 'Admin' | 'User' } // Expect role in input
 ): Promise<{ success: boolean; message?: string; user?: Omit<UserProfile, 'password'> }> {
   if (!newUserProfileData.email || !newUserProfileData.password) {
     return { success: false, message: "Email and password are required for new user." };
   }
 
   const emailLower = newUserProfileData.email.toLowerCase();
-  const role = getRoleFromEmail(emailLower); // Determine role from email
+  const assignedRole = newUserProfileData.role; // Role is now provided explicitly
 
   // Validate role vs email constraints
-  if (role === 'Admin' && emailLower !== primaryAdminEmail && !adminEmailPattern.test(emailLower)) {
+  if (assignedRole === 'Admin' && emailLower !== primaryAdminEmail && !adminEmailPattern.test(emailLower)) {
       return { success: false, message: `Invalid email format for Admin role. Use 'name-admin@edunexus.com'.` };
   }
-  if (role === 'User' && (emailLower === primaryAdminEmail || adminEmailPattern.test(emailLower))) {
+  if (assignedRole === 'User' && (emailLower === primaryAdminEmail || adminEmailPattern.test(emailLower))) {
       return { success: false, message: `Email format reserved for Admins cannot be used for User role.` };
   }
 
@@ -289,7 +297,7 @@ export async function addUserToJson(
     let userModel = newUserProfileData.model || 'free';
     let expiryDate = newUserProfileData.expiry_date ? new Date(newUserProfileData.expiry_date).toISOString() : null;
 
-    if (role === 'Admin') {
+    if (assignedRole === 'Admin') {
         userModel = 'combo';
         expiryDate = '2099-12-31T00:00:00.000Z';
     } else if (userModel === 'free') {
@@ -304,7 +312,7 @@ export async function addUserToJson(
       phone: newUserProfileData.phone || null,
       class: newUserProfileData.class || null,
       model: userModel,
-      role: role, // Assign calculated role
+      role: assignedRole, // Assign the provided role
       expiry_date: expiryDate,
       createdAt: new Date().toISOString(),
       avatarUrl: null,
@@ -334,16 +342,19 @@ export async function addUserToJson(
 
 /**
  * Updates an existing user in the users.json file by ID.
- * Allows updating name, phone, class, model, expiry_date, email, and avatarUrl.
- * Determines role based on the *updated* email.
+ * Allows updating name, phone, class, model, expiry_date, email, avatarUrl, and role.
+ * Includes validation for role changes based on email format.
  * Does NOT update password via this function.
  * Converts Date objects for expiry_date to ISO strings before saving.
  * Handles Admin constraints (fixed model/expiry).
  * @param userId The ID of the user to update (string).
- * @param updatedData Partial user profile data to update. Cannot include password or role directly.
+ * @param updatedData Partial user profile data to update. Can include 'role'.
  * @returns A promise resolving with success status, optional message, and the updated user profile (without password, but with role).
  */
-export async function updateUserInJson(userId: string, updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'role'>>): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
+export async function updateUserInJson(
+    userId: string,
+    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt'>> // Allow role update
+): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     if (!userId || typeof userId !== 'string') {
         return { success: false, message: "Invalid user ID provided for update." };
     }
@@ -358,24 +369,25 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
         const existingUser = users[userIndex];
         const isPrimaryAdmin = existingUser.email === primaryAdminEmail;
 
-        // Handle potential email change and role derivation
-        const newEmail = updatedData.email?.trim().toLowerCase() || existingUser.email; // Use new or existing
-        const newRole = getRoleFromEmail(newEmail);
+        // Handle potential email change
+        const newEmail = updatedData.email?.trim().toLowerCase() || existingUser.email;
+
+        // Determine the final role
+        // If 'role' is explicitly provided in updatedData, use that. Otherwise, keep existing role.
+        const newRole = (updatedData.role === 'Admin' || updatedData.role === 'User') ? updatedData.role : existingUser.role;
 
         // *** Role and Email Change Validations ***
-        // 1. Prevent changing primary admin's email
-        if (isPrimaryAdmin && newEmail !== existingUser.email) {
-            return { success: false, message: "Cannot change the email of the primary admin account." };
+        // 1. Prevent changing primary admin's email or role
+        if (isPrimaryAdmin) {
+            if (newEmail !== existingUser.email) {
+                return { success: false, message: "Cannot change the email of the primary admin account." };
+            }
+            if (newRole !== 'Admin') {
+                 return { success: false, message: "Cannot change the role of the primary admin account." };
+            }
         }
-        // 2. Prevent assigning User role to admin email format
-        if (newRole === 'User' && (newEmail === primaryAdminEmail || adminEmailPattern.test(newEmail || ''))) {
-            return { success: false, message: "Cannot assign User role to an admin email format." };
-        }
-         // 3. Prevent assigning Admin role to non-admin email format
-         if (newRole === 'Admin' && newEmail !== primaryAdminEmail && !adminEmailPattern.test(newEmail || '')) {
-              return { success: false, message: "To grant Admin role, email must match pattern '...-admin@edunexus.com' or be the primary admin." };
-         }
-        // 4. Check if new email is already taken by another user
+
+        // 2. Check if new email is already taken by another user (only if email changed)
         if (newEmail !== existingUser.email) {
             const conflictingUser = await findUserByEmailInternal(newEmail);
             if (conflictingUser && conflictingUser.id !== userId) {
@@ -383,25 +395,34 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
             }
         }
 
-        // Determine final model and expiry based on the potentially new role
-        let finalModel = updatedData.model ?? existingUser.model;
+        // 3. Validate Role change based on email format AFTER potential email change
+        if (newRole === 'Admin' && newEmail !== primaryAdminEmail && !adminEmailPattern.test(newEmail)) {
+             return { success: false, message: `Cannot assign Admin role. Email must end with '-admin@edunexus.com' or be the primary admin.` };
+        }
+        if (newRole === 'User' && (newEmail === primaryAdminEmail || adminEmailPattern.test(newEmail))) {
+             return { success: false, message: `Cannot assign User role to an admin email format.` };
+        }
+
+
+        // Determine final model and expiry based on the final role and updated model
+        let finalModel = updatedData.model ?? existingUser.model; // Prefer updated model if provided
         let finalExpiryDate = updatedData.expiry_date !== undefined
                                ? (updatedData.expiry_date instanceof Date ? updatedData.expiry_date : (updatedData.expiry_date ? new Date(updatedData.expiry_date) : null))
                                : (existingUser.expiry_date ? new Date(existingUser.expiry_date) : null);
 
         if (newRole === 'Admin') {
-            finalModel = 'combo';
-            finalExpiryDate = new Date('2099-12-31T00:00:00.000Z');
+            finalModel = 'combo'; // Admins always get combo
+            finalExpiryDate = new Date('2099-12-31T00:00:00.000Z'); // Admins get long expiry
         } else if (finalModel === 'free') {
-            finalExpiryDate = null;
-        } else if (!finalExpiryDate && finalModel !== 'free') {
-             // This condition should ideally be caught earlier by form validation
-            return { success: false, message: "Expiry date is required for paid models." };
+            finalExpiryDate = null; // Free users have null expiry
+        } else if (!finalExpiryDate) {
+            // This case should be caught by form validation, but double check
+           return { success: false, message: "Expiry date is required for paid models." };
         }
 
         const finalExpiryDateString = finalExpiryDate ? finalExpiryDate.toISOString() : null;
 
-        // Apply updates
+        // Apply updates - explicitly include role
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
             ...updatedData, // Apply general updates first
@@ -409,7 +430,7 @@ export async function updateUserInJson(userId: string, updatedData: Partial<Omit
             email: newEmail, // Apply potentially updated email
             password: existingUser.password, // Password not changed here
             createdAt: existingUser.createdAt, // Preserve original creation date
-            role: newRole, // Set the derived role
+            role: newRole, // Set the final derived/updated role
             model: finalModel, // Apply potentially updated model
             expiry_date: finalExpiryDateString, // Apply potentially updated expiry
             // Handle avatarUrl update specifically
@@ -467,10 +488,10 @@ export async function updateUserRole(
          if (newRole === 'Admin' && userToUpdate.email !== primaryAdminEmail && !adminEmailPattern.test(userToUpdate.email || '')) {
               return { success: false, message: `Cannot promote to Admin. Email must end with '-admin@edunexus.com' or be the primary admin.` };
          }
-          // 3. Validate email format if demoting to User
-          if (newRole === 'User' && (userToUpdate.email === primaryAdminEmail || adminEmailPattern.test(userToUpdate.email || ''))) {
-             return { success: false, message: `Cannot demote to User. Email format is reserved for Admins.` };
-         }
+         // 3. Remove the check that prevents demoting if email looks like admin - THIS IS THE FIX
+         // if (newRole === 'User' && (userToUpdate.email === primaryAdminEmail || adminEmailPattern.test(userToUpdate.email || ''))) {
+         //    return { success: false, message: `Cannot demote to User. Email format is reserved for Admins.` };
+         // }
 
 
          // --- Update Role and related fields ---
@@ -609,4 +630,41 @@ export async function getUserById(userId: string): Promise<Omit<UserProfile, 'pa
     console.error(`Error finding user by ID ${userId}:`, error);
     return null;
   }
+}
+
+// Add the missing checkUserPlanAndExpiry function
+/**
+ * Checks a user's current plan and expiry date against backend data.
+ * @param userId The ID of the user to check.
+ * @returns A promise resolving to an object { isPlanValid: boolean, message?: string }.
+ */
+export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanValid: boolean; message?: string }> {
+    if (!userId) {
+        return { isPlanValid: false, message: "User ID not provided." };
+    }
+    try {
+        const currentUser = await getUserById(userId);
+        if (!currentUser) {
+            return { isPlanValid: false, message: "User not found." };
+        }
+
+        // Check expiry date for non-free, non-admin users
+        if (currentUser.model !== 'free' && currentUser.role !== 'Admin') {
+            if (!currentUser.expiry_date) {
+                return { isPlanValid: false, message: "Subscription details incomplete." };
+            }
+            const expiry = new Date(currentUser.expiry_date);
+            if (isNaN(expiry.getTime()) || expiry < new Date()) {
+                 return { isPlanValid: false, message: "Your subscription has expired." };
+            }
+        }
+
+        // Add any other plan validation logic here if needed
+
+        return { isPlanValid: true }; // Plan is valid or it's a free/admin user
+
+    } catch (error) {
+        console.error("Error checking user plan:", error);
+        return { isPlanValid: false, message: "Error verifying subscription status." };
+    }
 }
