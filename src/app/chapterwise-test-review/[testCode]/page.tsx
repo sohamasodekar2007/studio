@@ -6,7 +6,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react'; // Added Bookmark
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react';
 import Link from 'next/link';
 import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types'; // Use DetailedAnswer
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
@@ -30,26 +30,26 @@ const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "second
 
 const OPTION_STYLES = {
   base: "border-border hover:border-primary dark:border-gray-700 dark:hover:border-primary",
-  selectedCorrect: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300 ring-2 ring-green-500 dark:ring-green-400",
-  selectedIncorrect: "border-red-500 bg-red-500/10 text-red-700 dark:border-red-400 dark:bg-red-700/20 dark:text-red-300 ring-2 ring-red-500 dark:ring-red-400",
+  selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300",
+  selectedIncorrect: "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300",
   correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
-  correctImageOption: "border-green-500 bg-green-500/10 text-green-700 dark:border-green-400 dark:bg-green-700/20 dark:text-green-300",
+  correctImageOption: "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
 };
 
-// Helper function to construct image paths relative to the public directory
+// Helper function remains the same - it constructs the path based on the input string
 const constructImagePath = (relativePath: string | null | undefined): string | null => {
     if (!relativePath) return null;
-    if (relativePath.startsWith('/question_bank_images')) {
+    // Ensure the path starts with '/' for it to be relative to the domain root
+    if (relativePath.startsWith('/')) {
         return relativePath;
     }
+    // Handle cases where it might be missing the leading slash
     if (relativePath.startsWith('question_bank_images')) {
         return `/${relativePath}`;
     }
-     // If it's just a filename, assume it's within a standard structure (adjust if needed)
-     // This part requires knowing the subject/lesson, which isn't directly in the report detail
-     // We might need to pass subject/lesson or modify the report structure later.
-     // For now, returning null if it's just a filename.
-     // console.warn("constructImagePath received potentially just a filename:", relativePath);
+    // If it's just a filename, we cannot reliably construct the path without subject/lesson
+    // This scenario shouldn't happen if the report saves the correct path
+    console.warn("constructImagePath received potentially just a filename:", relativePath);
     return null;
 };
 
@@ -199,17 +199,17 @@ export default function TestReviewPage() {
          if (!user?.id || !currentReviewQuestion?.questionId || !testReport) return;
 
          // Determine subject/lesson from report (may need refinement based on full_length structure)
-         const subject = Array.isArray(testReport?.test_subject) && testReport.test_subject.length > 0
+         // Assuming subject/lesson context might be missing in the report, get it from the question data if possible
+          const subject = Array.isArray(testReport?.test_subject) && testReport.test_subject.length > 0
                           ? testReport.test_subject[0]
-                          : 'Unknown'; // Fallback subject
-         // Assuming 'lesson' exists in the report object for chapterwise tests.
-         // For full length tests, this might be undefined or need a different approach.
-         const lesson = (testReport as any).lesson || 'General'; // Fallback lesson
+                          : 'Unknown'; // Fallback subject from report
+         const lesson = (testReport as any).lesson || 'General'; // Fallback lesson from report
 
          const questionData: BookmarkedQuestion = {
              questionId: currentReviewQuestion.questionId,
-             subject: subject,
-             lesson: lesson,
+             // Use subject/lesson from the question detail if available, otherwise fallback to report context
+             subject: currentReviewQuestion.subject || subject, // Prioritize question's own subject if available
+             lesson: currentReviewQuestion.lesson || lesson,   // Prioritize question's own lesson if available
              addedAt: Date.now(),
              tags: tags,
          };
@@ -292,15 +292,15 @@ export default function TestReviewPage() {
     );
   }
 
-   // Render Content Functions
+   // --- Render Content Function ---
    const renderContentWithMathJax = (
        textContent: string | undefined | null,
-       imageUrl: string | undefined | null, // Expects relative URL from report
+       imageUrl: string | undefined | null, // Expects relative URL from report like /question_bank_images/...
        context: 'question' | 'explanation'
    ) => {
-       const fullImagePath = constructImagePath(imageUrl); // Use helper to construct full path
+       const fullImagePath = constructImagePath(imageUrl); // Construct path relative to domain root
 
-       if (fullImagePath) { // Display image if path exists
+        if (fullImagePath) { // Display image if path exists and is valid
            return (
                 <div className="relative w-full max-w-xl h-auto mx-auto my-4">
                    <Image
@@ -311,32 +311,34 @@ export default function TestReviewPage() {
                        style={{ width: '100%', height: 'auto', objectFit: 'contain' }}
                        className="rounded-md border"
                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                       unoptimized
+                       unoptimized // Can remove if deploying and optimizing images
                        onError={(e) => {
                            console.error(`Error loading ${context} image: ${fullImagePath}`, e);
                             const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            // Optionally display a fallback message
-                            const fallback = document.createElement('p');
-                            fallback.textContent = `[${context} image failed to load: ${decodeURIComponent(fullImagePath.split('/').pop() || 'Unknown')}]`;
-                            fallback.className = 'text-xs text-destructive italic';
-                            target.parentNode?.insertBefore(fallback, target.nextSibling);
+                            target.style.display = 'none'; // Hide broken image
+                            // Optionally display a fallback text if image fails
+                             const fallback = document.createElement('p');
+                             fallback.textContent = `[${context} image failed to load]`;
+                             fallback.className = 'text-xs text-destructive italic';
+                             target.parentNode?.insertBefore(fallback, target.nextSibling);
                         }}
                     />
                 </div>
             );
-       } else if (textContent) { // Render text if no image or for explanation text
+        } else if (textContent) { // Render text if no image or for explanation text
+           // Use dangerouslySetInnerHTML for MathJax compatibility
            return (
                <div
                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
                    dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-                ></div>
+                />
            );
        } else {
+           // Fallback if neither text nor image is available
            return <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
        }
    };
-
+   // --- End Render Content Function ---
 
 
   // --- Main Render ---
@@ -405,14 +407,16 @@ export default function TestReviewPage() {
                if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
                else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
                else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
-                 const isImageQuestion = !currentReviewQuestion.questionText && !!currentReviewQuestion.questionImageUrl;
-                if (isImageQuestion && isCorrect) {
-                  optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
-                }
+                 // Use different styling for image question options if needed
+                // const isImageQuestion = !currentReviewQuestion.questionText && !!currentReviewQuestion.questionImageUrl;
+                // if (isImageQuestion && isCorrect) {
+                //     optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
+                // }
 
               return (
                 <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
                   <span className="font-medium mt-0.5">{optionKey}.</span>
+                   {/* Render option text, handling potential MathJax */}
                    <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: (optionText || '').replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
                    </div>
                   {isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
