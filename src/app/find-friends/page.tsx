@@ -55,7 +55,7 @@ export default function FindFriendsPage() {
     // Start with users already filtered to exclude self and admins
     return allUsers.filter(u =>
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) // Keep email search
     );
   }, [allUsers, searchTerm]);
 
@@ -127,7 +127,7 @@ export default function FindFriendsPage() {
 
    const getInitials = (name?: string | null, email?: string | null) => {
         if (name) return name.charAt(0).toUpperCase();
-        if (email) return email.charAt(0).toUpperCase();
+        if (email) return email.charAt(0).toUpperCase(); // Still use email for fallback initial
         return '?';
    }
 
@@ -173,7 +173,7 @@ export default function FindFriendsPage() {
                      </Avatar>
                      <div>
                        <p className="font-medium text-sm">{u.name || 'Anonymous User'}</p>
-                       <p className="text-xs text-muted-foreground">{u.email}</p>
+                       {/* <p className="text-xs text-muted-foreground">{u.email}</p> Removed email display */}
                        {/* Optionally show class/model if available */}
                        <p className="text-xs text-muted-foreground">{u.class || ''} {u.model ? `(${u.model})` : ''}</p>
                      </div>

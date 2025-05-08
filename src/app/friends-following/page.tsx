@@ -71,7 +71,7 @@ export default function FollowingPage() {
     // Already filtered for non-admins in useEffect
     return followingProfiles.filter(u =>
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) // Keep email search
     );
   }, [followingProfiles, searchTerm]);
 
@@ -108,7 +108,7 @@ export default function FollowingPage() {
 
   const getInitials = (name?: string | null, email?: string | null) => {
       if (name) return name.charAt(0).toUpperCase();
-      if (email) return email.charAt(0).toUpperCase();
+      if (email) return email.charAt(0).toUpperCase(); // Still use email for fallback initial
       return '?';
   }
 
@@ -158,7 +158,7 @@ export default function FollowingPage() {
                      </Avatar>
                      <div>
                        <p className="font-medium text-sm">{followedUser.name || 'Anonymous User'}</p>
-                       <p className="text-xs text-muted-foreground">{followedUser.email}</p>
+                       {/* <p className="text-xs text-muted-foreground">{followedUser.email}</p> */}
                        <p className="text-xs text-muted-foreground">{followedUser.class || ''} {followedUser.model ? `(${followedUser.model})` : ''}</p>
                      </div>
                    </div>
@@ -181,7 +181,7 @@ export default function FollowingPage() {
                              <AlertDialogHeader>
                                  <AlertDialogTitle>Unfollow {followedUser.name || 'User'}?</AlertDialogTitle>
                                  <AlertDialogDescription>
-                                     Are you sure you want to stop following {followedUser.name || followedUser.email}?
+                                     Are you sure you want to stop following {followedUser.name || 'this user'}?
                                  </AlertDialogDescription>
                              </AlertDialogHeader>
                              <AlertDialogFooter>
