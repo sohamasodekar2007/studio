@@ -2,14 +2,22 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import Script from 'next/script'; // For MathJax
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
-import type { QuestionBankItem } from '@/types';
-import { AlertTriangle, BookOpen, Construction } from 'lucide-react';
+import type { QuestionBankItem, DifficultyLevel } from '@/types';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle } from 'lucide-react'; // Added icons
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge'; // Import Badge
+
+type DifficultyFilter = DifficultyLevel | 'All';
 
 export default function DppLessonPage() {
   const params = useParams();
@@ -18,9 +26,26 @@ export default function DppLessonPage() {
 
   const [subject, setSubject] = useState<string | null>(null);
   const [lesson, setLesson] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
+  const [allQuestions, setAllQuestions] = useState<QuestionBankItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('All');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); // Store answers by question ID
+  const [showSolution, setShowSolution] = useState<boolean>(false);
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+
+  // --- MathJax Integration ---
+  const typesetMathJax = useCallback(() => {
+    if (typeof window !== 'undefined' && (window as any).MathJax) {
+      (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    }
+  }, []);
+
+  useEffect(() => {
+    typesetMathJax();
+  }, [currentQuestionIndex, allQuestions, showSolution, typesetMathJax]); // Re-typeset when question changes or solution shown
+  // --- End MathJax Integration ---
 
   useEffect(() => {
     if (Array.isArray(slug) && slug.length === 2) {
@@ -33,12 +58,15 @@ export default function DppLessonPage() {
         setIsLoading(true);
         setError(null);
         try {
-          // Fetch questions without class/exam filters for DPP
           const fetchedQuestions = await getQuestionsForLesson({
             subject: decodedSubject,
             lesson: decodedLesson,
           });
-          setQuestions(fetchedQuestions);
+          setAllQuestions(fetchedQuestions);
+           setCurrentQuestionIndex(0); // Reset index when questions load
+           setUserAnswers({}); // Reset answers
+           setShowSolution(false); // Hide solution
+           setIsCorrect(null); // Reset correctness
         } catch (err) {
           console.error(`Failed to load questions for ${decodedSubject}/${decodedLesson}:`, err);
           setError('Could not load practice questions for this lesson.');
@@ -50,24 +78,209 @@ export default function DppLessonPage() {
     } else {
       setError('Invalid lesson URL.');
       setIsLoading(false);
-      // Optionally redirect or show error
     }
   }, [slug]);
+
+  const filteredQuestions = useMemo(() => {
+    if (selectedDifficulty === 'All') {
+      return allQuestions;
+    }
+    return allQuestions.filter(q => q.difficulty === selectedDifficulty);
+  }, [allQuestions, selectedDifficulty]);
+
+  const currentQuestion = filteredQuestions[currentQuestionIndex];
+
+  const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
+    setSelectedDifficulty(difficulty);
+    setCurrentQuestionIndex(0); // Reset to first question of filtered list
+    setUserAnswers({});
+    setShowSolution(false);
+    setIsCorrect(null);
+  };
+
+  const handleOptionSelect = (questionId: string, selectedOption: string) => {
+      if (showSolution) return; // Don't allow changing answer after showing solution
+      setUserAnswers(prev => ({ ...prev, [questionId]: selectedOption }));
+      setIsCorrect(null); // Reset correctness check until submitted/checked
+      setShowSolution(false); // Hide solution if user selects a new answer
+  };
+
+   const checkAnswer = () => {
+       if (!currentQuestion) return;
+       const selected = userAnswers[currentQuestion.id];
+       if (selected === null || selected === undefined) {
+           // Optionally show a toast or message to select an option first
+           return;
+       }
+       const correct = selected === currentQuestion.correct;
+       setIsCorrect(correct);
+       setShowSolution(true); // Show solution after checking
+   };
+
+   const goToNextQuestion = () => {
+       if (currentQuestionIndex < filteredQuestions.length - 1) {
+           setCurrentQuestionIndex(prev => prev + 1);
+           setShowSolution(false);
+           setIsCorrect(null);
+       } else {
+           // Optionally handle end of DPP (e.g., show summary, navigate back)
+           router.push('/dpp'); // Example: Navigate back to list
+       }
+   };
+
+   // Function to render question content (text or image)
+   const renderQuestionContent = (q: QuestionBankItem) => {
+       if (q.type === 'image' && q.question.image) {
+           const imagePath = `/question_bank_images/${q.subject}/${q.lesson}/images/${q.question.image}`;
+           return (
+               <div className="relative w-full max-w-md h-64 mx-auto my-4"> {/* Adjust size as needed */}
+                   <Image
+                       src={imagePath}
+                       alt={`Question Image: ${q.id}`}
+                       layout="fill"
+                       objectFit="contain"
+                       className="rounded border"
+                       data-ai-hint="question diagram"
+                   />
+               </div>
+           );
+       } else if (q.type === 'text' && q.question.text) {
+           return (
+                <div
+                   className="prose dark:prose-invert max-w-none mathjax-content mb-4" // Added margin-bottom
+                   dangerouslySetInnerHTML={{ __html: q.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                />
+           );
+       }
+       return <p className="text-muted-foreground">Question content not available.</p>;
+   };
+
+    // Function to render options
+    const renderOptions = (q: QuestionBankItem) => {
+        const questionId = q.id;
+        const selectedOption = userAnswers[questionId];
+        const isAnswerChecked = showSolution; // Use showSolution state
+        const correctOption = q.correct;
+
+        return (
+            <RadioGroup
+                value={selectedOption ?? undefined}
+                 // Disable if solution is shown
+                onValueChange={(value) => handleOptionSelect(questionId, value)}
+                className="space-y-3 mt-4" // Added margin-top
+                disabled={showSolution}
+            >
+                {Object.entries(q.options).map(([key, value]) => {
+                    const isSelected = selectedOption === key;
+                    const isCorrectOption = key === correctOption;
+                    let optionStyle = "border-border hover:border-primary"; // Base style
+
+                    if (isAnswerChecked) {
+                        if (isSelected && isCorrectOption) {
+                             optionStyle = "border-primary bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300";
+                        } else if (isSelected && !isCorrectOption) {
+                             optionStyle = "border-destructive bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300";
+                        } else if (!isSelected && isCorrectOption) {
+                             optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"; // Highlight correct if unselected
+                        }
+                    } else if (isSelected) {
+                         optionStyle = "border-primary ring-2 ring-primary bg-primary/5"; // Highlight selected before check
+                    }
+
+                    return (
+                         <Label
+                            key={key}
+                            htmlFor={`${questionId}-${key}`}
+                            className={cn(
+                                "flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-all",
+                                optionStyle,
+                                showSolution ? "cursor-default" : "cursor-pointer" // Adjust cursor based on state
+                            )}
+                        >
+                            <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1"/>
+                            <span className="font-medium">{key}.</span>
+                            <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: value.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                            {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                            {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
+                        </Label>
+                    );
+                })}
+            </RadioGroup>
+        );
+    };
+
+    // Function to render explanation
+    const renderExplanation = (q: QuestionBankItem) => {
+        const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
+        const hasImage = q.explanation.image && q.explanation.image.trim().length > 0;
+        const imagePath = hasImage ? `/question_bank_images/${q.subject}/${q.lesson}/images/${q.explanation.image}` : null;
+
+        if (!hasText && !hasImage) return null; // No explanation to show
+
+        return (
+             <Card className="mt-6 bg-muted/40 dark:bg-muted/20 border-border">
+                 <CardHeader>
+                     <CardTitle className="text-lg">Explanation</CardTitle>
+                 </CardHeader>
+                 <CardContent>
+                     {hasText && (
+                         <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                     )}
+                     {hasImage && imagePath && (
+                          <div className="relative w-full max-w-md h-64 mx-auto mt-4">
+                             <Image
+                                 src={imagePath}
+                                 alt={`Explanation Image`}
+                                 layout="fill"
+                                 objectFit="contain"
+                                 className="rounded border"
+                                 data-ai-hint="explanation image"
+                             />
+                          </div>
+                     )}
+                 </CardContent>
+             </Card>
+        );
+    }
+
+    // Helper to display PYQ info
+     const renderPyqInfo = (q: QuestionBankItem) => {
+        if (!q.isPyq || !q.pyqDetails) return null;
+        const { exam, date, shift } = q.pyqDetails;
+        return (
+            <Badge variant="outline" className="text-xs text-muted-foreground">
+                PYQ: {exam} ({new Date(date).getFullYear()} Shift {shift})
+            </Badge>
+        );
+     }
+
 
   if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
         <Skeleton className="h-8 w-1/2 mb-2" />
         <Skeleton className="h-6 w-3/4 mb-6" />
+        <div className="flex gap-2 mb-4">
+            <Skeleton className="h-10 w-20" />
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+        </div>
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-1/4" />
-            <Skeleton className="h-4 w-1/2" />
+             <Skeleton className="h-4 w-1/3" />
           </CardHeader>
           <CardContent>
+            <Skeleton className="h-40 w-full mb-4" />
+            <Skeleton className="h-10 w-full mb-2" />
             <Skeleton className="h-10 w-full mb-2" />
             <Skeleton className="h-10 w-full" />
           </CardContent>
+           <CardFooter className="flex justify-between">
+                <Skeleton className="h-10 w-28" />
+                <Skeleton className="h-10 w-28" />
+           </CardFooter>
         </Card>
       </div>
     );
@@ -86,53 +299,122 @@ export default function DppLessonPage() {
     );
   }
 
+  if (!subject || !lesson) {
+     return <div className="container mx-auto py-8 px-4 text-center">Loading lesson details...</div>;
+  }
+
+   if (filteredQuestions.length === 0) {
+        return (
+            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+                <div className="mb-4">
+                    <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary">
+                    &larr; Back to DPP List
+                    </Link>
+                </div>
+                 <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
+                 <p className="text-muted-foreground">Subject: {subject}</p>
+                  {/* Filter buttons */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
+                    <Filter className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-medium mr-2">Difficulty:</span>
+                    {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
+                        <Button
+                        key={diff}
+                        variant={selectedDifficulty === diff ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleDifficultyFilter(diff)}
+                        >
+                        {diff}
+                        </Button>
+                    ))}
+                    {/* Add Sort button later */}
+                    {/* <Button variant="outline" size="sm" className="ml-auto"><ArrowUpNarrowWide className="h-4 w-4 mr-1"/> Sort</Button> */}
+                </div>
+                 <Card>
+                    <CardContent className="p-10 text-center text-muted-foreground">
+                        No questions found matching the '{selectedDifficulty}' filter for this lesson.
+                    </CardContent>
+                 </Card>
+             </div>
+        );
+    }
+
   return (
-    <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-      <div className="mb-4">
-        <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary">
-          &larr; Back to DPP List
-        </Link>
+    <>
+      {/* MathJax Script */}
+       <Script
+        id="mathjax-script-dpp" // Unique ID
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+            console.log('MathJax loaded for DPP page.');
+            typesetMathJax();
+        }}
+      />
+      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+        <div className="mb-4">
+          <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary">
+            &larr; Back to DPP List
+          </Link>
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
+        <p className="text-muted-foreground">Subject: {subject}</p>
+
+        {/* Filter buttons */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
+             <Filter className="h-5 w-5 text-muted-foreground" />
+            <span className="font-medium mr-2">Difficulty:</span>
+            {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
+                <Button
+                key={diff}
+                variant={selectedDifficulty === diff ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleDifficultyFilter(diff)}
+                >
+                {diff}
+                </Button>
+            ))}
+            {/* <Button variant="outline" size="sm" className="ml-auto"><ArrowUpNarrowWide className="h-4 w-4 mr-1"/> Sort</Button> */}
+        </div>
+
+        {/* Question Display Card */}
+        <Card className="shadow-md">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+                 <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
+                 <div className="flex items-center gap-2">
+                    {renderPyqInfo(currentQuestion)}
+                    <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
+                 </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {renderQuestionContent(currentQuestion)}
+            {renderOptions(currentQuestion)}
+             {showSolution && renderExplanation(currentQuestion)}
+          </CardContent>
+          <CardFooter className="flex justify-between items-center flex-wrap gap-2">
+             <Button
+                 variant="secondary"
+                 onClick={checkAnswer}
+                 disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined}
+             >
+                Check Answer
+            </Button>
+             {isCorrect !== null && (
+                <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                    {isCorrect ? 'Correct!' : 'Incorrect'}
+                </span>
+             )}
+             <Button
+                 onClick={goToNextQuestion}
+                 disabled={!showSolution} // Only enable Next after checking/showing solution
+             >
+                {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
-      <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
-      <p className="text-muted-foreground">Subject: {subject}</p>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Practice Interface (Coming Soon)</CardTitle>
-          <CardDescription>
-            A dedicated interface to practice these {questions.length} questions is under development.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-center p-10">
-            <Construction className="h-16 w-16 text-primary mx-auto mb-4" />
-             <p className="text-muted-foreground">
-                The practice interface for DPPs will allow you to attempt questions, view solutions, and track your progress for this lesson.
-            </p>
-             {/* You could list the question count or basic info here */}
-             <p className="mt-4 text-sm">Number of questions in this lesson: <strong>{questions.length}</strong></p>
-              {/* Placeholder button */}
-              <Button className="mt-6" disabled>Start Practice (Coming Soon)</Button>
-        </CardContent>
-      </Card>
-
-       {/* Optional: List questions briefly (remove if too long) */}
-        {/* <Card>
-            <CardHeader><CardTitle>Questions in this Lesson</CardTitle></CardHeader>
-            <CardContent>
-                {questions.length > 0 ? (
-                    <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                       {questions.slice(0, 10).map(q => ( // Show first 10 as example
-                            <li key={q.id} className="truncate">
-                                {q.question.text ? q.question.text.substring(0, 80) + '...' : `[Image Question: ${q.id}]`}
-                            </li>
-                       ))}
-                        {questions.length > 10 && <li>...and {questions.length - 10} more</li>}
-                    </ul>
-                ) : (
-                    <p>No questions found for this lesson.</p>
-                )}
-            </CardContent>
-        </Card> */}
-    </div>
+    </>
   );
 }
