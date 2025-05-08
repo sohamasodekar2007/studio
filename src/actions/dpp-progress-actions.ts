@@ -28,6 +28,17 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 }
 
 /**
+ * Constructs the file path for a specific DPP progress file.
+ * Includes userId in the path structure.
+ */
+function getProgressFilePath(userId: string, subject: string, lesson: string): string {
+    const userDir = path.join(dppProgressBasePath, userId);
+    const subjectDir = path.join(userDir, subject);
+    return path.join(subjectDir, `${lesson}.json`);
+}
+
+
+/**
  * Retrieves the DPP progress data for a specific user, subject, and lesson.
  * Returns null if no progress file exists.
  * @param userId The ID of the user.
@@ -45,7 +56,8 @@ export async function getDppProgress(
     return null;
   }
 
-  const filePath = path.join(dppProgressBasePath, userId, subject, `${lesson}.json`);
+  // Use the helper function to get the correct path including userId
+  const filePath = getProgressFilePath(userId, subject, lesson);
 
   try {
     await fs.access(filePath); // Check if file exists
@@ -86,16 +98,14 @@ export async function saveDppAttempt(
     return { success: false, message: 'Missing required parameters for saving DPP attempt.' };
   }
 
-  const userDirPath = path.join(dppProgressBasePath, userId);
-  const subjectDirPath = path.join(userDirPath, subject);
-  const filePath = path.join(subjectDirPath, `${lesson}.json`);
+  const filePath = getProgressFilePath(userId, subject, lesson);
+  const dirPath = path.dirname(filePath); // Get directory path for ensureDirExists
 
   let pointsAwarded = 0; // Track points for this attempt
 
   try {
-    // Ensure directories exist
-    await ensureDirExists(userDirPath);
-    await ensureDirExists(subjectDirPath);
+    // Ensure directory exists
+    await ensureDirExists(dirPath);
 
     // Read existing progress or initialize new object
     let progressData: UserDppLessonProgress | null = await getDppProgress(userId, subject, lesson);

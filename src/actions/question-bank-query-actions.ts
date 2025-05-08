@@ -10,6 +10,15 @@ const jsonQuestionBankBasePath = path.join(process.cwd(), 'src', 'data', 'questi
 // Base path for publicly served images
 const publicImagesBasePath = path.join(process.cwd(), 'public', 'question_bank_images');
 
+/** Helper to ensure directory exists */
+async function ensureDirExists(dirPath: string): Promise<void> {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
+    } catch (error: any) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  }
+
 
 /**
  * Retrieves a list of available subjects by reading directory names from the JSON data path.
@@ -17,6 +26,7 @@ const publicImagesBasePath = path.join(process.cwd(), 'public', 'question_bank_i
  */
 export async function getSubjects(): Promise<string[]> {
   try {
+    await ensureDirExists(jsonQuestionBankBasePath); // Ensure base dir exists
     const entries = await fs.readdir(jsonQuestionBankBasePath, { withFileTypes: true });
     const subjects = entries
       .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
@@ -51,9 +61,10 @@ export async function getLessonsForSubject(subject: string): Promise<string[]> {
   if (!subject) return [];
   const subjectJsonPath = path.join(jsonQuestionBankBasePath, subject);
   try {
+    await ensureDirExists(subjectJsonPath); // Ensure subject dir exists
     const entries = await fs.readdir(subjectJsonPath, { withFileTypes: true });
     const lessons = entries
-      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'images') // Exclude 'images' folder which might be in src/data if not careful
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'images' && entry.name !== 'questions')
       .map(entry => entry.name);
     return lessons;
   } catch (error: any) {
@@ -74,6 +85,29 @@ interface QuestionFilters {
 }
 
 /**
+ * Helper function to read a single question file safely.
+ * @param filePath Path to the question JSON file.
+ * @returns The parsed QuestionBankItem or null if error/invalid.
+ */
+async function readQuestionFile(filePath: string): Promise<QuestionBankItem | null> {
+    try {
+        const fileContent = await fs.readFile(filePath, 'utf-8');
+        const questionData = JSON.parse(fileContent) as QuestionBankItem;
+        // Basic validation
+        if (questionData.id && questionData.subject && questionData.lesson && questionData.options && questionData.correct) {
+             return questionData;
+        } else {
+            console.warn(`Skipping invalid question JSON file (missing core fields): ${filePath}`);
+            return null;
+        }
+    } catch (parseError) {
+        console.error(`Error parsing question file ${filePath}:`, parseError);
+        return null;
+    }
+}
+
+
+/**
  * Retrieves questions based on provided filters from the JSON data path.
  * @param filters An object containing filter criteria.
  * @returns A promise resolving to an array of QuestionBankItem matching the filters.
@@ -86,44 +120,27 @@ export async function getQuestionsForLesson(filters: QuestionFilters): Promise<Q
   }
 
   const questionsJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions');
-  let allQuestions: QuestionBankItem[] = [];
+  const filteredQuestions: QuestionBankItem[] = [];
 
   try {
-    try {
-        await fs.access(questionsJsonDir);
-    } catch (accessError: any) {
-        if (accessError.code === 'ENOENT') {
-             console.warn(`Questions JSON directory not found: ${questionsJsonDir}. Returning empty array.`);
-             return [];
-        }
-        throw accessError;
-    }
-
+    await ensureDirExists(questionsJsonDir); // Ensure the directory exists
     const files = await fs.readdir(questionsJsonDir);
     const jsonFiles = files.filter(file => file.endsWith('.json') && file.startsWith('Q_'));
 
     for (const file of jsonFiles) {
-      const filePath = path.join(questionsJsonDir, file);
-      try {
-        const fileContent = await fs.readFile(filePath, 'utf-8');
-        const questionData = JSON.parse(fileContent) as QuestionBankItem;
-        if (questionData.id && questionData.subject && questionData.lesson) {
-             allQuestions.push(questionData);
-        } else {
-            console.warn(`Skipping invalid question JSON file (missing core fields): ${filePath}`);
+        const filePath = path.join(questionsJsonDir, file);
+        const questionData = await readQuestionFile(filePath);
+        if (questionData) {
+            // Apply filters
+            let matches = true;
+            if (classFilter && questionData.class !== classFilter) matches = false;
+            if (examFilter && questionData.examType !== examFilter) matches = false;
+            // Add more filters here if needed (e.g., difficulty, tags)
+            if (matches) {
+                filteredQuestions.push(questionData);
+            }
         }
-      } catch (parseError) {
-        console.error(`Error parsing question file ${filePath}:`, parseError);
-      }
     }
-
-    const filteredQuestions = allQuestions.filter(q => {
-        let matches = true;
-        if (classFilter && q.class !== classFilter) matches = false;
-        if (examFilter && q.examType !== examFilter) matches = false;
-        return matches;
-    });
-
     return filteredQuestions;
 
   } catch (error: any) {
@@ -149,7 +166,7 @@ export async function deleteQuestion(params: { questionId: string; subject: stri
   }
 
   const questionJsonFilePath = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions', `${questionId}.json`);
-  const publicLessonImagesDir = path.join(publicImagesBasePath, subject, lesson, 'images'); // Path to public images
+  const publicLessonImagesDir = path.join(publicImagesBasePath, subject, lesson, 'images');
 
   try {
     let questionImage: string | null = null;
@@ -167,9 +184,10 @@ export async function deleteQuestion(params: { questionId: string; subject: stri
     await fs.unlink(questionJsonFilePath);
     console.log(`Deleted question JSON: ${questionJsonFilePath}`);
 
+    // Attempt to delete images from public directory
     if (questionImage) {
       try {
-        await fs.unlink(path.join(publicLessonImagesDir, questionImage)); // Delete from public
+        await fs.unlink(path.join(publicLessonImagesDir, questionImage));
         console.log(`Deleted public question image: ${questionImage}`);
       } catch (imgError: any) {
         if (imgError.code !== 'ENOENT') console.error(`Error deleting public question image ${questionImage}:`, imgError);
@@ -178,7 +196,7 @@ export async function deleteQuestion(params: { questionId: string; subject: stri
     }
     if (explanationImage) {
       try {
-        await fs.unlink(path.join(publicLessonImagesDir, explanationImage)); // Delete from public
+        await fs.unlink(path.join(publicLessonImagesDir, explanationImage));
          console.log(`Deleted public explanation image: ${explanationImage}`);
       } catch (imgError: any) {
         if (imgError.code !== 'ENOENT') console.error(`Error deleting public explanation image ${explanationImage}:`, imgError);
@@ -193,4 +211,133 @@ export async function deleteQuestion(params: { questionId: string; subject: stri
     if (error.code === 'ENOENT') return { success: false, message: `Question ${questionId} not found.` };
     return { success: false, message: `Failed to delete question ${questionId}. Reason: ${error.message}` };
   }
+}
+
+// --- PYQ Specific Actions ---
+
+/**
+ * Scans the entire question bank and returns a unique list of exam names
+ * for which PYQs exist (based on the pyqDetails.exam field).
+ * @returns A promise resolving to an array of unique PYQ exam names.
+ */
+export async function getAvailablePyqExams(): Promise<string[]> {
+    const pyqExams = new Set<string>();
+    try {
+        const subjects = await getSubjects();
+        for (const subject of subjects) {
+            const lessons = await getLessonsForSubject(subject);
+            for (const lesson of lessons) {
+                const questionsDir = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions');
+                try {
+                    const files = await fs.readdir(questionsDir);
+                    const jsonFiles = files.filter(file => file.endsWith('.json') && file.startsWith('Q_'));
+                    for (const file of jsonFiles) {
+                        const filePath = path.join(questionsDir, file);
+                        const qData = await readQuestionFile(filePath);
+                        if (qData?.isPyq && qData.pyqDetails?.exam) {
+                            pyqExams.add(qData.pyqDetails.exam);
+                        }
+                    }
+                } catch (readDirError: any) {
+                    if (readDirError.code !== 'ENOENT') {
+                        console.error(`Error reading questions directory ${questionsDir}:`, readDirError);
+                    }
+                    // Continue scanning other lessons/subjects
+                }
+            }
+        }
+        return Array.from(pyqExams);
+    } catch (error) {
+        console.error("Error scanning for available PYQ exams:", error);
+        return []; // Return empty array on error
+    }
+}
+
+/**
+ * Retrieves subjects and their lessons that contain PYQs for a specific exam.
+ * @param examName The name of the target exam.
+ * @returns A promise resolving to an array of { subject: string, lessons: string[] }.
+ */
+export async function getSubjectsAndLessonsForPyqExam(examName: ExamOption): Promise<{ subject: string; lessons: string[] }[]> {
+    const result: { [subject: string]: Set<string> } = {};
+
+    try {
+        const subjects = await getSubjects();
+        for (const subject of subjects) {
+            const lessons = await getLessonsForSubject(subject);
+            for (const lesson of lessons) {
+                const questionsDir = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions');
+                try {
+                    const files = await fs.readdir(questionsDir);
+                    const jsonFiles = files.filter(file => file.endsWith('.json') && file.startsWith('Q_'));
+                    for (const file of jsonFiles) {
+                        const filePath = path.join(questionsDir, file);
+                        const qData = await readQuestionFile(filePath);
+                        if (qData?.isPyq && qData.pyqDetails?.exam === examName) {
+                             if (!result[subject]) {
+                                 result[subject] = new Set();
+                             }
+                             result[subject].add(lesson);
+                             break; // Found a matching PYQ in this lesson, move to the next lesson
+                        }
+                    }
+                } catch (readDirError: any) {
+                     if (readDirError.code !== 'ENOENT') {
+                         console.error(`Error reading PYQ questions directory ${questionsDir}:`, readDirError);
+                     }
+                }
+            }
+        }
+
+        // Convert result map to the desired array format
+        return Object.entries(result).map(([subject, lessonsSet]) => ({
+            subject,
+            lessons: Array.from(lessonsSet).sort() // Sort lessons alphabetically
+        })).sort((a, b) => a.subject.localeCompare(b.subject)); // Sort subjects alphabetically
+
+    } catch (error) {
+        console.error(`Error fetching subjects/lessons for PYQ exam ${examName}:`, error);
+        return [];
+    }
+}
+
+/**
+ * Retrieves only the PYQ questions for a specific lesson and exam.
+ * @param examName The specific exam name to filter by.
+ * @param subject The subject name.
+ * @param lesson The lesson name.
+ * @returns A promise resolving to an array of PYQ QuestionBankItems.
+ */
+export async function getPyqQuestionsForLesson(examName: ExamOption, subject: string, lesson: string): Promise<QuestionBankItem[]> {
+    if (!examName || !subject || !lesson) {
+        console.warn("Exam, Subject, and Lesson are required to fetch PYQ questions.");
+        return [];
+    }
+
+    const questionsJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson, 'questions');
+    const pyqQuestions: QuestionBankItem[] = [];
+
+    try {
+        await ensureDirExists(questionsJsonDir); // Ensure the directory exists
+        const files = await fs.readdir(questionsJsonDir);
+        const jsonFiles = files.filter(file => file.endsWith('.json') && file.startsWith('Q_'));
+
+        for (const file of jsonFiles) {
+            const filePath = path.join(questionsJsonDir, file);
+            const questionData = await readQuestionFile(filePath);
+            // Filter specifically for PYQs matching the examName
+            if (questionData?.isPyq && questionData.pyqDetails?.exam === examName) {
+                pyqQuestions.push(questionData);
+            }
+        }
+        return pyqQuestions;
+
+    } catch (error: any) {
+       if (error.code === 'ENOENT') {
+         console.warn(`PYQ Questions JSON directory not found: ${questionsJsonDir}. Returning empty array.`);
+         return [];
+       }
+       console.error(`Error reading PYQ questions for ${examName}/${subject}/${lesson}:`, error);
+       throw new Error(`Failed to retrieve PYQ questions for ${subject}/${lesson}.`);
+    }
 }
