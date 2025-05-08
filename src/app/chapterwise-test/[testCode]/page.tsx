@@ -218,7 +218,7 @@ export default function ChapterwiseTestPage() {
 
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
       // Use index as a simple identifier within this attempt if question IDs aren't stable/available
-      questionId: `q-${index}`, // Example: use index if no stable ID
+      questionId: q.id || `q-${index}`, // Prioritize actual ID if available
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
@@ -305,9 +305,8 @@ export default function ChapterwiseTestPage() {
 
    // Function to render question content (text or image)
    const renderQuestionContent = (question: TestQuestion) => {
-     // Check if image_url exists and prioritize it
      // Ensure the URL starts with '/' to signify it's relative to the public folder
-     const imageUrl = question.question_image_url?.startsWith('/') ? question.question_image_url : null;
+     const imageUrl = question.image_url?.startsWith('/') ? question.image_url : null;
 
      if (imageUrl) {
        return (
@@ -325,12 +324,14 @@ export default function ChapterwiseTestPage() {
        );
      }
      // Fallback to question text if image_url is not present or invalid
-     else if (question.question_text) {
+     // Use the correct field: question_text or question
+     else if (question.question_text || question.question) {
+       const textContent = question.question_text || question.question || ''; // Prioritize question_text
        return (
          <div
            className="prose dark:prose-invert max-w-none prose-sm md:prose-base mathjax-content"
            dangerouslySetInnerHTML={{
-             __html: question.question_text
+             __html: textContent
                        .replace(/\$(.*?)\$/g, '\\($1\\)')
                        .replace(/\$\$(.*?)\$\$/g, '\\[$1\\]')
            }}

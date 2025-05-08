@@ -26,13 +26,14 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
       case 'FREE':
         return true; // Everyone can access FREE tests
       case 'FREE_PREMIUM':
-        return userModel !== 'free'; // Only premium users can access FREE_PREMIUM
+        // Visible to any premium user OR free users
+        return true;
       case 'PAID':
-        // PAID tests have specific access rules
-        if (userModel === 'combo') return true; // Combo plan accesses all PAID tests
-        if (test.testType === 'chapterwise' && userModel === 'chapterwise') return true;
-        if (test.testType === 'full_length' && userModel === 'full_length') return true;
-        return false; // Free users or mismatched premium users cannot access this PAID test
+         // Only visible to users with specific premium plans or combo
+         if (userModel === 'combo') return true; // Combo sees all paid
+         if (test.testType === 'chapterwise' && userModel === 'chapterwise') return true;
+         if (test.testType === 'full_length' && userModel === 'full_length') return true;
+         return false; // Free users or mismatched premium users don't see this PAID test
       default:
         return false; // Unknown type
     }
@@ -95,7 +96,8 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
   }
 
   // Override for test type specific issues (like if full_length interface is not ready)
-  if (test.testType !== 'chapterwise' && hasAccess) {
+  // For now, only chapterwise tests are implemented
+  if (test.testType !== 'chapterwise') {
      buttonText = 'Interface Coming Soon';
      isDisabled = true;
      buttonIcon = <AlertTriangle className="mr-2 h-4 w-4" />;
@@ -108,7 +110,7 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
          <Button
             variant={buttonVariant}
             size="lg"
-            className="w-full"
+            className="w-full sm:w-auto"
             onClick={() => { /* TODO: Redirect to upgrade page */
                  toast({ title: "Upgrade Required", description: "Please upgrade your plan to access this test." });
             }}
@@ -119,9 +121,15 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
       );
   }
 
-  const testUrl = (user && user.id && test.testType === 'chapterwise')
-    ? `/chapterwise-test/${test.test_code}?userId=${user.id}`
-    : '#'; // Default to '#' if not chapterwise or no user
+  // Ensure URL construction is correct based on test type
+  const testUrl = (user && user.id)
+    ? test.testType === 'chapterwise'
+      ? `/chapterwise-test/${test.test_code}?userId=${user.id}`
+      : test.testType === 'full_length' // Placeholder for future full_length test page
+        ? `/full-length-test/${test.test_code}?userId=${user.id}` // Example URL structure
+        : '#' // Fallback for other types
+    : '#'; // Default to '#' if no user or invalid type
+
 
   // Render the Link or a disabled button if needed
   return (

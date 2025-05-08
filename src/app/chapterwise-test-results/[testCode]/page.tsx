@@ -7,7 +7,7 @@
  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
  import { Progress } from '@/components/ui/progress';
- import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp } from 'lucide-react'; // Added BrainCircuit, TrendingUp
+ import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2 } from 'lucide-react'; // Added Loader2
  import Link from 'next/link';
  import type { TestResultSummary, GeneratedTest, UserProfile } from '@/types';
  import { Skeleton } from '@/components/ui/skeleton';
@@ -383,5 +383,3 @@
      </>
    );
  }
- 
-  
