@@ -22,7 +22,7 @@ export type ClassLevel = typeof classLevels[number];
 
 // Interface for User Data (Stored in users.json)
 export interface UserProfile {
-  id: string; // User ID is now always a string (UUID)
+  id: string; // User ID is now always a string (UUID or numeric string)
   email: string | null;
   password?: string; // Store hashed password
   name: string | null;
@@ -77,6 +77,7 @@ export interface QuestionBankItem {
     text?: string | null;
     image?: string | null; // Filename relative to public/question_bank_images/{subject}/{lesson}/images/
   };
+  marks: number; // Added marks field
   isPyq?: boolean; // Flag to indicate if it's a PYQ
   pyqDetails?: {
     exam: ExamOption; // The specific exam it appeared in
@@ -119,20 +120,20 @@ interface BaseGeneratedTest {
     test_code: string;
     name: string;
     duration: number; // in minutes
-    count: number; // Number of questions selected/specified by user
+    count: number; // Number of questions specified by user (for chapterwise), or calculated total (for full length)
     total_questions: number; // Actual total number of questions included
     type: PricingType; // FREE, PAID, FREE_PREMIUM
     audience: AudienceType;
     createdAt?: string; // ISO timestamp
+    test_subject: string[]; // Subjects involved
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 // NOTE: This structure assumes direct embedding of questions for Chapterwise tests
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise'; // Discriminator
-    test_subject: [string]; // Array with exactly one subject
     lesson: string;
-    examFilter: ExamOption | 'all'; // Filter used during generation
+    examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
     questions: TestQuestion[]; // Directly embed questions
 
     // Ensure fields from FullLengthTestJson are not present or explicitly undefined
@@ -149,8 +150,7 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 export interface FullLengthTestJson extends BaseGeneratedTest {
     testType: 'full_length'; // Discriminator
     stream: TestStream;
-    test_subject: string[]; // Can have multiple subjects (Physics, Chemistry, Maths/Bio)
-    examFilter: ExamOption | 'all'; // Filter used during generation
+    examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
     weightage?: {
         physics: number;
         chemistry: number;
@@ -182,7 +182,7 @@ export enum QuestionStatus {
 }
 
 export interface UserAnswer {
-  questionId: string; // Or index if using array index for the specific test
+  questionId: string; // Original ID from QuestionBankItem
   selectedOption: string | null; // e.g., "A", "B", "C", "D", or null if unanswered
   status: QuestionStatus;
   timeTaken?: number; // Optional: time spent on this question
@@ -217,10 +217,12 @@ export interface TestResultSummary {
     percentage: number;
     timeTakenMinutes: number; // Total time taken for the test
     detailedAnswers: Array<{
-        questionIndex: number;
+        questionId: string; // Store original question ID
+        questionIndex: number; // Index within this specific test attempt
         // Question content representation (one of these will be populated)
         questionText?: string | null; // MathJax format
         questionImageUrl?: string | null; // Relative URL
+        options?: string[]; // Store options shown to user
         userAnswer: string | null; // e.g. "A"
         correctAnswer: string; // e.g. "C"
         isCorrect: boolean;
@@ -228,6 +230,7 @@ export interface TestResultSummary {
         // Explanation content (one of these might be populated)
         explanationText?: string | null; // MathJax format
         explanationImageUrl?: string | null; // Relative URL
+        marks?: number; // Marks for this specific question
     }>;
 }
 
@@ -270,3 +273,34 @@ export interface UserDppLessonProgress {
   // Map where key is questionId and value is an array of attempts
   questionAttempts: Record<string, DppAttempt[]>;
 }
+
+// ---- Notebook / Bookmark Types ----
+
+// Interface for a single Notebook created by the user
+export interface Notebook {
+  id: string; // Unique ID for the notebook (e.g., UUID)
+  name: string;
+  createdAt: number; // Timestamp
+}
+
+// Interface for a bookmarked question within a notebook
+export interface BookmarkedQuestion {
+  questionId: string; // ID linking back to the QuestionBankItem
+  subject: string;    // Subject of the question
+  lesson: string;     // Lesson of the question
+  addedAt: number;    // Timestamp when bookmarked
+  tags?: string[];    // Optional tags like "Easy", "Hard", "Tricky", "Do Again"
+}
+
+// Interface for the user's entire notebook data structure
+// This will be the content of src/data/user-notebooks/{userId}/notebooks.json
+export interface UserNotebookData {
+  userId: string;
+  notebooks: Notebook[];
+  // Maps notebookId to an array of bookmarked questions in that notebook
+  bookmarkedQuestions: Record<string, BookmarkedQuestion[]>;
+}
+
+// Default tags for bookmarking
+export const bookmarkTags = ["Easy", "Hard", "Tricky", "Do Again", "Important"] as const;
+export type BookmarkTag = typeof bookmarkTags[number];

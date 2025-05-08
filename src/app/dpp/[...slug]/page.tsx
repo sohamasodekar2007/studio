@@ -11,21 +11,22 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; // Import DPP progress actions
-import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History } from 'lucide-react'; // Added icons
+import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark } from 'lucide-react'; // Added Bookmark icon
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge'; // Import Badge
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { getUserNotebooks, addQuestionToNotebooks } from '@/actions/notebook-actions'; // Import notebook actions
+import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog'; // Import the new dialog
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
 // Helper function to construct image paths relative to the public directory
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    // Ensure the path starts correctly and encode components
     const basePath = '/question_bank_images'; // Base path within public
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
@@ -51,6 +52,13 @@ export default function DppLessonPage() {
 
   const [dppProgress, setDppProgress] = useState<UserDppLessonProgress | null>(null); // State for user progress data
   const [isLoadingProgress, setIsLoadingProgress] = useState(false); // Separate loading state for progress
+
+  // --- Notebook/Bookmark State ---
+  const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  // --- End Notebook/Bookmark State ---
+
 
   // --- MathJax Integration ---
   const typesetMathJax = useCallback(() => {
@@ -99,23 +107,28 @@ export default function DppLessonPage() {
     }
   }, [slug]);
 
-  // Fetch User Progress
-  useEffect(() => {
-    if (user?.id && subject && lesson) {
-      setIsLoadingProgress(true);
-      getDppProgress(user.id, subject, lesson)
-        .then(progress => {
-          setDppProgress(progress);
-        })
-        .catch(err => {
-          console.error("Failed to load DPP progress:", err);
-          // Don't block the UI, just log the error
-        })
-        .finally(() => {
-          setIsLoadingProgress(false);
-        });
-    }
-  }, [user, subject, lesson]); // Fetch when user/subject/lesson are available
+  // Fetch User Progress and Notebooks
+   useEffect(() => {
+       if (user?.id && subject && lesson) {
+            // Fetch DPP Progress
+            setIsLoadingProgress(true);
+            getDppProgress(user.id, subject, lesson)
+                .then(progress => {
+                    setDppProgress(progress);
+                })
+                .catch(err => console.error("Failed to load DPP progress:", err))
+                .finally(() => setIsLoadingProgress(false));
+
+            // Fetch Notebooks
+            setIsLoadingNotebooks(true);
+            getUserNotebooks(user.id)
+                .then(data => {
+                     setNotebooks(data.notebooks || []);
+                })
+                .catch(err => console.error("Failed to load notebooks:", err))
+                .finally(() => setIsLoadingNotebooks(false));
+       }
+   }, [user, subject, lesson]);
 
   const filteredQuestions = useMemo(() => {
     if (selectedDifficulty === 'All') {
@@ -213,7 +226,7 @@ export default function DppLessonPage() {
                        className="rounded border"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2} // Prioritize first few images
-                       onError={(e) => { console.error(`Error loading question image: ${imagePath}`, e); }} // Simplified error logging
+                       onError={(e) => { console.error(`Error loading question image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Simplified error handling
                        unoptimized // Keep this if local images might cause issues
                     />
                     {/* Consider adding a fallback text display on error if needed */}
@@ -348,6 +361,51 @@ export default function DppLessonPage() {
         }
         return <span className="text-xs text-muted-foreground">Not Attempted Before</span>;
     };
+
+    // --- Notebook/Bookmark Handler ---
+    const handleOpenNotebookModal = () => {
+        if (isLoadingNotebooks) {
+             toast({ variant: "default", title: "Loading notebooks..." });
+             return;
+        }
+        if (!currentQuestion) return;
+        setIsNotebookModalOpen(true);
+    }
+
+    const handleCloseNotebookModal = () => {
+         setIsNotebookModalOpen(false);
+    }
+
+     const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
+         if (!user?.id || !currentQuestion) return;
+
+         const questionData = {
+             questionId: currentQuestion.id,
+             subject: currentQuestion.subject,
+             lesson: currentQuestion.lesson,
+             addedAt: Date.now(),
+             tags: tags,
+         };
+
+         setIsLoading(true); // Use general loading or a specific one
+         try {
+             const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
+             if (result.success) {
+                 toast({ title: "Saved!", description: "Question added to selected notebooks." });
+                 // Refresh notebook data? Or assume success? For now, just close.
+                 // await fetchNotebooks(); // Optionally refetch
+                 handleCloseNotebookModal();
+             } else {
+                  throw new Error(result.message || "Failed to save to notebooks.");
+             }
+         } catch (error: any) {
+              toast({ variant: "destructive", title: "Save Failed", description: error.message });
+         } finally {
+              setIsLoading(false);
+         }
+     }
+
+    // --- End Notebook/Bookmark Handler ---
 
 
   if (isLoading || authLoading) { // Check authLoading as well
@@ -502,14 +560,20 @@ export default function DppLessonPage() {
                 {showSolution && renderExplanation(currentQuestion)}
             </CardContent>
             <CardFooter className="flex justify-between items-center flex-wrap gap-2">
-                <Button
-                    variant="secondary"
-                    onClick={checkAnswer}
-                    disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}
-                >
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Check Answer
-                </Button>
+                 <div className="flex gap-2">
+                      <Button
+                          variant="secondary"
+                          onClick={checkAnswer}
+                          disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}
+                      >
+                          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Check Answer
+                      </Button>
+                      <Button variant="outline" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks}>
+                            <Bookmark className="mr-2 h-4 w-4" />
+                            Bookmark
+                      </Button>
+                 </div>
                 {isCorrect !== null && (
                     <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                         {isCorrect ? 'Correct!' : 'Incorrect'}
@@ -531,7 +595,19 @@ export default function DppLessonPage() {
             </Card>
         )}
       </div>
+
+      {/* Add to Notebook Dialog */}
+        {currentQuestion && user && (
+            <AddToNotebookDialog
+                isOpen={isNotebookModalOpen}
+                onClose={handleCloseNotebookModal}
+                notebooks={notebooks}
+                onSave={handleSaveToNotebooks}
+                isLoading={isLoading}
+                userId={user.id} // Pass userId to dialog for creating new notebooks
+                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])} // Update local state
+            />
+        )}
     </>
   );
 }
-

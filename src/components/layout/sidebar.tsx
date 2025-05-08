@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck } from 'lucide-react'; // Added ClipboardCheck for DPP
+import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook } from 'lucide-react'; // Added Notebook icon
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
@@ -27,18 +27,15 @@ export function AppSidebar() {
   const isAdmin = user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const isActive = (href: string) => {
-    // Exact match for home, settings, help, study-tips, doubt-solving, progress, dpp
-    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/dpp'].includes(href)) {
+    // Exact match for most top-level pages
+    if (['/', '/settings', '/help', '/study-tips', '/doubt-solving', '/progress', '/notebooks'].includes(href)) {
       return pathname === href;
     }
-    // Starts with for tests and admin as they have sub-routes
-    if (href === '/tests' || href === '/admin') {
+    // Starts with for tests, admin, and dpp as they have sub-routes
+    if (['/tests', '/admin', '/dpp'].includes(href)) {
       return pathname.startsWith(href);
     }
-    // Handle potential sub-routes for DPP if needed later
-    if (href === '/dpp') {
-        return pathname.startsWith('/dpp');
-    }
+
     return false;
   };
 
@@ -79,6 +76,14 @@ export function AppSidebar() {
                         <span>DPP</span>
                     </SidebarMenuButton>
                 </Link>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <Link href="/notebooks" passHref legacyBehavior>
+                <SidebarMenuButton as="a" isActive={isActive('/notebooks')} tooltip="Notebooks">
+                  <Notebook />
+                  <span>Notebooks</span>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
             <SidebarMenuItem>
               <Link href="/progress" passHref legacyBehavior>
