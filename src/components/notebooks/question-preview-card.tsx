@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, Tag, ExternalLink, AlertTriangle, FileText, ImageIcon, Eye } from 'lucide-react';
+import { Trash2, Tag, ExternalLink, AlertTriangle, FileText, ImageIcon, Eye, Loader2 } from 'lucide-react'; // Added Loader2
 import type { BookmarkedQuestion, QuestionBankItem } from '@/types';
 import { getQuestionById } from '@/actions/notebook-actions'; // Action to fetch full question data
 import {
@@ -27,6 +27,7 @@ import ImageViewDialog from './image-view-dialog'; // Import the new dialog
 interface QuestionPreviewCardProps {
   bookmarkedQuestion: BookmarkedQuestion;
   onRemove: () => void;
+  isRemoving?: boolean; // Optional prop to indicate removal in progress
 }
 
 // Helper function to construct image paths relative to the public directory
@@ -37,7 +38,7 @@ const constructImagePath = (subject: string, lesson: string, filename: string | 
 };
 
 
-export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove }: QuestionPreviewCardProps) {
+export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove, isRemoving = false }: QuestionPreviewCardProps) {
   const [questionData, setQuestionData] = useState<QuestionBankItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,8 +135,8 @@ export default function QuestionPreviewCard({ bookmarkedQuestion, onRemove }: Qu
              </div>
              <AlertDialog>
                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive">
-                         <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive" disabled={isRemoving}>
+                        {isRemoving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                      </Button>
                  </AlertDialogTrigger>
                   <AlertDialogContent>
