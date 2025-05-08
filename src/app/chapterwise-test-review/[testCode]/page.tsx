@@ -6,51 +6,61 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer } from 'lucide-react'; // Added Timer
 import Link from 'next/link';
-import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types'; // Use DetailedAnswer
+import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getTestReport } from '@/actions/test-report-actions'; // Action to get specific report
+import { getTestReport } from '@/actions/test-report-actions';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
-import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog'; // Import notebook dialog
-import { getUserNotebooks, addQuestionToNotebooks } from '@/actions/notebook-actions'; // Import notebook actions
+import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
+import { getUserNotebooks, addQuestionToNotebooks } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator'; // Import Separator
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
     [QuestionStatusEnum.Unanswered]: "destructive",
     [QuestionStatusEnum.MarkedForReview]: "secondary",
-    [QuestionStatusEnum.AnsweredAndMarked]: "default",
+    [QuestionStatusEnum.AnsweredAndMarked]: "default", // Or maybe a unique variant like 'info' if you add one
     [QuestionStatusEnum.NotVisited]: "outline",
 };
 
 const OPTION_STYLES = {
-  base: "border-border hover:border-primary dark:border-gray-700 dark:hover:border-primary",
-  selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300",
-  selectedIncorrect: "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300",
+  base: "border-border hover:bg-muted/30 dark:border-gray-700 dark:hover:bg-muted/20",
+  selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-800 dark:text-green-300 font-medium",
+  selectedIncorrect: "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-800 dark:text-red-300 font-medium",
   correctUnselected: "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
-  correctImageOption: "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+  // Correct option when user selected incorrectly - make it stand out
+  correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-400",
 };
+
 
 // Helper function remains the same - it constructs the path based on the input string
 const constructImagePath = (relativePath: string | null | undefined): string | null => {
     if (!relativePath) return null;
-    // Ensure the path starts with '/' for it to be relative to the domain root
-    if (relativePath.startsWith('/')) {
+    // Check if it already looks like a valid relative path
+    if (relativePath.startsWith('/') || relativePath.startsWith('http')) {
         return relativePath;
     }
-    // Handle cases where it might be missing the leading slash
-    if (relativePath.startsWith('question_bank_images')) {
-        return `/${relativePath}`;
-    }
+    // Handle cases where it might be missing the leading slash or needs base path
+    // This part is tricky without knowing the exact structure saved in detailedAnswers.
+    // Assuming it should always start with '/question_bank_images/'
+     if (relativePath.startsWith('question_bank_images')) {
+         return `/${relativePath}`;
+     }
     // If it's just a filename, we cannot reliably construct the path without subject/lesson
-    // This scenario shouldn't happen if the report saves the correct path
+    // This scenario might indicate an issue in how image URLs are saved in the report.
     console.warn("constructImagePath received potentially just a filename:", relativePath);
-    return null;
+    // Best guess - try constructing if possible, otherwise return null
+    // This part is commented out as it requires subject/lesson which might not be reliable here
+    // if (subject && lesson && relativePath) {
+    //   return `/question_bank_images/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(relativePath)}`;
+    // }
+    return null; // Cannot construct full path reliably
 };
 
 
@@ -67,9 +77,9 @@ export default function TestReviewPage() {
 
   // --- Notebook/Bookmark State ---
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
-  const [notebooks, setNotebooks] = useState<Notebook[]>([]); // Corrected syntax
-  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false); // Corrected syntax
-  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); // Corrected syntax
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
   // --- End Notebook/Bookmark State ---
 
   const testCode = params.testCode as string;
@@ -79,9 +89,18 @@ export default function TestReviewPage() {
   const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
            console.log("Attempting MathJax typesetting on review page...");
-           (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error in review page:", err));
+           // Target specific elements that might contain MathJax
+            const elements = document.querySelectorAll('.mathjax-content');
+            if (elements.length > 0) {
+                 (window as any).MathJax.typesetPromise(elements)
+                    .catch((err: any) => console.error("MathJax typeset error in review page:", err));
+            } else {
+                 (window as any).MathJax.typesetPromise() // Fallback to typesetting whole page if specific elements not found
+                    .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+            }
        }
    }, []);
+
 
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptTimestampStr) {
@@ -104,7 +123,6 @@ export default function TestReviewPage() {
             throw new Error(`Test attempt data not found for this attempt.`);
         }
         console.log("Fetched report data for review:", reportData);
-        // Ensure detailedAnswers exists and is an array
         if (!reportData.detailedAnswers || !Array.isArray(reportData.detailedAnswers)) {
              console.error("Report data is missing or has invalid detailedAnswers:", reportData);
              throw new Error("Invalid report data structure received.");
@@ -147,28 +165,26 @@ export default function TestReviewPage() {
   }, [user, authLoading, router, testCode, userId, attemptTimestampStr, fetchReviewData]);
 
   useEffect(() => {
-      // Only typeset if report data is present
       if (testReport && testReport.detailedAnswers && testReport.detailedAnswers.length > 0) {
           typesetMathJax();
       }
-  }, [currentQuestionReviewIndex, testReport, typesetMathJax]); // Depend on index and data
+  }, [currentQuestionReviewIndex, testReport, typesetMathJax]);
 
   // Memoized values
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
-  const currentReviewQuestion : DetailedAnswer | undefined = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]); // Use DetailedAnswer type
+  const currentReviewQuestion : DetailedAnswer | undefined = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  // Determine correct option key, handling potential "Option X" prefix or just "X"
-   const correctOptionKey = useMemo(() => {
-       const answer = currentReviewQuestion?.correctAnswer;
-       if (!answer) return undefined;
-       return answer.replace('Option ', '').trim();
-   }, [currentReviewQuestion?.correctAnswer]);
-
+   // Determine correct option key, handling potential "Option X" prefix or just "X"
+  const correctOptionKey = useMemo(() => {
+    const answer = currentReviewQuestion?.correctAnswer;
+    if (!answer) return undefined;
+    return answer.replace('Option ', '').trim();
+  }, [currentReviewQuestion?.correctAnswer]);
 
   const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
-  const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]); // Check if selected is non-null
+  const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
   const questionStatus = useMemo(() => currentReviewQuestion?.status || QuestionStatusEnum.NotVisited, [currentReviewQuestion]);
 
   const optionsToDisplay = useMemo(() => {
@@ -176,7 +192,6 @@ export default function TestReviewPage() {
       return ['', '', '', ''];
     }
     const opts = currentReviewQuestion.options;
-    // Ensure it's always an array of 4, even if data is malformed
     return Array.from({ length: 4 }, (_, i) => (typeof opts[i] === 'string' ? opts[i] : ''));
   }, [currentReviewQuestion]);
 
@@ -198,18 +213,14 @@ export default function TestReviewPage() {
      const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
          if (!user?.id || !currentReviewQuestion?.questionId || !testReport) return;
 
-         // Determine subject/lesson from report (may need refinement based on full_length structure)
-         // Assuming subject/lesson context might be missing in the report, get it from the question data if possible
-          const subject = Array.isArray(testReport?.test_subject) && testReport.test_subject.length > 0
-                          ? testReport.test_subject[0]
-                          : 'Unknown'; // Fallback subject from report
-         const lesson = (testReport as any).lesson || 'General'; // Fallback lesson from report
+         // Determine subject/lesson (handle potential missing data)
+         const subject = testReport.test_subject?.[0] || 'Unknown Subject';
+         const lesson = (testReport as any).lesson || 'General'; // Assuming lesson might be stored this way for chapterwise
 
          const questionData: BookmarkedQuestion = {
              questionId: currentReviewQuestion.questionId,
-             // Use subject/lesson from the question detail if available, otherwise fallback to report context
-             subject: currentReviewQuestion.subject || subject, // Prioritize question's own subject if available
-             lesson: currentReviewQuestion.lesson || lesson,   // Prioritize question's own lesson if available
+             subject: subject,
+             lesson: lesson,
              addedAt: Date.now(),
              tags: tags,
          };
@@ -283,7 +294,6 @@ export default function TestReviewPage() {
   }
 
    if (!currentReviewQuestion) {
-    // This can happen momentarily if report loads but the index is out of bounds initially
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4" />
@@ -295,46 +305,44 @@ export default function TestReviewPage() {
    // --- Render Content Function ---
    const renderContentWithMathJax = (
        textContent: string | undefined | null,
-       imageUrl: string | undefined | null, // Expects relative URL from report like /question_bank_images/...
+       imageUrl: string | undefined | null, // Expects relative URL like /question_bank_images/...
        context: 'question' | 'explanation'
    ) => {
        const fullImagePath = constructImagePath(imageUrl); // Construct path relative to domain root
 
-        if (fullImagePath) { // Display image if path exists and is valid
+       if (fullImagePath) { // Display image if path exists and is valid
            return (
-                <div className="relative w-full max-w-xl h-auto mx-auto my-4">
+                <div className="relative w-full max-w-2xl h-auto mx-auto my-4"> {/* Allow more width */}
                    <Image
                        src={fullImagePath}
-                       alt={context === 'question' ? "Question Image" : "Explanation Image"}
-                       width={700}
-                       height={500}
+                       alt={`${context === 'question' ? 'Question' : 'Explanation'} Image`}
+                       width={800} // Increase constraint
+                       height={600} // Increase constraint
                        style={{ width: '100%', height: 'auto', objectFit: 'contain' }}
                        className="rounded-md border"
                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                       unoptimized // Can remove if deploying and optimizing images
+                       unoptimized // Important for local/relative paths
                        onError={(e) => {
                            console.error(`Error loading ${context} image: ${fullImagePath}`, e);
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none'; // Hide broken image
-                            // Optionally display a fallback text if image fails
-                             const fallback = document.createElement('p');
-                             fallback.textContent = `[${context} image failed to load]`;
-                             fallback.className = 'text-xs text-destructive italic';
-                             target.parentNode?.insertBefore(fallback, target.nextSibling);
-                        }}
+                           const target = e.target as HTMLImageElement;
+                           target.style.display = 'none'; // Hide broken image
+                           // Add fallback text
+                           const fallback = document.createElement('p');
+                           fallback.textContent = `[${context} image failed to load: ${imageUrl}]`; // Show original path on error
+                           fallback.className = 'text-xs text-destructive italic';
+                           target.parentNode?.insertBefore(fallback, target.nextSibling);
+                       }}
                     />
                 </div>
             );
         } else if (textContent) { // Render text if no image or for explanation text
-           // Use dangerouslySetInnerHTML for MathJax compatibility
            return (
                <div
-                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+                   className="prose prose-sm sm:prose-base dark:prose-invert max-w-none text-foreground mathjax-content" // Adjust prose size
                    dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                 />
            );
        } else {
-           // Fallback if neither text nor image is available
            return <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
        }
    };
@@ -353,7 +361,7 @@ export default function TestReviewPage() {
             if (testReport) typesetMathJax();
         }}
       />
-    <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
+    <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6"> {/* Increased max-w */}
       <div className="flex justify-between items-center">
         <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
@@ -361,33 +369,37 @@ export default function TestReviewPage() {
             </Link>
         </Button>
          <h1 className="text-2xl font-bold text-center truncate flex-1 mx-4">{testReport.testName || 'Test Review'}</h1>
-         <div className="w-24"></div>
+         {/* Question Navigation Buttons */}
+         <div className="flex gap-2 flex-shrink-0">
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentQuestionReviewIndex === 0}>
+                <ArrowLeft className="mr-1 h-4 w-4" /> Prev
+            </Button>
+             <span className="text-sm font-medium text-muted-foreground self-center">
+                {currentQuestionReviewIndex + 1} / {totalQuestions}
+            </span>
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
+                disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
+                Next <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
+         </div>
       </div>
 
-      <Card className="shadow-md bg-card text-card-foreground">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Question {currentQuestionReviewIndex + 1} of {totalQuestions}</CardTitle>
-             <Badge variant="outline">Marks: {currentReviewQuestion?.marks ?? 1}</Badge> {/* Default to 1 mark if missing */}
-          </div>
-           {currentReviewQuestion.status && (
-                <Badge
-                    variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
-                    className={cn("text-xs w-fit mt-2", {
-                        "bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300 border-green-500": questionStatus === QuestionStatusEnum.Answered && isUserCorrect,
-                        "bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300 border-red-500": (questionStatus === QuestionStatusEnum.Answered && !isUserCorrect) || questionStatus === QuestionStatusEnum.Unanswered,
-                        "bg-purple-100 text-purple-700 dark:bg-purple-700/20 dark:text-purple-300 border-purple-500": questionStatus === QuestionStatusEnum.MarkedForReview,
-                        "bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300 border-blue-500": questionStatus === QuestionStatusEnum.AnsweredAndMarked,
-                        "border-gray-400 text-gray-600 dark:border-gray-600 dark:text-gray-400": questionStatus === QuestionStatusEnum.NotVisited,
-                    })}
-                 >
-                   Status: {questionStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                </Badge>
-            )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-            {/* Render Question */}
-            <div className="mb-4 pb-4 border-b border-border">
+      {/* Main Content Card */}
+      <Card className="shadow-lg bg-card text-card-foreground">
+        {/* Question Area */}
+        <CardContent className="p-6">
+           <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <h3 className="text-lg font-semibold text-primary">Question {currentQuestionReviewIndex + 1}</h3>
+                 {currentReviewQuestion?.marks && <Badge variant="secondary">Marks: {currentReviewQuestion.marks}</Badge>}
+           </div>
+          <div className="mb-6 pb-6 border-b border-border">
                  {renderContentWithMathJax(
                     currentReviewQuestion.questionText,
                     currentReviewQuestion.questionImageUrl,
@@ -395,9 +407,9 @@ export default function TestReviewPage() {
                  )}
             </div>
 
-          {/* Render Options */}
-          <div className="space-y-2 pt-4">
-            <p className="font-semibold text-card-foreground">Options:</p>
+          {/* Options Area */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-base text-muted-foreground">Options:</h4>
             {optionsToDisplay.map((optionText, idx) => {
               const optionKey = optionKeys[idx];
               const isSelected = userSelectedOptionKey === optionKey;
@@ -406,34 +418,55 @@ export default function TestReviewPage() {
               let optionStyleClass = OPTION_STYLES.base;
                if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
                else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
-               else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
-                 // Use different styling for image question options if needed
-                // const isImageQuestion = !currentReviewQuestion.questionText && !!currentReviewQuestion.questionImageUrl;
-                // if (isImageQuestion && isCorrect) {
-                //     optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
-                // }
+               else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctButNotSelected); // Highlight correct even if not selected
 
               return (
-                <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-md", optionStyleClass)}>
-                  <span className="font-medium mt-0.5">{optionKey}.</span>
-                   {/* Render option text, handling potential MathJax */}
-                   <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: (optionText || '').replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
-                   </div>
+                <div key={optionKey} className={cn("flex items-start space-x-3 p-3 border rounded-lg", optionStyleClass)}>
+                   <span className="font-semibold mt-0.5">{optionKey}.</span>
+                    <div className="flex-1 mathjax-content prose prose-sm sm:prose-base dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: (optionText || '').replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}>
+                    </div>
                   {isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                   {isSelected && !isCorrect && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
-                  {!isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" />}
+                   {!isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0 opacity-70" title="Correct Answer"/>}
                 </div>
               );
             })}
           </div>
 
+          {/* Status and Answer Info */}
+          <div className="mt-6 flex flex-wrap justify-between items-center gap-4 p-4 bg-muted/30 dark:bg-muted/20 rounded-lg">
+                <div className="flex flex-col text-sm">
+                     <span className="text-muted-foreground">Your Answer:</span>
+                     <span className={cn("font-semibold", userSelectedOptionKey ? (isUserCorrect ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-muted-foreground')}>
+                        {userSelectedOptionKey ? `Option ${userSelectedOptionKey}` : (questionStatus === QuestionStatusEnum.NotVisited ? 'Not Visited' : 'Not Answered')}
+                    </span>
+                </div>
+                <div className="flex flex-col text-sm">
+                    <span className="text-muted-foreground">Correct Answer:</span>
+                     <span className="font-semibold text-green-600 dark:text-green-400">Option {correctOptionKey || 'N/A'}</span>
+                </div>
+                <Badge
+                    variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]}
+                    className={cn("text-xs", {
+                        "bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300 border-green-500": isUserCorrect,
+                        "bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300 border-red-500": !isUserCorrect && (questionStatus === QuestionStatusEnum.Answered || questionStatus === QuestionStatusEnum.AnsweredAndMarked || questionStatus === QuestionStatusEnum.Unanswered),
+                        "bg-purple-100 text-purple-700 dark:bg-purple-700/20 dark:text-purple-300 border-purple-500": questionStatus === QuestionStatusEnum.MarkedForReview,
+                        "bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300 border-blue-500": questionStatus === QuestionStatusEnum.AnsweredAndMarked && !isUserCorrect, // If marked and wrong
+                         "border-gray-400 text-gray-600 dark:border-gray-600 dark:text-gray-400": questionStatus === QuestionStatusEnum.NotVisited,
+                    })}
+                 >
+                   {questionStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </Badge>
+           </div>
+
+
           {/* Render Explanation */}
            {(currentReviewQuestion.explanationText || currentReviewQuestion.explanationImageUrl) && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <h4 className="font-semibold text-lg mb-2 flex items-center text-card-foreground">
-                 <Info className="h-5 w-5 mr-2 text-primary"/> Explanation
+            <div className="mt-6 pt-6 border-t border-border">
+              <h4 className="font-semibold text-lg mb-3 flex items-center text-primary">
+                 <Info className="h-5 w-5 mr-2"/> Explanation
               </h4>
-              <div className="bg-muted/50 dark:bg-muted/20 p-3 rounded-md">
+              <div className="p-4 bg-muted/30 dark:bg-muted/20 rounded-md">
                  {renderContentWithMathJax(
                     currentReviewQuestion.explanationText,
                     currentReviewQuestion.explanationImageUrl,
@@ -443,23 +476,35 @@ export default function TestReviewPage() {
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between items-center flex-wrap gap-3 mt-4 p-6 border-t border-border">
-           {/* Bookmark Button */}
-           <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
+
+        {/* Footer for Actions */}
+         <CardFooter className="flex justify-end items-center p-4 border-t border-border">
+             {/* Bookmark Button */}
+             <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
                  {isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Bookmark className="mr-2 h-4 w-4" />}
                  Save to Notebook
-            </Button>
-            {/* Navigation Buttons */}
-           <div className="flex gap-2">
-             <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionReviewIndex === 0}>
-                <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-              </Button>
-              <Button onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
-                Next <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-           </div>
+             </Button>
         </CardFooter>
       </Card>
+
+       {/* Pagination - Moved outside the main card for better layout */}
+       <div className="flex justify-between items-center mt-6">
+            <Button
+                variant="outline"
+                onClick={() => setCurrentQuestionReviewIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentQuestionReviewIndex === 0}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Previous Question
+            </Button>
+             <span className="text-sm font-medium text-muted-foreground">
+                Viewing Question {currentQuestionReviewIndex + 1} of {totalQuestions}
+            </span>
+            <Button
+                variant="outline"
+                onClick={() => setCurrentQuestionReviewIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
+                disabled={currentQuestionReviewIndex >= totalQuestions - 1}>
+                 Next Question <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+        </div>
     </div>
 
      {/* Add to Notebook Dialog */}
@@ -469,9 +514,9 @@ export default function TestReviewPage() {
                 onClose={handleCloseNotebookModal}
                 notebooks={notebooks}
                 onSave={handleSaveToNotebooks}
-                isLoading={isSavingToNotebook} // Pass the correct loading state
-                userId={user.id} // Pass userId to dialog for creating new notebooks
-                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])} // Update local state
+                isLoading={isSavingToNotebook}
+                userId={user.id}
+                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])}
             />
         )}
     </>
