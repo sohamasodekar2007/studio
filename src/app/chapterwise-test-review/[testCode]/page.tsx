@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+// Import CardFooter
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer } from 'lucide-react';
@@ -162,57 +163,51 @@ export default function TestReviewPage() {
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
   // Determine correct option key, handling potential "Option X" prefix or just "X"
-  const correctOptionKey = useMemo(() => {
-    const answer = currentReviewQuestion?.correctAnswer;
-    if (!answer) return undefined;
-    // Check if the answer starts with "Option " and remove it if it does
-    if (typeof answer === 'string' && answer.startsWith('Option ')) {
-      return answer.substring(7).trim(); // Remove "Option " prefix
-    }
-    return answer; // Assume it's already just the key ("A", "B", etc.)
-  }, [currentReviewQuestion?.correctAnswer]);
+   const correctOptionKey = useMemo(() => {
+     const answer = currentReviewQuestion?.correctAnswer;
+     if (!answer) return undefined;
+     return typeof answer === 'string' ? answer.replace('Option ', '').trim() : answer;
+   }, [currentReviewQuestion?.correctAnswer]);
+
 
   const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
   const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
   const questionStatus = useMemo(() => currentReviewQuestion?.status || QuestionStatusEnum.NotVisited, [currentReviewQuestion]);
 
+
   // --- Enhanced Rendering Functions ---
 
-    const renderQuestionContent = (question: DetailedAnswer | undefined) => {
-        if (!question) return <Skeleton className="h-40 w-full" />;
+  const renderContent = (contentData: { text?: string | null, imageUrl?: string | null, imageAlt: string, subject?: string | null, lesson?: string | null }) => {
+        const { text, imageUrl, imageAlt, subject, lesson } = contentData;
 
-        // Derive subject/lesson from the test report for image path construction
-        // Note: This assumes testReport is available and populated correctly
-        const subject = testReport?.test_subject?.[0]; // Assuming chapterwise has one subject
-        const lesson = (testReport as ChapterwiseTestJson | null)?.lesson; // Get lesson if it exists
-        const fullImagePath = constructImagePath(subject, lesson, question.questionImageUrl); // Use derived subject/lesson
+        const imagePath = constructImagePath(subject, lesson, imageUrl); // Pass subject/lesson
 
-        if (fullImagePath) {
+        if (imagePath) {
             return (
-                 <div className="relative w-full max-w-2xl h-auto mx-auto my-4">
-                     <Image
-                         src={fullImagePath}
-                         alt={`Question ${question.questionIndex + 1}`}
-                         width={600}
-                         height={400}
-                         style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
-                         className="rounded-md border bg-white" // Add bg-white for better image visibility
-                         data-ai-hint="question diagram"
-                         priority={currentQuestionReviewIndex < 3} // Prioritize initial images
-                         onError={(e) => { console.error(`Error loading question image: ${fullImagePath}`, e); }}
-                         unoptimized // Keep for local/dynamic images
-                      />
-                  </div>
+                 <div className="relative w-full max-w-xl h-auto mx-auto my-4"> {/* Adjusted size and margin */}
+                    <Image
+                        src={imagePath} // Use the verified path
+                        alt={imageAlt}
+                        width={600} // Adjust as needed
+                        height={400} // Adjust as needed
+                        style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain' }} // Responsive styles
+                        className="rounded-md border bg-white" // Add bg-white for better image visibility
+                        data-ai-hint="question diagram" // Keep hint
+                        priority={currentQuestionReviewIndex < 3} // Prioritize initial images
+                        onError={(e) => { console.error(`Error loading image: ${imagePath}`, e); }} // Simplified onError
+                        unoptimized // Keep for local/dynamic images
+                     />
+                 </div>
             );
-        } else if (question.questionText) {
+        } else if (text) {
             return (
                 <div
                     className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content mb-4" // Ensure text color contrasts
-                    dangerouslySetInnerHTML={{ __html: question.questionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                    dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                  />
             );
         }
-        return <p className="text-sm text-muted-foreground">Question content not available.</p>;
+        return <p className="text-sm text-muted-foreground">Content not available.</p>;
     };
 
     const renderOptions = (question: DetailedAnswer | undefined) => {
@@ -254,8 +249,6 @@ export default function TestReviewPage() {
                                 optionStyle
                             )}
                         >
-                            {/* Optionally hide the radio button itself in review */}
-                            {/* <RadioGroupItem value={optionKey} id={`${questionId}-${optionKey}`} className="mt-1 opacity-50" /> */}
                             <span className="font-medium">{optionKey}.</span>
                             <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: displayValue.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                              {/* Icons for Correct/Incorrect */}
@@ -276,9 +269,7 @@ export default function TestReviewPage() {
         // Derive subject/lesson from the test report for image path construction
         const subject = testReport?.test_subject?.[0]; // Use the subject array if present
         const lesson = (testReport as ChapterwiseTestJson | null)?.lesson; // Use lesson if present
-        const explanationImagePath = constructImagePath(subject, lesson, question.explanationImageUrl);
-        const hasImage = !!explanationImagePath;
-
+        const hasImage = !!question.explanationImageUrl; // Image URL is directly in detailed answer
 
         if (!hasText && !hasImage) {
             return ( // Return null or a placeholder if no explanation
@@ -287,36 +278,22 @@ export default function TestReviewPage() {
         }
 
         // If there IS explanation content, render the card
-        return (
-            <Card className="mt-6 bg-muted/30 dark:bg-muted/20 border-border">
-                <CardHeader>
-                    <CardTitle className="text-lg">Explanation</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {hasText && (
-                        <div
-                            className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" // Ensure text contrast
-                            dangerouslySetInnerHTML={{ __html: (question.explanationText ?? '').replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-                         />
-                    )}
-                     {hasImage && (
-                        <div className="relative w-full max-w-xl h-auto mx-auto mt-4">
-                           <Image
-                               src={explanationImagePath} // Removed assertion, as hasImage checks this
-                               alt="Explanation Image"
-                               width={600}
-                               height={400}
-                               style={{ maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
-                               className="rounded border bg-white" // Add bg-white
-                               data-ai-hint="explanation image"
-                               onError={(e) => { console.error(`Error loading explanation image: ${explanationImagePath}`, e); }}
-                               unoptimized
-                            />
-                        </div>
-                     )}
-                </CardContent>
-            </Card>
-        );
+         return (
+             <Card className="mt-6 bg-muted/30 dark:bg-muted/20 border-border">
+                 <CardHeader>
+                     <CardTitle className="text-lg">Explanation</CardTitle>
+                 </CardHeader>
+                 <CardContent>
+                     {renderContent({
+                         text: question.explanationText,
+                         imageUrl: question.explanationImageUrl,
+                         imageAlt: "Explanation Image",
+                         subject: subject, // Pass derived subject
+                         lesson: lesson, // Pass derived lesson
+                     })}
+                 </CardContent>
+             </Card>
+         );
     };
 
 
@@ -379,6 +356,7 @@ export default function TestReviewPage() {
              <Skeleton className="h-12 w-full mb-2" />
              <Skeleton className="h-12 w-full mb-2" />
            </CardContent>
+           {/* CardFooter needs to be imported */}
            <CardFooter><Skeleton className="h-10 w-24" /></CardFooter>
          </Card>
        </div>
@@ -452,7 +430,13 @@ export default function TestReviewPage() {
            </CardDescription>
         </CardHeader>
         <CardContent>
-             {renderQuestionContent(currentReviewQuestion)}
+             {renderContent({
+                 text: currentReviewQuestion.questionText,
+                 imageUrl: currentReviewQuestion.questionImageUrl,
+                 imageAlt: "Question Image",
+                 subject: testReport.test_subject?.[0], // Pass subject
+                 lesson: (testReport as ChapterwiseTestJson | null)?.lesson, // Pass lesson
+             })}
              <Separator className="my-5" />
              <h4 className="font-medium mb-3">Options:</h4>
              {renderOptions(currentReviewQuestion)}
