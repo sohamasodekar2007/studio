@@ -1,0 +1,34 @@
+{
+  "id": "Q_1746702889078",
+  "subject": "Chemistry",
+  "lesson": "Chemical KInetics",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [],
+  "type": "text",
+  "question": {
+    "text": "The geometry of \\(\\text{[Ni(CN)_4]}^{2-}\\) is:\r\n",
+    "image": null
+  },
+  "options": {
+    "A": "Tetrahedral",
+    "B": "Square planar",
+    "C": "Octahedral",
+    "D": "Linear"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "\\(\\text{Ni}^{2+}\\) in \\(\\text{[Ni(CN)_4]}^{2-}\\) undergoes \\(dsp^2\\) hybridization, giving square planar geometry.",
+    "image": null
+  },
+  "isPyq": true,
+  "pyqDetails": {
+    "exam": "MHT-CET",
+    "date": "2024-05-08",
+    "shift": "S1"
+  },
+  "marks": 1,
+  "created": "2025-05-08T11:14:49.078Z",
+  "modified": "2025-05-08T11:14:49.078Z"
+}

@@ -4,11 +4,11 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark } from 'lucide-react'; // Added Bookmark
 import Link from 'next/link';
-import type { TestResultSummary, QuestionStatus, Notebook, QuestionBankItem, BookmarkedQuestion } from '@/types'; // Import relevant types
+import type { TestResultSummary, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types'; // Use DetailedAnswer
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getTestReport } from '@/actions/test-report-actions'; // Action to get specific report
@@ -37,20 +37,20 @@ const OPTION_STYLES = {
 };
 
 // Helper function to construct image paths relative to the public directory
-// This helper assumes the detailedAnswers structure includes the base path already
-// or filename needs prefixing. Adjust based on how URLs are stored in the report.
 const constructImagePath = (relativePath: string | null | undefined): string | null => {
     if (!relativePath) return null;
-    // If the path already starts with '/', assume it's correct relative to public
-    if (relativePath.startsWith('/')) {
+    if (relativePath.startsWith('/question_bank_images')) {
         return relativePath;
     }
-    // Otherwise, assume it needs the base path (adjust if structure differs)
-    // This fallback might not be needed if saveTestReport correctly saves full paths.
-    // const basePath = '/question_bank_images';
-    // return `${basePath}/${relativePath}`; // Example, adjust if needed
-    console.warn("constructImagePath received a potentially incomplete path:", relativePath);
-    return null; // Return null if path is not absolute starting with /
+    if (relativePath.startsWith('question_bank_images')) {
+        return `/${relativePath}`;
+    }
+     // If it's just a filename, assume it's within a standard structure (adjust if needed)
+     // This part requires knowing the subject/lesson, which isn't directly in the report detail
+     // We might need to pass subject/lesson or modify the report structure later.
+     // For now, returning null if it's just a filename.
+     // console.warn("constructImagePath received potentially just a filename:", relativePath);
+    return null;
 };
 
 
@@ -67,9 +67,9 @@ export default function TestReviewPage() {
 
   // --- Notebook/Bookmark State ---
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
-  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
-  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
-  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); // State for saving to notebook
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]); // Corrected syntax
+  const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false); // Corrected syntax
+  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); // Corrected syntax
   // --- End Notebook/Bookmark State ---
 
   const testCode = params.testCode as string;
@@ -155,16 +155,16 @@ export default function TestReviewPage() {
 
   // Memoized values
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
-  const currentReviewQuestion = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
+  const currentReviewQuestion : DetailedAnswer | undefined = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]); // Use DetailedAnswer type
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-   // Determine correct option key, handling potential "Option X" prefix or just "X"
+  // Determine correct option key, handling potential "Option X" prefix or just "X"
    const correctOptionKey = useMemo(() => {
-     const answer = currentReviewQuestion?.correctAnswer;
-     if (!answer) return undefined;
-     return answer.startsWith("Option ") ? answer.replace('Option ', '').trim() : answer.trim();
-   }, [currentReviewQuestion]);
+       const answer = currentReviewQuestion?.correctAnswer;
+       if (!answer) return undefined;
+       return answer.replace('Option ', '').trim();
+   }, [currentReviewQuestion?.correctAnswer]);
 
 
   const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
@@ -198,14 +198,18 @@ export default function TestReviewPage() {
      const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
          if (!user?.id || !currentReviewQuestion?.questionId || !testReport) return;
 
-         // Use subject and lesson from the report metadata if available
-         const currentQuestionSubject = testReport?.test_subject?.[0] || 'Unknown';
-         const currentQuestionLesson = testReport?.lesson || 'Unknown'; // Might only be available for chapterwise
+         // Determine subject/lesson from report (may need refinement based on full_length structure)
+         const subject = Array.isArray(testReport?.test_subject) && testReport.test_subject.length > 0
+                          ? testReport.test_subject[0]
+                          : 'Unknown'; // Fallback subject
+         // Assuming 'lesson' exists in the report object for chapterwise tests.
+         // For full length tests, this might be undefined or need a different approach.
+         const lesson = (testReport as any).lesson || 'General'; // Fallback lesson
 
          const questionData: BookmarkedQuestion = {
              questionId: currentReviewQuestion.questionId,
-             subject: currentQuestionSubject,
-             lesson: currentQuestionLesson, // Add lesson
+             subject: subject,
+             lesson: lesson,
              addedAt: Date.now(),
              tags: tags,
          };
@@ -289,46 +293,50 @@ export default function TestReviewPage() {
   }
 
    // Render Content Functions
-    const renderContentWithMathJax = (
-        textContent: string | undefined | null,
-        imageUrl: string | undefined | null, // Expects relative URL from report
-        context: 'question' | 'explanation'
-    ) => {
-        const fullImagePath = constructImagePath(imageUrl); // Use helper to construct full path
+   const renderContentWithMathJax = (
+       textContent: string | undefined | null,
+       imageUrl: string | undefined | null, // Expects relative URL from report
+       context: 'question' | 'explanation'
+   ) => {
+       const fullImagePath = constructImagePath(imageUrl); // Use helper to construct full path
 
-        if (fullImagePath) {
-            return (
-                 <div className="relative w-full max-w-xl h-auto mx-auto my-4"> {/* Adjusted size and margin */}
-                    <Image
-                        src={fullImagePath}
-                        alt={context === 'question' ? "Question Image" : "Explanation Image"}
-                        width={700} // Provide explicit width
-                        height={500} // Provide explicit height
-                        style={{ width: '100%', height: 'auto', objectFit: 'contain' }} // Responsive styles
-                        className="rounded-md border" // Basic styling
-                        data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-                        unoptimized // Recommended for local/dynamic images
-                        onError={(e) => {
-                            console.error(`Error loading image: ${fullImagePath}`, e);
-                             // Optionally hide the broken image placeholder
-                             const target = e.target as HTMLImageElement;
-                             target.style.display = 'none';
-                             // Or display a fallback message: target.parentElement?.appendChild(document.createTextNode('Image failed to load'));
-                         }}
+       if (fullImagePath) { // Display image if path exists
+           return (
+                <div className="relative w-full max-w-xl h-auto mx-auto my-4">
+                   <Image
+                       src={fullImagePath}
+                       alt={context === 'question' ? "Question Image" : "Explanation Image"}
+                       width={700}
+                       height={500}
+                       style={{ width: '100%', height: 'auto', objectFit: 'contain' }}
+                       className="rounded-md border"
+                       data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
+                       unoptimized
+                       onError={(e) => {
+                           console.error(`Error loading ${context} image: ${fullImagePath}`, e);
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            // Optionally display a fallback message
+                            const fallback = document.createElement('p');
+                            fallback.textContent = `[${context} image failed to load: ${decodeURIComponent(fullImagePath.split('/').pop() || 'Unknown')}]`;
+                            fallback.className = 'text-xs text-destructive italic';
+                            target.parentNode?.insertBefore(fallback, target.nextSibling);
+                        }}
                     />
-                 </div>
-             );
-        } else if (textContent) {
-            return (
-                <div
-                    className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
-                    dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-                 />
+                </div>
             );
-        } else {
-            return <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
-        }
-    };
+       } else if (textContent) { // Render text if no image or for explanation text
+           return (
+               <div
+                   className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+                   dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                ></div>
+           );
+       } else {
+           return <p className="text-sm text-muted-foreground">{`[${context === 'question' ? 'Question' : 'Explanation'} content not available]`}</p>;
+       }
+   };
+
 
 
   // --- Main Render ---
@@ -340,7 +348,6 @@ export default function TestReviewPage() {
         strategy="lazyOnload"
         onLoad={() => {
             console.log('MathJax loaded for review page.');
-            // Typeset when the component mounts and has data
             if (testReport) typesetMathJax();
         }}
       />
@@ -398,8 +405,8 @@ export default function TestReviewPage() {
                if (isSelected && isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedCorrect);
                else if (isSelected && !isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.selectedIncorrect);
                else if (isCorrect) optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctUnselected);
-                // Style correct option label for image questions differently
-                if (!currentReviewQuestion.questionText && currentReviewQuestion.questionImageUrl && isCorrect) {
+                 const isImageQuestion = !currentReviewQuestion.questionText && !!currentReviewQuestion.questionImageUrl;
+                if (isImageQuestion && isCorrect) {
                   optionStyleClass = cn(OPTION_STYLES.base, OPTION_STYLES.correctImageOption);
                 }
 
@@ -466,4 +473,3 @@ export default function TestReviewPage() {
     </>
   );
 }
-
