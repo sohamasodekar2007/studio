@@ -41,7 +41,14 @@ const addUserSchema = z.object({
 }).refine(data => data.model === 'free' || (data.model !== 'free' && data.expiry_date), {
   message: "Expiry date is required for paid models.",
   path: ["expiry_date"],
+}).refine(data => !(data.role === 'Admin' && data.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL), { // Refine: Check admin role and email
+    message: `Admin role can only be assigned to the email: ${process.env.NEXT_PUBLIC_ADMIN_EMAIL}`,
+    path: ["role"], // Show error message on the role field
+}).refine(data => !(data.role === 'User' && data.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL), { // Refine: Check user role and admin email
+    message: `The email ${process.env.NEXT_PUBLIC_ADMIN_EMAIL} is reserved for the Admin role.`,
+    path: ["role"], // Show error message on the role field
 });
+
 
 type AddUserFormValues = z.infer<typeof addUserSchema>;
 
@@ -77,40 +84,26 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
   const onSubmit = async (data: AddUserFormValues) => {
     setIsLoading(true);
     try {
-
-      // Ensure admin email matches if role is Admin
-      if (data.role === 'Admin' && data.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-          throw new Error(`Admin role can only be assigned to the email: ${process.env.NEXT_PUBLIC_ADMIN_EMAIL}`);
-      }
-       // Ensure user role doesn't use admin email
-       if (data.role === 'User' && data.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-          throw new Error(`The email ${process.env.NEXT_PUBLIC_ADMIN_EMAIL} is reserved for the Admin role.`);
-       }
+      // Validation is now handled by Zod schema refinement
 
       // Format expiry_date to ISO string or null
       const expiryDateString = data.model === 'free' ? null : (data.expiry_date ? data.expiry_date.toISOString() : null);
 
-      // Prepare the UserProfile object
-      // The actual UserProfile type expects the hashed password, addUserToJson handles hashing.
-      // For the callback, we can omit the password.
-      const newUserProfileForCallback: Omit<UserProfile, 'password'> = {
-        id: uuidv4(), // Generate a unique ID for the new user
+      // Prepare the UserProfile object for the action
+      // Note: addUserToJson handles password hashing
+      const newUserProfileForAction: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral'> & { password: string } = {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        referral: "", // Default referral
+        password: data.password, // Pass plain text password
         class: data.class,
-        model: data.role === 'Admin' ? 'combo' : data.model, // Admins get combo model
+        model: data.role === 'Admin' ? 'combo' : data.model, // Admins always get combo model
         expiry_date: data.role === 'Admin' ? '2099-12-31T00:00:00.000Z' : expiryDateString, // Long expiry for admin
-        createdAt: new Date().toISOString(),
-        avatarUrl: null, // Add default avatarUrl
+        // We don't include 'role' here; it's inferred or handled elsewhere if needed for storage beyond auth context display
       };
 
-      // Use the server action to add the user to users.json (it handles hashing)
-      const result = await addUserToJson({
-          ...newUserProfileForCallback, // Spread the profile data
-          password: data.password, // Pass the plain text password
-      });
+
+      const result = await addUserToJson(newUserProfileForAction);
 
       if (!result.success || !result.user) { // Check if user object is returned
         throw new Error(result.message || 'Failed to add new user.');
@@ -120,8 +113,14 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         title: 'User Added Successfully',
         description: `User ${data.email} has been created with the role ${data.role}.`,
       });
-      // Use the user data returned from the action for the callback
-      onUserAdded(result.user);
+
+       // Prepare data for the callback (including the role for display)
+      const userForCallback: UserProfile = {
+          ...result.user,
+          role: data.role, // Add the selected role for display in the parent component
+      };
+
+      onUserAdded(userForCallback); // Pass the user with the role back to the parent
       form.reset(); // Reset form fields
       onClose(); // Close dialog
 
