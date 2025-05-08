@@ -11,9 +11,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import type { Notebook, BookmarkTag } from '@/types';
 import { bookmarkTags } from '@/types';
-import { PlusCircle, Loader2, Tag, Pencil } from 'lucide-react';
+import { PlusCircle, Loader2, Tag } from 'lucide-react'; // Removed Pencil as it's commented out
 import { createNotebook } from '@/actions/notebook-actions'; // Import createNotebook action
 import { useToast } from '@/hooks/use-toast';
+import { cn } from "@/lib/utils"; // Import the cn utility function
 
 interface AddToNotebookDialogProps {
   isOpen: boolean;
