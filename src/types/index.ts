@@ -118,6 +118,7 @@ export interface TestQuestion {
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
+    testType: 'chapterwise' | 'full_length'; // Discriminator added here
     test_code: string;
     name: string;
     duration: number; // in minutes
@@ -131,23 +132,23 @@ interface BaseGeneratedTest {
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
-    testType: 'chapterwise'; // Discriminator
+    testType: 'chapterwise'; // Explicit discriminator
     lesson: string;
     examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
     questions: TestQuestion[]; // Directly embed questions
 
-    // Ensure fields from FullLengthTestJson are not present or explicitly undefined
+    // Ensure fields from FullLengthTestJson are explicitly undefined
+    stream?: undefined;
+    weightage?: undefined;
     physics?: undefined;
     chemistry?: undefined;
     maths?: undefined;
     biology?: undefined;
-    stream?: undefined;
-    weightage?: undefined;
 }
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
-    testType: 'full_length'; // Discriminator
+    testType: 'full_length'; // Explicit discriminator
     stream: TestStream;
     examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
     weightage?: {
@@ -162,8 +163,8 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
     maths?: TestQuestion[];
     biology?: TestQuestion[];
 
-    // Ensure fields from ChapterwiseTestJson are not present or explicitly undefined
-    questions?: undefined; // Full length tests have subject-specific arrays
+    // Ensure fields from ChapterwiseTestJson are explicitly undefined
+    questions?: undefined;
     lesson?: undefined;
 }
 
