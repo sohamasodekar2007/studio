@@ -41,8 +41,9 @@ export default function ChallengeLobbyPage() {
         setChallenge(null);
       } else {
         setChallenge(data);
+        // Use challenge.challengeCode (which is the actual test code) for navigation
         if (data.testStatus === 'started' && user) {
-           router.replace(`/challenge-test/${challengeCode}?userId=${user.id}`);
+           router.replace(`/challenge-test/${data.challengeCode}?userId=${user.id}`);
         }
         if (data.testStatus === 'completed' || data.testStatus === 'expired') {
             // Allow viewing results if completed/expired
@@ -72,7 +73,6 @@ export default function ChallengeLobbyPage() {
         getChallengeDetails(challengeCode).then(data => {
           if (data) {
             setChallenge(currentChallenge => {
-              // Only update if data is different to avoid unnecessary re-renders
               if (JSON.stringify(currentChallenge?.participants) !== JSON.stringify(data.participants) || currentChallenge?.testStatus !== data.testStatus) {
                 return data;
               }
@@ -80,11 +80,12 @@ export default function ChallengeLobbyPage() {
             });
             if (data.testStatus === 'started') {
               clearInterval(intervalId);
-              router.replace(`/challenge-test/${challengeCode}?userId=${user!.id}`);
+              // Use data.challengeCode for navigation
+              router.replace(`/challenge-test/${data.challengeCode}?userId=${user!.id}`);
             }
           }
         });
-      }, 5000); // Poll every 5 seconds
+      }, 5000); 
       return () => clearInterval(intervalId);
     }
   }, [challenge, user, challengeCode, router]);
@@ -97,8 +98,8 @@ export default function ChallengeLobbyPage() {
       const result = await startChallenge(challengeCode, user.id);
       if (result.success) {
         toast({ title: "Challenge Started!", description: "The test is now live for all participants." });
-        // Creator also navigates to the test page
-        router.push(`/challenge-test/${challengeCode}?userId=${user.id}`);
+        // Use challenge.challengeCode for navigation
+        router.push(`/challenge-test/${challenge.challengeCode}?userId=${user.id}`);
       } else {
         throw new Error(result.message || "Failed to start challenge.");
       }
@@ -150,7 +151,7 @@ export default function ChallengeLobbyPage() {
   }
   
   const isCreator = user?.id === challenge.creatorId;
-  const allAccepted = Object.values(challenge.participants).every(p => p.status === 'accepted');
+  const allAccepted = Object.values(challenge.participants).every(p => p.status === 'accepted' || p.userId === challenge.creatorId); // Creator is always accepted
   const canStart = isCreator && challenge.testStatus === 'waiting' && allAccepted;
 
 
@@ -203,13 +204,13 @@ export default function ChallengeLobbyPage() {
               {!allAccepted && isCreator && <p className="text-xs text-muted-foreground text-center">Waiting for all invited friends to accept the challenge.</p>}
             </>
           )}
-          {challenge.testStatus === 'started' && (
-             <Button onClick={() => router.push(`/challenge-test/${challengeCode}?userId=${user!.id}`)} className="w-full">
+          {challenge.testStatus === 'started' && user && (
+             <Button onClick={() => router.push(`/challenge-test/${challenge.challengeCode}?userId=${user.id}`)} className="w-full">
                 <PlayCircle className="mr-2 h-4 w-4" /> Join Ongoing Test
              </Button>
           )}
           {challenge.testStatus === 'completed' && (
-             <Button onClick={() => router.push(`/challenge-test-result/${challengeCode}`)} className="w-full">
+             <Button onClick={() => router.push(`/challenge-test-result/${challenge.challengeCode}`)} className="w-full">
                 View Results
              </Button>
           )}

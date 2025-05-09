@@ -8,8 +8,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
-import type { Challenge, ChallengeParticipant, TestQuestion, UserAnswer, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Loader2, XCircle, Bookmark, Tag } from 'lucide-react'; // Removed Eye, Timer, FileText, ImageIcon
+import type { Challenge, TestQuestion, UserAnswer, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { getChallengeDetails } from '@/actions/challenge-actions';
 import Image from 'next/image';
@@ -38,9 +38,12 @@ const OPTION_STYLES = {
 
 const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
     if (!imagePath) return null;
-    if (imagePath.startsWith('/')) return imagePath;
+    if (imagePath.startsWith('/') || imagePath.startsWith('http')) return imagePath;
+    // This path construction might need adjustment if challenge question images are stored differently
+    // For now, assuming a similar structure to question_bank for consistency.
+    // If challenge images are directly in /public/challenge_images/{testCode}/ for example, adjust accordingly.
     console.warn(`constructPublicImagePath in challenge review received: ${imagePath}. Assuming it's a direct public path or needs context.`);
-    return imagePath;
+    return imagePath; 
 };
 
 
@@ -51,7 +54,7 @@ export default function ChallengeTestReviewPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const testCode = params.testCode as string; // Changed from challengeCode
+  const testCode = params.testCode as string; 
   const viewingUserId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -80,7 +83,7 @@ export default function ChallengeTestReviewPage() {
    }, []);
 
   const fetchChallengeData = useCallback(async () => {
-    if (!testCode || !viewingUserId) { // Changed from challengeCode
+    if (!testCode || !viewingUserId) { 
       setError("Missing information to load challenge review.");
       setIsLoading(false);
       return;
@@ -88,8 +91,8 @@ export default function ChallengeTestReviewPage() {
     setIsLoading(true);
     setError(null);
     try {
-        const data = await getChallengeDetails(testCode); // Changed from challengeCode
-        if (!data) throw new Error(`Challenge data not found for code ${testCode}.`); // Changed from challengeCode
+        const data = await getChallengeDetails(testCode); 
+        if (!data) throw new Error(`Challenge data not found for code ${testCode}.`); 
         
         if (!data.participants[viewingUserId] || data.participants[viewingUserId].status !== 'completed') {
             setError("This user did not complete the challenge, or results are not available.");
@@ -102,20 +105,24 @@ export default function ChallengeTestReviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, viewingUserId]); // Changed from challengeCode
+  }, [testCode, viewingUserId]); 
 
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
-        router.push(`/auth/login?redirect=/challenge-test-review/${testCode}?userId=${viewingUserId}`); // Changed from challengeCode
+        router.push(`/auth/login?redirect=/challenge-test-review/${testCode}?userId=${viewingUserId}`); 
       } else if (user.id !== viewingUserId) {
-        console.warn("Attempting to view another user's challenge review.");
-        fetchChallengeData(); 
+        // Allow viewing if it's a public review link or admin, for now assume only self-review
+        console.warn("Attempting to view another user's challenge review. Current implementation might restrict this.");
+        // setError("You are not authorized to view this review.");
+        // setIsLoading(false);
+        // return;
+        fetchChallengeData(); // Or proceed if logic allows viewing others'
       } else {
         fetchChallengeData();
       }
     }
-  }, [user, authLoading, router, testCode, viewingUserId, fetchChallengeData]); // Changed from challengeCode
+  }, [user, authLoading, router, testCode, viewingUserId, fetchChallengeData]); 
 
   useEffect(() => {
     if (user?.id) {
@@ -127,16 +134,16 @@ export default function ChallengeTestReviewPage() {
     }
   }, [user?.id]);
   
-  const currentReviewQuestion: TestQuestion | undefined = useMemo(() => challengeData?.questions?.[currentQuestionReviewIndex], [challengeData, currentQuestionReviewIndex]);
+  const currentQuestionFromChallenge: TestQuestion | undefined = useMemo(() => challengeData?.questions?.[currentQuestionReviewIndex], [challengeData, currentQuestionReviewIndex]);
 
   useEffect(() => {
-    if (!isLoading && challengeData && currentReviewQuestion) {
+    if (!isLoading && challengeData && currentQuestionFromChallenge) {
         const timerId = setTimeout(() => {
             typesetMathJax();
         }, 50);
         return () => clearTimeout(timerId);
     }
-  }, [isLoading, challengeData, currentReviewQuestion, currentQuestionReviewIndex, typesetMathJax]);
+  }, [isLoading, challengeData, currentQuestionFromChallenge, currentQuestionReviewIndex, typesetMathJax]);
 
 
   const participantData = challengeData?.participants[viewingUserId || ''];
@@ -144,19 +151,20 @@ export default function ChallengeTestReviewPage() {
   const totalQuestions = useMemo(() => allQuestionsFromChallenge.length || 0, [allQuestionsFromChallenge]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const currentUserAnswerDetailed = useMemo(() => {
-      if (!participantData?.answers || !currentReviewQuestion?.id) return null;
-      return participantData.answers.find(ans => ans.questionId === currentReviewQuestion.id);
-  }, [participantData, currentReviewQuestion]);
+  // Get detailed answer for the current question from participant's answers
+  const currentUserAnswerDetailed: UserAnswer | undefined = useMemo(() => {
+      if (!participantData?.answers || !currentQuestionFromChallenge?.id) return undefined;
+      return participantData.answers.find(ans => ans.questionId === currentQuestionFromChallenge.id);
+  }, [participantData, currentQuestionFromChallenge]);
 
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
-  const correctOptionKey = currentReviewQuestion?.answer;
+  const correctOptionKey = currentQuestionFromChallenge?.answer;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
   const renderContent = useCallback((context: 'question' | 'explanation') => {
-    if (!currentReviewQuestion) return <p className="text-sm text-muted-foreground">Content not available.</p>;
-    const textContent = context === 'question' ? currentReviewQuestion.question_text : currentReviewQuestion.explanation_text;
-    const imagePathFromReport = context === 'question' ? currentReviewQuestion.question_image_url : currentReviewQuestion.explanation_image_url;
+    if (!currentQuestionFromChallenge) return <p className="text-sm text-muted-foreground">Content not available.</p>;
+    const textContent = context === 'question' ? currentQuestionFromChallenge.question_text : currentQuestionFromChallenge.explanation_text;
+    const imagePathFromReport = context === 'question' ? currentQuestionFromChallenge.question_image_url : currentQuestionFromChallenge.explanation_image_url;
     const publicImagePath = constructPublicImagePath(imagePathFromReport);
 
     if (publicImagePath) {
@@ -169,16 +177,16 @@ export default function ChallengeTestReviewPage() {
       return <div className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />;
     }
     return <p className="text-sm text-muted-foreground">{context === 'question' ? 'Question content not available.' : 'Explanation not available.'}</p>;
-  }, [currentReviewQuestion, currentQuestionReviewIndex]);
+  }, [currentQuestionFromChallenge, currentQuestionReviewIndex]);
 
   const renderOptions = useCallback(() => { 
-    if (!currentReviewQuestion || !currentReviewQuestion.options) return null;
+    if (!currentQuestionFromChallenge || !currentQuestionFromChallenge.options) return null;
     const selectedOption = userSelectedOptionKey;
     const correctOpt = correctOptionKey;
 
     return (
       <div className="space-y-3 mt-4">
-        {currentReviewQuestion.options.map((optionText, idx) => {
+        {currentQuestionFromChallenge.options.map((optionText, idx) => {
           const optionKey = optionKeys[idx];
           const isSelected = selectedOption === optionKey;
           const isCorrectOption = optionKey === correctOpt;
@@ -202,7 +210,7 @@ export default function ChallengeTestReviewPage() {
         })}
       </div>
     );
-  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]); 
+  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentQuestionFromChallenge]); 
   const navigateReview = (direction: 'prev' | 'next') => { 
       setCurrentQuestionReviewIndex(prev => {
       const newIndex = direction === 'prev' ? prev - 1 : prev + 1;
@@ -211,15 +219,16 @@ export default function ChallengeTestReviewPage() {
   };
   const handleOpenNotebookModal = () => { 
      if (isLoadingNotebooks) return;
-    if (!currentReviewQuestion) return;
+    if (!currentQuestionFromChallenge) return;
     setIsNotebookModalOpen(true);
   };
   const handleCloseNotebookModal = () => setIsNotebookModalOpen(false);
   const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => { 
-      if (!user?.id || !currentReviewQuestion?.id || !challengeData ) return;
+     if (!user?.id || !currentQuestionFromChallenge?.id || !challengeData ) return;
+     // Subject and lesson for challenge tests come from testConfig
      const subject = challengeData.testConfig.subject;
      const lesson = challengeData.testConfig.lesson;
-     const questionData: BookmarkedQuestion = { questionId: currentReviewQuestion.id, subject, lesson, addedAt: Date.now(), tags };
+     const questionData: BookmarkedQuestion = { questionId: currentQuestionFromChallenge.id, subject, lesson, addedAt: Date.now(), tags };
      setIsSavingToNotebook(true);
      try {
          const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
@@ -253,15 +262,15 @@ export default function ChallengeTestReviewPage() {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" /> <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1> <p className="text-muted-foreground mb-6">{error}</p>
-        <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> {/* Changed from challengeCode */}
+        <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> 
       </div>
     );
   }
-  if (!challengeData || !participantData || !currentReviewQuestion) { 
+  if (!challengeData || !participantData || !currentQuestionFromChallenge) { 
      return (
        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" /> <h1 className="text-2xl font-bold mb-2">Challenge Review Data Not Found</h1> <p className="text-muted-foreground mb-6">Could not load the details for this challenge review.</p>
-         <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> {/* Changed from challengeCode */}
+         <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> 
        </div>
      );
   }
@@ -271,7 +280,7 @@ export default function ChallengeTestReviewPage() {
       <Script id="mathjax-script-challenge-review" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={typesetMathJax} />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${testCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button> {/* Changed from challengeCode */}
+          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${testCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button> 
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={`${challengeData.testConfig.subject} - ${challengeData.testConfig.lesson}`}>
             Challenge Review: {challengeData.testConfig.subject} - {challengeData.testConfig.lesson}
           </h1>
@@ -283,14 +292,14 @@ export default function ChallengeTestReviewPage() {
               <CardTitle className="text-lg sm:text-xl">Question {currentQuestionReviewIndex + 1} <span className="font-normal text-muted-foreground">of {totalQuestions}</span></CardTitle>
               <Badge variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]} className="capitalize text-xs sm:text-sm">{questionStatus.replace('_', ' & ')}</Badge>
             </div>
-            <CardDescription className="text-xs text-muted-foreground pt-1">Marks: {currentReviewQuestion.marks ?? 1} | ID: {currentReviewQuestion.id}</CardDescription>
+            <CardDescription className="text-xs text-muted-foreground pt-1">Marks: {currentQuestionFromChallenge.marks ?? 1} | ID: {currentQuestionFromChallenge.id}</CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
             <div className="mb-5 min-h-[100px]">{renderContent('question')}</div>
             <Separator className="my-5" />
             <h4 className="font-semibold mb-3 text-base">Your Answer & Options:</h4>
             {renderOptions()}
-            {(currentReviewQuestion.explanation_text || currentReviewQuestion.explanation_image_url) && (
+            {(currentQuestionFromChallenge.explanation_text || currentQuestionFromChallenge.explanation_image_url) && (
               <><Separator className="my-5" /><div className="space-y-2"><h4 className="font-semibold text-base">Explanation:</h4>{renderContent('explanation')}</div></>
             )}
           </CardContent>
@@ -305,7 +314,7 @@ export default function ChallengeTestReviewPage() {
           </CardFooter>
         </Card>
       </div>
-      {currentReviewQuestion && user && challengeData && (<AddToNotebookDialog isOpen={isNotebookModalOpen} onClose={handleCloseNotebookModal} notebooks={notebooks} onSave={handleSaveToNotebooks} isLoading={isSavingToNotebook} userId={user.id} onNotebookCreated={handleCreateNotebookCallback} />)}
+      {currentQuestionFromChallenge && user && challengeData && (<AddToNotebookDialog isOpen={isNotebookModalOpen} onClose={handleCloseNotebookModal} notebooks={notebooks} onSave={handleSaveToNotebooks} isLoading={isSavingToNotebook} userId={user.id} onNotebookCreated={handleCreateNotebookCallback} />)}
     </>
   );
 }

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, AlertTriangle, Trophy, Award, Medal, ListOrdered, CheckCircle, XCircle, UserCircle, Clock, BarChartBig, Eye } from 'lucide-react';
+import { Loader2, AlertTriangle, Trophy, Award, Medal, ListOrdered, Clock } from 'lucide-react'; // Removed Eye, BarChartBig
 import type { Challenge, ChallengeParticipant } from '@/types';
 import { getChallengeResults } from '@/actions/challenge-actions';
 import Link from 'next/link';
@@ -20,25 +20,25 @@ export default function ChallengeTestResultPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
-  const testCode = params.testCode as string; // Changed from challengeCode
+  const testCode = params.testCode as string; 
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchResults = useCallback(async () => {
-    if (!testCode) { // Changed from challengeCode
+    if (!testCode) { 
       setError("Invalid challenge link.");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await getChallengeResults(testCode); // Changed from challengeCode
+      const data = await getChallengeResults(testCode); 
       if (!data || (data.testStatus !== 'completed' && data.testStatus !== 'expired')) {
         setError("Challenge results are not yet available or challenge has expired without completion.");
         setChallenge(data);
-        if (data && data.testStatus === 'waiting' || data?.testStatus === 'started') {
-           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); // Changed from challengeCode
+        if (data && (data.testStatus === 'waiting' || data?.testStatus === 'started')) {
+           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); 
         }
       } else {
         setChallenge(data);
@@ -48,17 +48,17 @@ export default function ChallengeTestResultPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, router]); // Changed from challengeCode
+  }, [testCode, router]); 
 
   useEffect(() => {
      if (!authLoading) {
         if (!user) {
-            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); // Changed from challengeCode
+            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); 
             return;
         }
         fetchResults();
     }
-  }, [authLoading, user, testCode, fetchResults, router]); // Changed from challengeCode
+  }, [authLoading, user, testCode, fetchResults, router]); 
 
   const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : '?';
 
@@ -159,8 +159,8 @@ export default function ChallengeTestResultPage() {
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 pt-6 border-t">
             <Button variant="outline" asChild>
-                <Link href={`/challenge-test-review/${testCode}?userId=${user?.id}`}> {/* Changed from challengeCode */}
-                    <Eye className="mr-2 h-4 w-4"/> Review Your Answers
+                <Link href={`/challenge-test-review/${testCode}?userId=${user?.id}`}> 
+                    Review Your Answers
                 </Link>
             </Button>
             <Button asChild>

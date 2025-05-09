@@ -17,29 +17,32 @@ const nextConfig = {
     ],
   },
   webpack: (config) => {
-    config.watchOptions = config.watchOptions || {}; // Ensure watchOptions is an object
+    // Create a new watchOptions object, copying from existing if it exists
+    const newWatchOptions = { ...(config.watchOptions || {}) };
 
     let existingIgnored = [];
-    if (config.watchOptions.ignored) {
-        if (Array.isArray(config.watchOptions.ignored)) {
-            existingIgnored = config.watchOptions.ignored;
+    if (newWatchOptions.ignored) {
+        if (Array.isArray(newWatchOptions.ignored)) {
+            existingIgnored = newWatchOptions.ignored;
         } else {
             // If it's not an array but exists (e.g., a string or RegExp), wrap it in an array
-            existingIgnored = [config.watchOptions.ignored];
+            existingIgnored = [newWatchOptions.ignored];
         }
     }
 
-    config.watchOptions.ignored = [
+    newWatchOptions.ignored = [
         ...existingIgnored,
         '**/.git/**',
         '**/node_modules/**',
-        '**/src/data/**', // Keep ignoring data directory
+        '**/src/data/**', 
         '**/.next/**',
     ];
     
-    // Ensure poll and aggregateTimeout are numbers, or provide defaults if not set
-    config.watchOptions.poll = typeof config.watchOptions.poll === 'number' ? config.watchOptions.poll : 1000;
-    config.watchOptions.aggregateTimeout = typeof config.watchOptions.aggregateTimeout === 'number' ? config.watchOptions.aggregateTimeout : 300;
+    newWatchOptions.poll = typeof newWatchOptions.poll === 'number' ? newWatchOptions.poll : 1000;
+    newWatchOptions.aggregateTimeout = typeof newWatchOptions.aggregateTimeout === 'number' ? newWatchOptions.aggregateTimeout : 300;
+    
+    // Assign the new or modified watchOptions back to the config
+    config.watchOptions = newWatchOptions;
     
     return config;
   },

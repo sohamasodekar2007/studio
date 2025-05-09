@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, History, Eye, Loader2, RefreshCw, Swords } from 'lucide-react';
 import type { TestResultSummary, UserChallengeHistoryItem } from '@/types';
 import { getAllTestReportsForUser } from '@/actions/test-report-actions';
-import { getCompletedChallengesForUser } from '@/actions/challenge-actions';
+import { getCompletedChallengesForUser } from '@/actions/challenge-actions'; // Updated import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ProgressPage() {
@@ -50,7 +50,7 @@ export default function ProgressPage() {
         return;
     };
     setIsLoadingChallenges(true);
-    setError(null); // Clear previous errors
+    setError(null); 
     try {
         const challenges = await getCompletedChallengesForUser(user.id);
         setChallengeTestHistory(challenges);
@@ -171,13 +171,22 @@ export default function ProgressPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Test Name</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center hidden md:table-cell">Percentage</TableHead><TableHead className="hidden lg:table-cell">Submitted On</TableHead><TableHead className="text-right">Actions</TableHead>
+                          <TableHead>Test Name</TableHead>
+                          <TableHead className="text-center">Score</TableHead>
+                          <TableHead className="text-center hidden md:table-cell">Percentage</TableHead>
+                          <TableHead className="hidden lg:table-cell">Submitted On</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {regularTestHistory.map((attempt) => (
                           <TableRow key={attempt.attemptTimestamp}>
-                            <TableCell className="font-medium truncate max-w-xs">{attempt.testName || 'N/A'}</TableCell><TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell><TableCell className="hidden lg:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2">
+                            <TableCell className="font-medium truncate max-w-xs">{attempt.testName || 'N/A'}</TableCell>
+                            <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
+                            <TableCell className="text-center hidden md:table-cell">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
+                            <TableCell className="hidden lg:table-cell">{attempt.submittedAt ? new Date(attempt.submittedAt).toLocaleString() : 'N/A'}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
                                 <Button variant="secondary" size="sm" asChild>
                                   <Link href={`/chapterwise-test-results/${attempt.testCode}?userId=${user?.id}&attemptTimestamp=${attempt.attemptTimestamp}`}>
                                     View Result
@@ -188,7 +197,8 @@ export default function ProgressPage() {
                                     <Eye className="mr-1.5 h-4 w-4" /> Review
                                   </Link>
                                 </Button>
-                              </div></TableCell>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
