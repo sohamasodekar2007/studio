@@ -143,44 +143,46 @@ export default function AdminReportsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Test Code</TableHead><TableHead>Test Name</TableHead><TableHead>Type</TableHead><TableHead># Qs</TableHead><TableHead>Duration</TableHead><TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingTests ? (
-                Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={`skel-${index}`}>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell><TableCell><Skeleton className="h-5 w-48" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell><Skeleton className="h-5 w-10" /></TableCell><TableCell><Skeleton className="h-5 w-16" /></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredTests.length > 0 ? (
-                filteredTests.map((test) => (
-                  <TableRow key={test.test_code}>
-                    <TableCell className="font-mono text-xs">{test.test_code}</TableCell><TableCell className="font-medium">{test.name}</TableCell><TableCell className="capitalize">{test.testType.replace('_', ' ')}</TableCell><TableCell>{test.total_questions}</TableCell><TableCell>{test.duration} min</TableCell><TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleViewHistory(test)}>
-                        <Users className="mr-1.5 h-3.5 w-3.5" /> History
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleViewRanking(test)}>
-                        <BarChartBig className="mr-1.5 h-3.5 w-3.5" /> Rank
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoadingDetails && selectedTestForPrint?.test_code === test.test_code}>
-                        {isLoadingDetails && selectedTestForPrint?.test_code === test.test_code ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Print
-                      </Button>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Test Code</TableHead><TableHead>Test Name</TableHead><TableHead>Type</TableHead><TableHead># Qs</TableHead><TableHead>Duration</TableHead><TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingTests ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={`skel-${index}`}>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell><TableCell><Skeleton className="h-5 w-48" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell><Skeleton className="h-5 w-10" /></TableCell><TableCell><Skeleton className="h-5 w-16" /></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredTests.length > 0 ? (
+                  filteredTests.map((test) => (
+                    <TableRow key={test.test_code}>
+                      <TableCell className="font-mono text-xs">{test.test_code}</TableCell><TableCell className="font-medium">{test.name}</TableCell><TableCell className="capitalize">{test.testType.replace('_', ' ')}</TableCell><TableCell>{test.total_questions}</TableCell><TableCell>{test.duration} min</TableCell><TableCell className="text-right space-x-2">
+                        <Button variant="outline" size="sm" onClick={() => handleViewHistory(test)}>
+                          <Users className="mr-1.5 h-3.5 w-3.5" /> History
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleViewRanking(test)}>
+                          <BarChartBig className="mr-1.5 h-3.5 w-3.5" /> Rank
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handlePrintReport(test)} disabled={isLoadingDetails && selectedTestForPrint?.test_code === test.test_code}>
+                          {isLoadingDetails && selectedTestForPrint?.test_code === test.test_code ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin"/> : <Printer className="mr-1.5 h-3.5 w-3.5" />} Print
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center">
+                      No tests found matching your criteria.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    No tests found matching your criteria.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
         <CardFooter>
           <div className="text-xs text-muted-foreground">
@@ -217,3 +219,5 @@ export default function AdminReportsPage() {
     </div>
   );
 }
+
+    

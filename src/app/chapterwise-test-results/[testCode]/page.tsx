@@ -373,22 +373,24 @@
                  </CardHeader>
                  <CardContent>
                     {topperData ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead></TableHead>
-                                    <TableHead className="text-right">You</TableHead>
-                                    <TableHead className="text-right">Topper</TableHead>
-                                </TableRow>
-                             </TableHeader>
-                            <TableBody>
-                                <TableRow><TableCell>Score</TableCell><TableCell className="text-right font-medium">{results.score?.toFixed(1)}</TableCell><TableCell className="text-right">{topperData.score.toFixed(1)}</TableCell></TableRow>
-                                <TableRow><TableCell>Accuracy</TableCell><TableCell className="text-right font-medium">{accuracy}%</TableCell><TableCell className="text-right">{topperData.accuracy}%</TableCell></TableRow>
-                                <TableRow><TableCell>Correct</TableCell><TableCell className="text-right font-medium">{results.correct}</TableCell><TableCell className="text-right">{topperData.correct}</TableCell></TableRow>
-                                <TableRow><TableCell>Incorrect</TableCell><TableCell className="text-right font-medium">{results.incorrect}</TableCell><TableCell className="text-right">{topperData.incorrect}</TableCell></TableRow>
-                                <TableRow><TableCell>Total Time</TableCell><TableCell className="text-right font-medium">{results.timeTakenMinutes} min</TableCell><TableCell className="text-right">{topperData.time}</TableCell></TableRow>
-                            </TableBody>
-                         </Table>
+                        <div className="overflow-x-auto">
+                          <Table>
+                              <TableHeader>
+                                  <TableRow>
+                                      <TableHead></TableHead>
+                                      <TableHead className="text-right">You</TableHead>
+                                      <TableHead className="text-right">Topper</TableHead>
+                                  </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                  <TableRow><TableCell>Score</TableCell><TableCell className="text-right font-medium">{results.score?.toFixed(1)}</TableCell><TableCell className="text-right">{topperData.score.toFixed(1)}</TableCell></TableRow>
+                                  <TableRow><TableCell>Accuracy</TableCell><TableCell className="text-right font-medium">{accuracy}%</TableCell><TableCell className="text-right">{topperData.accuracy}%</TableCell></TableRow>
+                                  <TableRow><TableCell>Correct</TableCell><TableCell className="text-right font-medium">{results.correct}</TableCell><TableCell className="text-right">{topperData.correct}</TableCell></TableRow>
+                                  <TableRow><TableCell>Incorrect</TableCell><TableCell className="text-right font-medium">{results.incorrect}</TableCell><TableCell className="text-right">{topperData.incorrect}</TableCell></TableRow>
+                                  <TableRow><TableCell>Total Time</TableCell><TableCell className="text-right font-medium">{results.timeTakenMinutes} min</TableCell><TableCell className="text-right">{topperData.time}</TableCell></TableRow>
+                              </TableBody>
+                          </Table>
+                        </div>
                     ) : (
                          <p className="text-sm text-muted-foreground text-center py-4">Topper data not available.</p>
                     )}
@@ -492,3 +494,5 @@
      </>
    );
  }
+
+    

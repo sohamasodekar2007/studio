@@ -62,27 +62,29 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
               <Skeleton className="h-8 w-full" />
             </div>
           ) : rankedAttempts.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">Rank</TableHead><TableHead>User</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center">Percentage</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rankedAttempts.slice(0, 40).map((attempt) => ( // Show top 40
-                  <TableRow key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
-                    <TableCell className="font-medium text-center">
-                      {attempt.rank === 1 && <Award className="h-4 w-4 inline text-yellow-500 mr-1" />}
-                      {attempt.rank === 2 && <Award className="h-4 w-4 inline text-gray-400 mr-1" />}
-                      {attempt.rank === 3 && <Award className="h-4 w-4 inline text-orange-400 mr-1" />}
-                      {attempt.rank}
-                    </TableCell><TableCell>{attempt.user?.name || 'N/A'} ({attempt.user?.email || 'N/A'})</TableCell>
-                     {/* Display total marks if available */}
-                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]">Rank</TableHead><TableHead>User</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center">Percentage</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {rankedAttempts.slice(0, 40).map((attempt) => ( // Show top 40
+                    <TableRow key={attempt.attemptTimestamp}> {/* Use timestamp as key */}
+                      <TableCell className="font-medium text-center">
+                        {attempt.rank === 1 && <Award className="h-4 w-4 inline text-yellow-500 mr-1" />}
+                        {attempt.rank === 2 && <Award className="h-4 w-4 inline text-gray-400 mr-1" />}
+                        {attempt.rank === 3 && <Award className="h-4 w-4 inline text-orange-400 mr-1" />}
+                        {attempt.rank}
+                      </TableCell><TableCell>{attempt.user?.name || 'N/A'} ({attempt.user?.email || 'N/A'})</TableCell>
+                      {/* Display total marks if available */}
+                      <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <p className="p-4 text-center text-muted-foreground">No attempts found to rank for this test.</p>
           )}
@@ -91,3 +93,5 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
     </Dialog>
   );
 }
+
+    

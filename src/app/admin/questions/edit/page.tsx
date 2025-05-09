@@ -332,102 +332,104 @@ export default function EditQuestionsPage() {
             </div>
          </CardHeader>
           <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-[150px]">ID</TableHead>
-                        <TableHead>Question Preview</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Class</TableHead>
-                        <TableHead>Exam</TableHead>
-                        <TableHead>Difficulty</TableHead>
-                        <TableHead>Correct Ans</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {isLoadingQuestions ? (
-                        Array.from({ length: 5 }).map((_, index) => (
-                        <TableRow key={`skel-${index}`}>
-                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                            <TableCell><Skeleton className="h-5 w-full" /></TableCell>
-                            <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                             <TableCell><Skeleton className="h-5 w-10" /></TableCell>
-                             <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                             <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                             <TableCell><Skeleton className="h-5 w-10" /></TableCell>
-                            <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                        </TableRow>
-                        ))
-                     ) : displayQuestions.length > 0 ? (
-                        displayQuestions.map((q) => (
-                        <TableRow key={q.id}>
-                            <TableCell className="font-mono text-xs">{q.id}</TableCell>
-                            <TableCell>{renderQuestionPreview(q)}</TableCell>
-                            <TableCell>
-                               <Badge variant={q.type === 'text' ? 'secondary' : 'outline'} className="capitalize">
-                                   {q.type === 'text' ? <FileText className="h-3 w-3 mr-1"/> : <ImageIcon className="h-3 w-3 mr-1"/>}
-                                   {q.type}
-                                </Badge>
-                            </TableCell>
-                             <TableCell>{q.class}</TableCell>
-                             <TableCell>{q.examType}</TableCell>
-                             <TableCell>{q.difficulty}</TableCell>
-                            <TableCell className="font-medium text-center">{q.correct}</TableCell>
-                            <TableCell className="text-right">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">Toggle menu</span>
-                                </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                 <DropdownMenuItem onClick={() => handleEdit(q)}>
-                                    <Edit className="mr-2 h-4 w-4" /> Edit Question
-                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                                        >
-                                            <Trash2 className="mr-2 h-4 w-4" /> Delete Question
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This will permanently delete question <span className="font-mono text-xs">{q.id}</span> from {q.subject}/{q.lesson}. This action cannot be undone.
-                                        </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDelete(q.id, q.subject, q.lesson)} className="bg-destructive hover:bg-destructive/90">
-                                            Yes, delete
-                                        </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            </TableCell>
-                        </TableRow>
-                        ))
-                     ) : (
-                         <TableRow>
-                            <TableCell colSpan={8} className="h-24 text-center">
-                                {(!selectedSubject || !selectedLesson)
-                                    ? "Please select a Subject and Lesson to view questions."
-                                    : "No questions found matching your filters."}
-                            </TableCell>
-                         </TableRow>
-                     )}
-                </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead className="w-[150px]">ID</TableHead>
+                          <TableHead>Question Preview</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Exam</TableHead>
+                          <TableHead>Difficulty</TableHead>
+                          <TableHead>Correct Ans</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {isLoadingQuestions ? (
+                          Array.from({ length: 5 }).map((_, index) => (
+                          <TableRow key={`skel-${index}`}>
+                              <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-10" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                              <TableCell><Skeleton className="h-5 w-10" /></TableCell>
+                              <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                          </TableRow>
+                          ))
+                      ) : displayQuestions.length > 0 ? (
+                          displayQuestions.map((q) => (
+                          <TableRow key={q.id}>
+                              <TableCell className="font-mono text-xs">{q.id}</TableCell>
+                              <TableCell>{renderQuestionPreview(q)}</TableCell>
+                              <TableCell>
+                                <Badge variant={q.type === 'text' ? 'secondary' : 'outline'} className="capitalize">
+                                    {q.type === 'text' ? <FileText className="h-3 w-3 mr-1"/> : <ImageIcon className="h-3 w-3 mr-1"/>}
+                                    {q.type}
+                                  </Badge>
+                              </TableCell>
+                              <TableCell>{q.class}</TableCell>
+                              <TableCell>{q.examType}</TableCell>
+                              <TableCell>{q.difficulty}</TableCell>
+                              <TableCell className="font-medium text-center">{q.correct}</TableCell>
+                              <TableCell className="text-right">
+                              <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                  <Button aria-haspopup="true" size="icon" variant="ghost">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                      <span className="sr-only">Toggle menu</span>
+                                  </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => handleEdit(q)}>
+                                      <Edit className="mr-2 h-4 w-4" /> Edit Question
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                          <Button
+                                              variant="ghost"
+                                              className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                          >
+                                              <Trash2 className="mr-2 h-4 w-4" /> Delete Question
+                                          </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                              This will permanently delete question <span className="font-mono text-xs">{q.id}</span> from {q.subject}/{q.lesson}. This action cannot be undone.
+                                          </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleDelete(q.id, q.subject, q.lesson)} className="bg-destructive hover:bg-destructive/90">
+                                              Yes, delete
+                                          </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                  </AlertDialog>
+                                  </DropdownMenuContent>
+                              </DropdownMenu>
+                              </TableCell>
+                          </TableRow>
+                          ))
+                      ) : (
+                          <TableRow>
+                              <TableCell colSpan={8} className="h-24 text-center">
+                                  {(!selectedSubject || !selectedLesson)
+                                      ? "Please select a Subject and Lesson to view questions."
+                                      : "No questions found matching your filters."}
+                              </TableCell>
+                          </TableRow>
+                      )}
+                  </TableBody>
+              </Table>
+            </div>
           </CardContent>
            <CardFooter>
               <div className="text-xs text-muted-foreground">
@@ -451,3 +453,5 @@ export default function EditQuestionsPage() {
     </>
   );
 }
+
+    

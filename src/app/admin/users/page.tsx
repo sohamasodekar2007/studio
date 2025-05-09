@@ -131,8 +131,6 @@ export default function AdminUsersPage() {
                  return;
              }
 
-             // REMOVED: Email format validation is now removed from the action
-
             const result = await updateUserRole(userId, newRole);
             if (result.success && result.user) {
                  toast({ title: "Role Updated", description: `User role changed to ${newRole}.` });
@@ -199,138 +197,140 @@ export default function AdminUsersPage() {
            </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                 <TableHead className="w-[50px]">Avatar</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Model</TableHead>
-                 <TableHead>Expiry</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`}>
-                     <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => {
-                 const isCurrentUserPrimaryAdmin = user.email === primaryAdminEmail;
-                 const avatarSrc = user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png?size=40`;
-
-                  return (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                         <Avatar className="h-8 w-8">
-                           <AvatarImage src={avatarSrc} alt={user.name || 'User'} />
-                           <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
-                         </Avatar>
-                    </TableCell>
-                    <TableCell className="font-medium">{user.name || 'N/A'} {isCurrentUserPrimaryAdmin ? '(Primary)' : ''}</TableCell>
-                    <TableCell>{user.email || 'N/A'}</TableCell>
-                    <TableCell>
-                      {user.phone ? (
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground"/>
-                          {user.phone}
-                        </span>
-                      ) : ('N/A')}
-                    </TableCell>
-                     <TableCell>
-                       <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
-                         {user.role} {/* Display role from user data */}
-                       </Badge>
-                     </TableCell>
-                      <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
-                       <TableCell>{formatDate(user.expiry_date)}</TableCell>
-                    <TableCell>{formatDate(user.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                             <Edit className="mr-2 h-4 w-4" /> Edit User / Plan
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
-                             <KeyRound className="mr-2 h-4 w-4" /> Reset Password
-                           </DropdownMenuItem>
-                            {/* Conditional Role Change */}
-                            {!isCurrentUserPrimaryAdmin && (
-                                <>
-                                 <DropdownMenuSeparator />
-                                 {user.role === 'User' ? (
-                                     <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'Admin')} disabled={isChangingRole === user.id}>
-                                         {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />} Promote to Admin
-                                     </DropdownMenuItem>
-                                 ) : (
-                                     <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'User')} disabled={isChangingRole === user.id}>
-                                         {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />} Demote to User
-                                     </DropdownMenuItem>
-                                 )}
-                                </>
-                            )}
-                          <DropdownMenuSeparator />
-                           <AlertDialog>
-                             <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
-                                  disabled={isCurrentUserPrimaryAdmin || !!isDeleting}
-                                >
-                                    {isDeleting === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User
-                                </Button>
-                             </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the user account
-                                    for <span className="font-semibold">{user.email}</span> and remove their data.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-destructive hover:bg-destructive/90">
-                                      Yes, delete user
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                           </AlertDialog>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )})
-              ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">
-                    No users found matching your criteria.
-                  </TableCell>
+                  <TableHead className="w-[50px]">Avatar</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Expiry</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => {
+                  const isCurrentUserPrimaryAdmin = user.email === primaryAdminEmail;
+                  const avatarSrc = user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png?size=40`;
+
+                    return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={avatarSrc} alt={user.name || 'User'} />
+                            <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
+                          </Avatar>
+                      </TableCell>
+                      <TableCell className="font-medium">{user.name || 'N/A'} {isCurrentUserPrimaryAdmin ? '(Primary)' : ''}</TableCell>
+                      <TableCell>{user.email || 'N/A'}</TableCell>
+                      <TableCell>
+                        {user.phone ? (
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-muted-foreground"/>
+                            {user.phone}
+                          </span>
+                        ) : ('N/A')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
+                          {user.role} {/* Display role from user data */}
+                        </Badge>
+                      </TableCell>
+                        <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
+                        <TableCell>{formatDate(user.expiry_date)}</TableCell>
+                      <TableCell>{formatDate(user.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit User / Plan
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserPrimaryAdmin}>
+                              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
+                            </DropdownMenuItem>
+                              {/* Conditional Role Change */}
+                              {!isCurrentUserPrimaryAdmin && (
+                                  <>
+                                  <DropdownMenuSeparator />
+                                  {user.role === 'User' ? (
+                                      <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'Admin')} disabled={isChangingRole === user.id}>
+                                          {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />} Promote to Admin
+                                      </DropdownMenuItem>
+                                  ) : (
+                                      <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'User')} disabled={isChangingRole === user.id}>
+                                          {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />} Demote to User
+                                      </DropdownMenuItem>
+                                  )}
+                                  </>
+                              )}
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive"
+                                    disabled={isCurrentUserPrimaryAdmin || !!isDeleting}
+                                  >
+                                      {isDeleting === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User
+                                  </Button>
+                              </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the user account
+                                      for <span className="font-semibold">{user.email}</span> and remove their data.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-destructive hover:bg-destructive/90">
+                                        Yes, delete user
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )})
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center">
+                      No users found matching your criteria.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
         <CardFooter>
           <div className="text-xs text-muted-foreground">
@@ -365,3 +365,5 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+    

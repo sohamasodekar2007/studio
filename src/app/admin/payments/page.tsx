@@ -32,42 +32,44 @@ export default function AdminPaymentsPage() {
             </div>
          </CardHeader>
           <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Transaction ID</TableHead>
-                        <TableHead>User Email</TableHead>
-                        <TableHead>Item Purchased</TableHead>
-                        <TableHead>Amount (INR)</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                         <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {transactions.length > 0 ? transactions.map(tx => (
-                        <TableRow key={tx.id}>
-                            <TableCell className="font-mono text-xs">{tx.id}</TableCell>
-                            <TableCell>{tx.email}</TableCell>
-                            <TableCell>{tx.item}</TableCell>
-                            <TableCell>₹{tx.amount}</TableCell>
-                            <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                                <Badge variant={tx.status === 'succeeded' ? 'default' : 'destructive'} className={tx.status === 'succeeded' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>
-                                    {tx.status}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" disabled>Details</Button> {/* Placeholder */}
-                            </TableCell>
-                        </TableRow>
-                    )) : (
-                         <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center">No transactions found.</TableCell>
-                         </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Transaction ID</TableHead>
+                          <TableHead>User Email</TableHead>
+                          <TableHead>Item Purchased</TableHead>
+                          <TableHead>Amount (INR)</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {transactions.length > 0 ? transactions.map(tx => (
+                          <TableRow key={tx.id}>
+                              <TableCell className="font-mono text-xs">{tx.id}</TableCell>
+                              <TableCell>{tx.email}</TableCell>
+                              <TableCell>{tx.item}</TableCell>
+                              <TableCell>₹{tx.amount}</TableCell>
+                              <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                  <Badge variant={tx.status === 'succeeded' ? 'default' : 'destructive'} className={tx.status === 'succeeded' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>
+                                      {tx.status}
+                                  </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                  <Button variant="ghost" size="sm" disabled>Details</Button> {/* Placeholder */}
+                              </TableCell>
+                          </TableRow>
+                      )) : (
+                          <TableRow>
+                              <TableCell colSpan={7} className="h-24 text-center">No transactions found.</TableCell>
+                          </TableRow>
+                      )}
+                  </TableBody>
+              </Table>
+            </div>
              {/* TODO: Add Pagination */}
           </CardContent>
        </Card>
@@ -96,3 +98,5 @@ export default function AdminPaymentsPage() {
     </div>
   );
 }
+
+    

@@ -53,30 +53,32 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
               <Skeleton className="h-8 w-full" />
             </div>
           ) : attempts.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User Name</TableHead><TableHead>Email</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center">Percentage</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right">Review</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attempts.map((attempt) => (
-                  // Use attemptTimestamp for the key as it's guaranteed unique per attempt
-                  <TableRow key={attempt.attemptTimestamp}>
-                    <TableCell>{attempt.user?.name || 'N/A'}</TableCell><TableCell>{attempt.user?.email || 'N/A'}</TableCell>{/* Display Email */}
-                    {/* Display total marks if available */}
-                    <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell><TableCell>{new Date(attempt.submittedAt!).toLocaleString()}</TableCell><TableCell className="text-right">
-                      <Button variant="outline" size="sm" asChild>
-                        {/* Pass attemptTimestamp to review link */}
-                        <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${attempt.userId}&attemptTimestamp=${attempt.attemptTimestamp}`} target="_blank">
-                          <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                        </Link>
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User Name</TableHead><TableHead>Email</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center">Percentage</TableHead><TableHead>Submitted On</TableHead><TableHead className="text-right">Review</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {attempts.map((attempt) => (
+                    // Use attemptTimestamp for the key as it's guaranteed unique per attempt
+                    <TableRow key={attempt.attemptTimestamp}>
+                      <TableCell>{attempt.user?.name || 'N/A'}</TableCell><TableCell>{attempt.user?.email || 'N/A'}</TableCell>{/* Display Email */}
+                      {/* Display total marks if available */}
+                      <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell><TableCell>{new Date(attempt.submittedAt!).toLocaleString()}</TableCell><TableCell className="text-right">
+                        <Button variant="outline" size="sm" asChild>
+                          {/* Pass attemptTimestamp to review link */}
+                          <Link href={`/chapterwise-test-review/${attempt.testCode}?userId=${attempt.userId}&attemptTimestamp=${attempt.attemptTimestamp}`} target="_blank">
+                            <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <p className="p-4 text-center text-muted-foreground">No attempts found for this test.</p>
           )}
@@ -85,3 +87,5 @@ export default function TestHistoryDialog({ isOpen, onClose, test, fetchTestAtte
     </Dialog>
   );
 }
+
+    

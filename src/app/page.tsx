@@ -203,7 +203,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2"><Flame className="text-primary"/>Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button variant="default" className="w-full justify-start text-sm py-3 h-auto" asChild>
               <Link href="/tests"><ListChecks className="mr-2 h-4 w-4" /> Test Series</Link>
             </Button>
@@ -310,7 +310,7 @@ export default function DashboardPage() {
             <CardContent>
                 {isLoadingStats ? <Skeleton className="h-32 w-full" /> : recentHistory.length > 0 ? (
                     <ul className="space-y-3">
-                        {recentHistory.map(attempt => (
+                        {recentHistory.map((attempt) => (
                             <li key={attempt.attemptTimestamp} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2.5 border rounded-md hover:bg-muted/50 transition-colors">
                                 <div>
                                     <p className="text-sm font-medium truncate max-w-[200px] sm:max-w-xs md:max-w-md">{attempt.testName || `Test: ${attempt.testCode}`}</p>
@@ -332,3 +332,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

@@ -131,113 +131,115 @@ export default function ManageTestsPage() {
            {/* Add Filters here if needed (e.g., by subject, type) */}
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Test Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Subjects</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead><HelpCircle className="h-4 w-4 inline-block mr-1"/>#</TableHead>
-                <TableHead><Clock className="h-4 w-4 inline-block mr-1"/>Mins</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`}>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-10" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-12" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredTests.length > 0 ? (
-                filteredTests.map((test) => (
-                  <TableRow key={test.test_code}>
-                    <TableCell className="font-mono text-xs">{test.test_code}</TableCell>
-                    <TableCell className="font-medium">{test.name}</TableCell>
-                    <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                            {test.test_subject.map(sub => (
-                                <Badge key={sub} variant="secondary" className="text-xs capitalize">{sub}</Badge>
-                            ))}
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                       <Badge variant={test.type === 'FREE' ? 'default' : (test.type === 'PAID' ? 'destructive' : 'secondary')}
-                         className={`capitalize text-xs ${
-                           test.type === 'FREE' ? 'bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300 border-green-500/50' :
-                           test.type === 'PAID' ? 'bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300 border-red-500/50' :
-                           'bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300 border-blue-500/50'
-                         }`}>
-                        {formatPricing(test.type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{test.total_questions}</TableCell>
-                    <TableCell>{test.duration}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                           <DropdownMenuItem disabled> {/* TODO: Implement View/Edit JSON */}
-                               <FileJson className="mr-2 h-4 w-4" /> View/Edit JSON
-                           </DropdownMenuItem>
-                           <DropdownMenuItem disabled> {/* TODO: Implement Edit Test Metadata */}
-                             <Edit className="mr-2 h-4 w-4" /> Edit Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {/* Delete Confirmation */}
-                          <AlertDialog>
-                             <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-                                  disabled={isDeleting}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" /> Delete Test
-                                </Button>
-                             </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the test file
-                                    for <span className="font-semibold">{test.name}</span> (<span className="font-mono text-xs">{test.test_code}</span>).
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteTest(test.test_code)} className="bg-destructive hover:bg-destructive/90">
-                                      Yes, delete test
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                           </AlertDialog>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
-                    No generated tests found. <Link href="/admin/tests/create" className="text-primary underline">Create one now</Link>.
-                  </TableCell>
+                  <TableHead>Test Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Subjects</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead><HelpCircle className="h-4 w-4 inline-block mr-1"/>#</TableHead>
+                  <TableHead><Clock className="h-4 w-4 inline-block mr-1"/>Mins</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-10" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredTests.length > 0 ? (
+                  filteredTests.map((test) => (
+                    <TableRow key={test.test_code}>
+                      <TableCell className="font-mono text-xs">{test.test_code}</TableCell>
+                      <TableCell className="font-medium">{test.name}</TableCell>
+                      <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                              {test.test_subject.map(sub => (
+                                  <Badge key={sub} variant="secondary" className="text-xs capitalize">{sub}</Badge>
+                              ))}
+                          </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={test.type === 'FREE' ? 'default' : (test.type === 'PAID' ? 'destructive' : 'secondary')}
+                          className={`capitalize text-xs ${
+                            test.type === 'FREE' ? 'bg-green-100 text-green-700 dark:bg-green-700/20 dark:text-green-300 border-green-500/50' :
+                            test.type === 'PAID' ? 'bg-red-100 text-red-700 dark:bg-red-700/20 dark:text-red-300 border-red-500/50' :
+                            'bg-blue-100 text-blue-700 dark:bg-blue-700/20 dark:text-blue-300 border-blue-500/50'
+                          }`}>
+                          {formatPricing(test.type)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{test.total_questions}</TableCell>
+                      <TableCell>{test.duration}</TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem disabled> {/* TODO: Implement View/Edit JSON */}
+                                <FileJson className="mr-2 h-4 w-4" /> View/Edit JSON
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled> {/* TODO: Implement Edit Test Metadata */}
+                              <Edit className="mr-2 h-4 w-4" /> Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {/* Delete Confirmation */}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                                    disabled={isDeleting}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete Test
+                                  </Button>
+                              </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the test file
+                                      for <span className="font-semibold">{test.name}</span> (<span className="font-mono text-xs">{test.test_code}</span>).
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteTest(test.test_code)} className="bg-destructive hover:bg-destructive/90">
+                                        Yes, delete test
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      No generated tests found. <Link href="/admin/tests/create" className="text-primary underline">Create one now</Link>.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
         <CardFooter>
            <div className="text-xs text-muted-foreground">
@@ -249,3 +251,5 @@ export default function ManageTestsPage() {
     </div>
   );
 }
+
+    
