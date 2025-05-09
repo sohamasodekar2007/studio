@@ -16,27 +16,24 @@ import { Loader2, Upload, ClipboardPaste, X } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem } from '@/types';
 import { updateQuestionDetails } from '@/actions/question-bank-actions';
-import Script from 'next/script'; // For MathJax
+import Script from 'next/script'; 
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+const MAX_FILE_SIZE = 4 * 1024 * 1024; 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
-// Helper function to construct image paths relative to the public directory
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    // Ensure the path starts correctly and encode components
-    const basePath = '/question_bank_images'; // Base path within public
+    const basePath = '/question_bank_images'; 
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
 
 const editQuestionSchema = z.object({
   correctAnswer: z.enum(["A", "B", "C", "D"], { required_error: "Correct answer is required" }),
   explanationText: z.string().optional(),
-  explanationImage: z.any().optional(), // Can be File or string (filename) or null
+  explanationImage: z.any().optional(), 
   removeExplanationImage: z.boolean().optional().default(false),
-  marks: z.number().min(1, "Marks must be at least 1").positive("Marks must be positive"), // Add marks validation
+  marks: z.number().min(1, "Marks must be at least 1").positive("Marks must be positive"), 
 }).refine(data => {
-    // Validate explanationImage file if it's a File object
     if (data.explanationImage && data.explanationImage instanceof File) {
         if (data.explanationImage.size > MAX_FILE_SIZE) return false;
         if (!ACCEPTED_IMAGE_TYPES.includes(data.explanationImage.type)) return false;
@@ -65,39 +62,39 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
 
   const form = useForm<EditQuestionFormValues>({
     resolver: zodResolver(editQuestionSchema),
-    // Initialize form values when the component mounts or the question prop changes
     defaultValues: {
       correctAnswer: question.correct,
       explanationText: question.explanation.text || '',
-      explanationImage: null, // Start with null, set preview from question prop
+      explanationImage: null, 
       removeExplanationImage: false,
-      marks: question.marks || 1, // Initialize marks
+      marks: question.marks || 1, 
     },
   });
 
-  // MathJax typesetting
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typeset error in dialog:", err));
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-dialog-preview'); // Specific class for dialog
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (dialog-preview):", err));
+        }
     }
   }, []);
 
-  // Effect to initialize/reset form and preview when dialog opens or question changes
    useEffect(() => {
        if (isOpen) {
            const initialExplanationImagePath = constructImagePath(question.subject, question.lesson, question.explanation.image);
            setExplanationImagePreview(initialExplanationImagePath);
-           // Reset form with current question data
            form.reset({
                correctAnswer: question.correct,
                explanationText: question.explanation.text || '',
-               explanationImage: null, // Reset file input state
+               explanationImage: null, 
                removeExplanationImage: false,
                marks: question.marks || 1,
            });
-            typesetMathJax(); // Typeset when dialog content is ready
+           const timerId = setTimeout(() => typesetMathJax(), 50); // Typeset after dialog content is likely rendered
+           return () => clearTimeout(timerId);
        } else {
-            // Clear preview when dialog closes
             setExplanationImagePreview(null);
        }
    }, [question, isOpen, form, typesetMathJax]);
@@ -108,26 +105,22 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
     setPreview: (url: string | null) => void
   ) => {
     if (file) {
-      // Validate file
       if (file.size > MAX_FILE_SIZE || !ACCEPTED_IMAGE_TYPES.includes(file.type)) {
         form.setError('explanationImage', { type: 'manual', message: `Invalid file (Max ${MAX_FILE_SIZE / 1024 / 1024}MB, JPG/PNG/WEBP).` });
-        setPreview(constructImagePath(question.subject, question.lesson, question.explanation.image)); // Revert to original preview
-        form.setValue('explanationImage', null); // Clear file value
+        setPreview(constructImagePath(question.subject, question.lesson, question.explanation.image)); 
+        form.setValue('explanationImage', null); 
         return false;
       }
-      // Validation passed
       form.clearErrors('explanationImage');
-      form.setValue('explanationImage', file); // Set the File object
-      form.setValue('removeExplanationImage', false); // Ensure remove flag is false
+      form.setValue('explanationImage', file); 
+      form.setValue('removeExplanationImage', false); 
       const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result as string); // Show preview of the NEW file
+      reader.onloadend = () => setPreview(reader.result as string); 
       reader.readAsDataURL(file);
       return true;
     } else {
-      // If file is null (e.g., selection canceled), revert preview but keep form state consistent
-       setPreview(constructImagePath(question.subject, question.lesson, question.explanation.image)); // Revert preview
-       form.setValue('explanationImage', null); // Clear file from form state
-       // Don't set removeExplanationImage here, let the explicit remove button handle that
+       setPreview(constructImagePath(question.subject, question.lesson, question.explanation.image)); 
+       form.setValue('explanationImage', null); 
        return false;
     }
   }, [form, question.subject, question.lesson, question.explanation.image]);
@@ -138,15 +131,14 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
   ) => {
     const file = event.target.files?.[0] || null;
     processImageFile(file, setPreview);
-    if (event.target) event.target.value = ""; // Allow re-uploading same file
+    if (event.target) event.target.value = ""; 
   }, [processImageFile]);
 
-   // Explicitly remove the image (both preview and mark for backend removal)
    const removeImage = useCallback(() => {
         setExplanationImagePreview(null);
         if (explanationFileInputRef.current) explanationFileInputRef.current.value = "";
-        form.setValue('explanationImage', null); // Clear file object
-        form.setValue('removeExplanationImage', true); // Mark for removal on backend
+        form.setValue('explanationImage', null); 
+        form.setValue('removeExplanationImage', true); 
         form.clearErrors('explanationImage');
         toast({ title: "Image Marked for Removal", description: "Click 'Save Changes' to confirm." });
    }, [form, toast]);
@@ -155,7 +147,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
    const handlePasteImage = useCallback(async (
      setPreview: (url: string | null) => void
    ) => {
-     // ... (paste logic remains the same, uses processImageFile)
       if (!navigator.clipboard?.read) {
        toast({ variant: "destructive", title: "Clipboard API Not Supported" });
        return;
@@ -175,7 +166,7 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
          const fileExtension = imageBlob.type.split('/')[1] || 'png';
          const fileName = `pasted_expl_${timestamp}.${fileExtension}`;
          const imageFile = new File([imageBlob], fileName, { type: imageBlob.type });
-         const success = processImageFile(imageFile, setPreview); // Reuse validation/preview logic
+         const success = processImageFile(imageFile, setPreview); 
           if (success) {
              toast({ title: "Image Pasted Successfully!" });
           }
@@ -200,32 +191,26 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
         formData.append('subject', question.subject);
         formData.append('lesson', question.lesson);
         formData.append('correctAnswer', data.correctAnswer);
-        formData.append('marks', data.marks.toString()); // Send marks
+        formData.append('marks', data.marks.toString()); 
         if (data.explanationText) {
             formData.append('explanationText', data.explanationText);
         }
-        // Only append the image if it's a new File object
         if (data.explanationImage instanceof File) {
             formData.append('explanationImage', data.explanationImage, data.explanationImage.name);
         }
-         // Append removal flag if set
          if (data.removeExplanationImage) {
             formData.append('removeExplanationImage', 'true');
         }
-
         const result = await updateQuestionDetails(formData);
-
         if (!result.success || !result.question) {
             throw new Error(result.error || 'Failed to update question.');
         }
-
         toast({
             title: 'Question Updated',
             description: `Details for ${question.id} have been saved.`,
         });
-        onQuestionUpdate(result.question); // Update the state in the parent component
-        onClose(); // Close the dialog
-
+        onQuestionUpdate(result.question); 
+        onClose(); 
     } catch (error: any) {
       console.error('Failed to update question:', error);
       toast({
@@ -238,7 +223,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
     }
   };
 
-   // Renders the question preview (text or image)
    const renderQuestionPreview = (q: QuestionBankItem) => {
        const imagePath = constructImagePath(q.subject, q.lesson, q.question.image);
 
@@ -246,15 +230,15 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
             return (
                 <div className="space-y-2">
                    <p className="text-sm font-medium">Question Image:</p>
-                    <div className="relative w-full max-w-sm h-48"> {/* Fixed height container */}
+                    <div className="relative w-full max-w-sm h-48"> 
                        <Image
                            src={imagePath}
                            alt="Question Image Preview"
-                           layout="fill" // Use fill layout
-                           objectFit="contain" // Ensure image fits without distortion
+                           layout="fill" 
+                           objectFit="contain" 
                            className="rounded border"
                            data-ai-hint="question diagram"
-                           unoptimized // Useful for local dev images
+                           unoptimized 
                        />
                     </div>
                     <p className="text-xs text-muted-foreground">Options A, B, C, D are assumed to be in the image.</p>
@@ -263,10 +247,9 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
        }
        if (q.type === 'text' && q.question.text) {
            return (
-                <div className="space-y-2 mathjax-content">
+                <div className="space-y-2 mathjax-dialog-preview">
                    <p className="text-sm font-medium">Question Text:</p>
                    <div className="prose prose-sm dark:prose-invert max-w-none border p-3 rounded-md text-foreground bg-background">
-                       {/* Render MathJax */}
                        <div dangerouslySetInnerHTML={{ __html: q.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                    </div>
                    <p className="text-sm font-medium mt-2">Options:</p>
@@ -285,13 +268,11 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
 
   return (
     <>
-    {/* MathJax Script */}
     <Script
-        id="mathjax-script-edit-dialog" // Unique ID
+        id="mathjax-script-edit-dialog" 
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-            console.log('MathJax loaded for edit dialog.');
             if (isOpen) typesetMathJax();
         }}
       />
@@ -304,16 +285,13 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
           </DialogDescription>
         </DialogHeader>
 
-         {/* Question Preview Section */}
          <div className="my-4 p-4 border rounded-md bg-muted/30 max-h-60 overflow-y-auto">
              <h4 className="text-base font-semibold mb-2">Question Preview</h4>
             {renderQuestionPreview(question)}
          </div>
 
-        {/* Edit Form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-             {/* Correct Answer Dropdown */}
              <FormField
                 control={form.control}
                 name="correctAnswer"
@@ -334,8 +312,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 </FormItem>
                 )}
             />
-
-             {/* Marks Input */}
              <FormField
                 control={form.control}
                 name="marks"
@@ -346,7 +322,7 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                             <Input
                                 type="number"
                                 {...field}
-                                onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} // Ensure value is number
+                                onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} 
                                 min="1"
                                 placeholder="Marks for correct answer"
                                 disabled={isLoading}
@@ -357,8 +333,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                     </FormItem>
                 )}
              />
-
-             {/* Explanation Text */}
              <FormField
                 control={form.control}
                 name="explanationText"
@@ -366,18 +340,16 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 <FormItem>
                     <FormLabel>Explanation Text</FormLabel>
                     <FormControl>
-                       <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={4} disabled={isLoading} />
+                       <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={4} disabled={isLoading} className="mathjax-dialog-preview"/>
                     </FormControl>
                     <FormMessage />
                 </FormItem>
                 )}
             />
-
-             {/* Explanation Image Upload/Paste */}
             <FormField
                 control={form.control}
                 name="explanationImage"
-                render={() => ( // Field state is managed internally via refs/state
+                render={() => ( 
                 <FormItem>
                     <FormLabel>Explanation Image (Optional)</FormLabel>
                     <FormControl>
@@ -397,7 +369,6 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                             <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage(setExplanationImagePreview)} disabled={isLoading}>
                                 <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
                             </Button>
-                             {/* Image Preview and Remove Button */}
                              {explanationImagePreview && (
                                 <div className="relative h-24 w-auto border rounded-md overflow-hidden group">
                                     <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} data-ai-hint="explanation image" unoptimized/>
@@ -406,7 +377,7 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                                         variant="destructive"
                                         size="icon"
                                         className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
-                                        onClick={removeImage} // Use the removeImage callback
+                                        onClick={removeImage} 
                                         disabled={isLoading}
                                         title="Remove Image"
                                     >
@@ -421,14 +392,11 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
                 </FormItem>
                 )}
             />
-             {/* Hidden field to track removal intent */}
              <FormField
                 control={form.control}
                 name="removeExplanationImage"
                 render={({ field }) => <input type="hidden" {...field} value={field.value ? 'true' : 'false'} />}
              />
-
-            {/* Dialog Footer */}
             <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
                 <Button type="submit" disabled={isLoading}>

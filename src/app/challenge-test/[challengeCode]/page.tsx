@@ -46,7 +46,7 @@ export default function ChallengeTestPage() {
   const { toast } = useToast();
 
   const challengeCode = params.challengeCode as string;
-  const userId = searchParams.get('userId'); // Get userId from query params
+  const userId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,14 +59,28 @@ export default function ChallengeTestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-content');
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+        } else {
+            (window as any).MathJax.typesetPromise()
+                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+        }
     }
   }, []);
 
+  const currentQuestion: TestQuestion | undefined = challengeData?.questions?.[currentQuestionIndex];
   useEffect(() => {
-      typesetMathJax();
-  }, [currentQuestionIndex, challengeData, typesetMathJax]);
+    if (!isLoading && challengeData && currentQuestion) {
+        const timerId = setTimeout(() => {
+            typesetMathJax();
+        }, 50);
+        return () => clearTimeout(timerId);
+    }
+  }, [isLoading, challengeData, currentQuestionIndex, typesetMathJax, currentQuestion]);
+
 
   const loadChallenge = useCallback(async () => {
     if (!challengeCode) {
@@ -83,13 +97,12 @@ export default function ChallengeTestPage() {
         setChallengeData(null);
       } else if (data.testStatus !== 'started') {
         setError(`Challenge is not active. Status: ${data.testStatus}. Redirecting to lobby...`);
-        setChallengeData(data); // Set data to show status before redirect
+        setChallengeData(data); 
         setTimeout(() => router.push(`/challenge/lobby/${challengeCode}`), 3000);
       }
       else {
         setChallengeData(data);
-        // Duration for challenge test would come from its config, or a default
-        const challengeDurationMinutes = data.testConfig.numQuestions * 1.5; // Example: 1.5 min per question
+        const challengeDurationMinutes = data.testConfig.numQuestions * 1.5; 
         setTimeLeft(challengeDurationMinutes * 60);
         const initialStatuses: Record<number, QuestionStatus> = {};
         data.questions.forEach((_, index) => {
@@ -121,82 +134,13 @@ export default function ChallengeTestPage() {
         }
         loadChallenge();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [challengeCode, userId, authLoading, user, router, toast]); // Removed loadChallenge
-
-  useEffect(() => {
-    if (timeLeft <= 0 || !challengeData || isSubmitting || !startTime || challengeData.testStatus !== 'started') return;
-    const timerId = setInterval(() => {
-      setTimeLeft((prevTime) => {
-        if (prevTime <= 1) {
-          clearInterval(timerId);
-          if (!isSubmitting) handleSubmitTest(true);
-          return 0;
-        }
-        return prevTime - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, challengeData, isSubmitting, startTime]);
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const currentQuestion: TestQuestion | undefined = challengeData?.questions?.[currentQuestionIndex];
-
-  const handleOptionChange = (optionKey: string) => { /* ... (same as chapterwise) ... */ 
-    setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: optionKey }));
-    setQuestionStatuses(prev => ({
-      ...prev,
-      [currentQuestionIndex]: prev[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || prev[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked
-        ? QuestionStatusEnum.AnsweredAndMarked
-        : QuestionStatusEnum.Answered,
-    }));
-  };
-  const navigateQuestion = (index: number) => { /* ... (same as chapterwise) ... */ 
-    if (index >= 0 && challengeData && challengeData.questions && index < challengeData.questions.length) {
-       const currentStatus = questionStatuses[currentQuestionIndex];
-       if (currentStatus === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
-         setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
-       }
-      setCurrentQuestionIndex(index);
-       if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
-           setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
-       }
-    }
-  };
-  const handleMarkForReview = () => { /* ... (same as chapterwise) ... */ 
-    const currentStatus = questionStatuses[currentQuestionIndex];
-    if (currentStatus === QuestionStatusEnum.Answered) {
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
-    } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
-    } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
-    }
-    else { 
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
-    }
-  };
-  const handleClearResponse = () => { /* ... (same as chapterwise) ... */ 
-     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
-    const currentStatus = questionStatuses[currentQuestionIndex];
-    if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
-    } else {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
-    }
-  };
+  }, [challengeCode, userId, authLoading, user, router, toast, loadChallenge]);
 
   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!challengeData || !user || !userId || isSubmitting || !startTime) return;
     setIsSubmitting(true);
 
-    const timeTakenSeconds = challengeData.questions.length * 1.5 * 60 - timeLeft; // Simplified time calculation
+    const timeTakenSeconds = challengeData.questions.length * 1.5 * 60 - timeLeft;
 
     const submittedAnswers: UserAnswer[] = (challengeData.questions || []).map((q, index) => ({
       questionId: q.id || `q-${index}`,
@@ -218,8 +162,73 @@ export default function ChallengeTestPage() {
     }
   }, [challengeData, user, userId, isSubmitting, startTime, challengeCode, userAnswers, questionStatuses, toast, router, timeLeft]);
 
-  // --- UI Rendering ---
-  if (isLoading || authLoading) { /* ... Skeleton ... */ 
+  useEffect(() => {
+    if (timeLeft <= 0 || !challengeData || isSubmitting || !startTime || challengeData.testStatus !== 'started') return;
+    const timerId = setInterval(() => {
+      setTimeLeft((prevTime) => {
+        if (prevTime <= 1) {
+          clearInterval(timerId);
+          if (!isSubmitting) handleSubmitTest(true);
+          return 0;
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [timeLeft, challengeData, isSubmitting, startTime, handleSubmitTest]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+
+  const handleOptionChange = (optionKey: string) => { 
+    setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: optionKey }));
+    setQuestionStatuses(prev => ({
+      ...prev,
+      [currentQuestionIndex]: prev[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || prev[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked
+        ? QuestionStatusEnum.AnsweredAndMarked
+        : QuestionStatusEnum.Answered,
+    }));
+  };
+  const navigateQuestion = (index: number) => { 
+    if (index >= 0 && challengeData && challengeData.questions && index < challengeData.questions.length) {
+       const currentStatus = questionStatuses[currentQuestionIndex];
+       if (currentStatus === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
+         setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
+       }
+      setCurrentQuestionIndex(index);
+       if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
+           setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
+       }
+    }
+  };
+  const handleMarkForReview = () => { 
+    const currentStatus = questionStatuses[currentQuestionIndex];
+    if (currentStatus === QuestionStatusEnum.Answered) {
+      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
+    } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
+    } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
+         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
+    }
+    else { 
+      setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
+    }
+  };
+  const handleClearResponse = () => { 
+     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
+    const currentStatus = questionStatuses[currentQuestionIndex];
+    if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
+    } else {
+        setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
+    }
+  };
+
+  if (isLoading || authLoading) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -227,7 +236,7 @@ export default function ChallengeTestPage() {
       </div>
     );
   }
-  if (error) { /* ... Error display ... */
+  if (error) { 
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-destructive/10">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -237,7 +246,7 @@ export default function ChallengeTestPage() {
       </div>
     );
   }
-  if (!challengeData || !challengeData.questions || challengeData.questions.length === 0 || !currentQuestion) { /* ... No data ... */
+  if (!challengeData || !challengeData.questions || challengeData.questions.length === 0 || !currentQuestion) { 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
@@ -250,8 +259,8 @@ export default function ChallengeTestPage() {
    const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : '?';
 
    const renderQuestionContent = (question: TestQuestion) => {
-     const imageUrl = question.question_image_url?.startsWith('/') ? question.question_image_url : null;
-     if (imageUrl) {
+     const imageUrl = question.question_image_url; // This should be the full public path from the challenge data
+     if (imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
        return <Image src={imageUrl} alt={`Question ${currentQuestionIndex + 1}`} width={600} height={400} className="rounded-md border max-w-full h-auto mx-auto my-4" data-ai-hint="question diagram" priority={currentQuestionIndex < 3} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized />;
      } else if (question.question_text || question.question) {
        const textContent = question.question_text || question.question || '';
@@ -396,3 +405,4 @@ export default function ChallengeTestPage() {
     </>
   );
 }
+

@@ -4,24 +4,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import { saveTestReport } from '@/actions/test-report-actions'; // Import the action to save report
-import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession, TestResultSummary } from '@/types';
-import { QuestionStatus as QuestionStatusEnum } from '@/types'; // Make sure enum is imported
+import { saveTestReport } from '@/actions/test-report-actions';
+import type { GeneratedTest, TestQuestion, UserAnswer, QuestionStatus, TestSession } from '@/types';
+import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, Clock } from 'lucide-react';
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
-// import { Progress } from '@/components/ui/progress'; // Not used currently
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-// import Link from 'next/link'; // Not used currently
-import Script from 'next/script'; // For MathJax
+import Script from 'next/script';
 
 const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
   [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200',
@@ -48,20 +46,31 @@ export default function ChapterwiseTestPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string | null>>({});
   const [questionStatuses, setQuestionStatuses] = useState<Record<number, QuestionStatus>>({});
-  const [startTime, setStartTime] = useState<number | null>(null); // Track start time
+  const [startTime, setStartTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-content');
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+        } else {
+            (window as any).MathJax.typesetPromise()
+                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+        }
     }
   }, []);
 
   useEffect(() => {
-      typesetMathJax();
-  }, [currentQuestionIndex, testData, typesetMathJax]);
-
+    if (!isLoading && testData && currentQuestion) { // Ensure currentQuestion is also available
+        const timerId = setTimeout(() => {
+            typesetMathJax();
+        }, 50);
+        return () => clearTimeout(timerId);
+    }
+  }, [isLoading, testData, currentQuestionIndex, typesetMathJax, currentQuestion]); // Add currentQuestion
 
   const loadTest = useCallback(async () => {
     if (!testCode) {
@@ -70,10 +79,9 @@ export default function ChapterwiseTestPage() {
       return;
     }
     setIsLoading(true);
-    setError(null); // Reset error on new load attempt
+    setError(null);
     try {
       const data = await getGeneratedTestByCode(testCode);
-       // Ensure it's chapterwise and has questions
        if (!data || data.testType !== 'chapterwise' || !data.questions || data.questions.length === 0) {
         setError("Chapterwise test not found, invalid, or has no questions.");
         setTestData(null);
@@ -85,11 +93,10 @@ export default function ChapterwiseTestPage() {
           initialStatuses[index] = QuestionStatusEnum.NotVisited;
         });
         if (data.questions.length > 0) {
-             initialStatuses[0] = QuestionStatusEnum.Unanswered; // Mark first question as unanswered
+             initialStatuses[0] = QuestionStatusEnum.Unanswered;
         }
         setQuestionStatuses(initialStatuses);
-        setStartTime(Date.now()); // Set start time when test data is loaded
-        console.log("Test loaded, start time set:", Date.now());
+        setStartTime(Date.now());
       }
     } catch (err: any) {
       console.error("Error loading test data:", err);
@@ -103,46 +110,37 @@ export default function ChapterwiseTestPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ variant: 'destructive', title: 'Unauthorized', description: 'Please log in to take the test.' });
-      router.push(`/auth/login?redirect=/take-test/${testCode}`); // Use take-test for redirect consistency
+      router.push(`/auth/login?redirect=/take-test/${testCode}`);
       return;
     }
-
-    // Ensure userId matches logged-in user
     if (!authLoading && user && userId && user.id !== userId) {
         toast({ variant: 'destructive', title: 'Forbidden', description: 'You cannot take a test for another user.' });
-        router.push('/'); // Redirect to dashboard or tests page
+        router.push('/');
         return;
     }
-
-    // If userId is missing but user is logged in, add it
      if (!authLoading && user && !userId) {
          router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
-         return; // Wait for redirect to happen before loading
+         return;
      }
-
-    // Only load if userId is present and matches (or auth is loading)
     if (userId || authLoading) {
         loadTest();
     }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testCode, userId, authLoading, user, router, toast]); // Removed loadTest from dependency array
+  }, [testCode, userId, authLoading, user, router, toast, loadTest]);
 
   useEffect(() => {
-    if (timeLeft <= 0 || showInstructions || !testData || isSubmitting || !startTime) return; // Added startTime check
+    if (timeLeft <= 0 || showInstructions || !testData || isSubmitting || !startTime) return;
     const timerId = setInterval(() => {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-           console.log("Time up, auto-submitting...");
-           if (!isSubmitting) handleSubmitTest(true); // Indicate auto-submit
+           if (!isSubmitting) handleSubmitTest(true);
           return 0;
         }
         return prevTime - 1;
       });
     }, 1000);
     return () => clearInterval(timerId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, showInstructions, testData, isSubmitting, startTime]); // Add startTime to dependencies
+  }, [timeLeft, showInstructions, testData, isSubmitting, startTime, handleSubmitTest]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -164,14 +162,11 @@ export default function ChapterwiseTestPage() {
 
   const navigateQuestion = (index: number) => {
     if (index >= 0 && testData && testData.questions && index < testData.questions.length) {
-       // Update status of the question being left *before* changing index
        const currentStatus = questionStatuses[currentQuestionIndex];
        if (currentStatus === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestionIndex]) {
          setQuestionStatuses(prev => ({...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered}));
        }
-
       setCurrentQuestionIndex(index);
-      // Update status of the new question being visited
        if (questionStatuses[index] === QuestionStatusEnum.NotVisited) {
            setQuestionStatuses(prev => ({...prev, [index]: QuestionStatusEnum.Unanswered}));
        }
@@ -183,13 +178,11 @@ export default function ChapterwiseTestPage() {
     if (currentStatus === QuestionStatusEnum.Answered) {
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.AnsweredAndMarked }));
     } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        // If unmarking an answered marked question, revert to just Answered
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-        // If unmarking a marked question, revert to Unanswered (since it wasn't answered)
          setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
     }
-    else { // Unanswered or NotVisited
+    else { 
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
@@ -197,7 +190,6 @@ export default function ChapterwiseTestPage() {
   const handleClearResponse = () => {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: null }));
     const currentStatus = questionStatuses[currentQuestionIndex];
-    // If it was Answered & Marked, it becomes just Marked. Otherwise, it becomes Unanswered.
     if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     } else {
@@ -207,18 +199,14 @@ export default function ChapterwiseTestPage() {
 
    const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!testData || !user || !userId || isSubmitting || !startTime) {
-        console.warn("Submit prevented: Missing data, user, already submitting, or no start time.");
         return;
     }
-     console.log(`Submitting test (Auto: ${autoSubmit})...`);
     setIsSubmitting(true);
-
     const endTime = Date.now();
-    const attemptTimestamp = startTime; // Use the initial start time for the attempt ID
+    const attemptTimestamp = startTime;
 
     const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
-      // Use index as a simple identifier within this attempt if question IDs aren't stable/available
-      questionId: q.id || `q-${index}`, // Prioritize actual ID if available
+      questionId: q.id || `q-${index}`,
       selectedOption: userAnswers[index] || null,
       status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
     }));
@@ -226,33 +214,23 @@ export default function ChapterwiseTestPage() {
     const sessionData: TestSession = {
       testId: testCode,
       userId: userId,
-      startTime: startTime, // Use the stored start time
+      startTime: startTime,
       endTime: endTime,
       answers: submittedAnswers,
     };
 
     try {
-        console.log("Calling saveTestReport action with session data and test definition...");
-        // Call the server action to calculate results and save the report
         const result = await saveTestReport(sessionData, testData);
-
          if (result.success && result.results) {
-             console.log(`Test report saved successfully. File path: ${result.filePath}`);
              toast({ title: "Test Submitted!", description: "Your responses have been saved." });
-
-             // Redirect to results page, passing the unique attemptTimestamp
-              router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestamp}`);
+             router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestamp}`);
          } else {
-             // Throw error if saving failed on the server
              throw new Error(result.message || "Failed to save test report on the server.");
          }
-
     } catch (e: any) {
-       console.error("Submission failed:", e);
        toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results." });
-       setIsSubmitting(false); // Allow retry if submission fails
+       setIsSubmitting(false);
     }
-    // Removed finally block as navigation happens on success / error handling sets loading state
   }, [testData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router]);
 
 
@@ -276,7 +254,7 @@ export default function ChapterwiseTestPage() {
     );
   }
 
-  if (!testData || !testData.questions || testData.questions.length === 0) { // Simplified check
+  if (!testData || !testData.questions || testData.questions.length === 0) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
@@ -286,7 +264,6 @@ export default function ChapterwiseTestPage() {
     );
   }
 
-  // Added check for currentQuestion after confirming questions array exists
   if (!currentQuestion) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-muted/30">
@@ -303,30 +280,26 @@ export default function ChapterwiseTestPage() {
 
   const optionKeys = ["A", "B", "C", "D"];
 
-   // Function to render question content (text or image)
    const renderQuestionContent = (question: TestQuestion) => {
-     // Ensure the URL starts with '/' to signify it's relative to the public folder
-     const imageUrl = question.image_url?.startsWith('/') ? question.image_url : null;
+     const imageUrl = question.question_image_url; // This should be the full public path
 
-     if (imageUrl) {
+     if (imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
        return (
          <Image
-           src={imageUrl} // Use the verified URL
+           src={imageUrl}
            alt={`Question ${currentQuestionIndex + 1}`}
-           width={600} // Adjust as needed
-           height={400} // Adjust as needed
-           className="rounded-md border max-w-full h-auto mx-auto my-4" // Added margin
+           width={600}
+           height={400}
+           className="rounded-md border max-w-full h-auto mx-auto my-4"
            data-ai-hint="question diagram"
-           priority={currentQuestionIndex < 3} // Prioritize loading initial images
-           onError={(e) => { console.error(`Error loading image: ${imageUrl}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Simplified onError
-           unoptimized // Good for local dev server
+           priority={currentQuestionIndex < 3}
+           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+           unoptimized
          />
        );
      }
-     // Fallback to question text if image_url is not present or invalid
-     // Use the correct field: question_text or question
      else if (question.question_text || question.question) {
-       const textContent = question.question_text || question.question || ''; // Prioritize question_text
+       const textContent = question.question_text || question.question || '';
        return (
          <div
            className="prose dark:prose-invert max-w-none prose-sm md:prose-base mathjax-content"
@@ -338,17 +311,12 @@ export default function ChapterwiseTestPage() {
          />
        );
      }
-     // Fallback if neither image nor text is available
      return <p className="text-muted-foreground">Question content not available.</p>;
    };
 
-   // Function to render option content
     const renderOptionContent = (optionText: string | null | undefined) => {
-        if (!optionText) return null; // Return null or placeholder if option text is missing
-
-        // Check if optionText might contain MathJax
+        if (!optionText) return null;
         const containsMathJax = (typeof optionText === 'string' && (optionText.includes('$') || optionText.includes('\\(') || optionText.includes('\\[')));
-
         if (containsMathJax) {
             return (
                 <div className="prose-sm dark:prose-invert max-w-none flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: optionText.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />
@@ -360,16 +328,13 @@ export default function ChapterwiseTestPage() {
         }
     };
 
-
   return (
     <>
     <Script
-        id="mathjax-script-test" // Unique ID for the script tag
+        id="mathjax-script-test"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-          console.log('MathJax loaded for test page');
-          // Initial typeset after script loads and component mounts
           typesetMathJax();
         }}
       />
@@ -379,7 +344,7 @@ export default function ChapterwiseTestPage() {
         <div className="flex items-center gap-4">
             {user && (
                 <div className="text-xs text-muted-foreground hidden sm:block">
-                    {user.name} ({user.model}) {/* Changed from displayName */}
+                    {user.name} ({user.model})
                 </div>
             )}
             <div className="flex items-center gap-1 text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-md">
@@ -527,7 +492,7 @@ export default function ChapterwiseTestPage() {
            </div>
         </aside>
       </div>
-    </div>
     </>
   );
 }
+

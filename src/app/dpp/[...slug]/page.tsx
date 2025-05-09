@@ -5,37 +5,36 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import Script from 'next/script'; // For MathJax
+import Script from 'next/script'; 
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
-import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; // Import DPP progress actions
+import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; 
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark } from 'lucide-react'; // Added Bookmark icon
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark } from 'lucide-react'; 
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge'; // Import Badge
-import { useAuth } from '@/context/auth-context'; // Import useAuth
-import { useToast } from '@/hooks/use-toast'; // Import useToast
-import { getUserNotebooks, addQuestionToNotebooks } from '@/actions/notebook-actions'; // Import notebook actions
-import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog'; // Import the new dialog
+import { Badge } from '@/components/ui/badge'; 
+import { useAuth } from '@/context/auth-context'; 
+import { useToast } from '@/hooks/use-toast'; 
+import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions'; 
+import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog'; 
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
-// Helper function to construct image paths relative to the public directory
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    const basePath = '/question_bank_images'; // Base path within public
+    const basePath = '/question_bank_images'; 
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
 
 export default function DppLessonPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth(); // Get user from auth context
-  const { toast } = useToast(); // Initialize toast
+  const { user, loading: authLoading } = useAuth(); 
+  const { toast } = useToast(); 
   const { slug } = params;
 
   const [subject, setSubject] = useState<string | null>(null);
@@ -45,34 +44,48 @@ export default function DppLessonPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('All');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); // Store answers by question ID for CURRENT session
+  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); 
   const [showSolution, setShowSolution] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [isSaving, setIsSaving] = useState<boolean>(false); // State for saving attempt
+  const [isSaving, setIsSaving] = useState<boolean>(false); 
 
-  const [dppProgress, setDppProgress] = useState<UserDppLessonProgress | null>(null); // State for user progress data
-  const [isLoadingProgress, setIsLoadingProgress] = useState(false); // Separate loading state for progress
+  const [dppProgress, setDppProgress] = useState<UserDppLessonProgress | null>(null); 
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false); 
 
-  // --- Notebook/Bookmark State ---
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
-  // --- End Notebook/Bookmark State ---
-
-
-  // --- MathJax Integration ---
+ 
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-      (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-content');
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+        } else {
+            (window as any).MathJax.typesetPromise()
+                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+        }
     }
   }, []);
 
-  useEffect(() => {
-    typesetMathJax();
-  }, [currentQuestionIndex, allQuestions, showSolution, typesetMathJax]); // Re-typeset when question changes or solution shown
-  // --- End MathJax Integration ---
+  const currentQuestion = useMemo(() => {
+    const filtered = selectedDifficulty === 'All' 
+      ? allQuestions 
+      : allQuestions.filter(q => q.difficulty === selectedDifficulty);
+    return filtered[currentQuestionIndex];
+  }, [allQuestions, selectedDifficulty, currentQuestionIndex]);
 
-  // Fetch Questions
+
+  useEffect(() => {
+    if (!isLoading && currentQuestion) {
+        const timerId = setTimeout(() => {
+            typesetMathJax();
+        }, 50);
+        return () => clearTimeout(timerId);
+    }
+  }, [isLoading, currentQuestion, showSolution, typesetMathJax]);
+
   useEffect(() => {
     if (Array.isArray(slug) && slug.length === 2) {
       const decodedSubject = decodeURIComponent(slug[0]);
@@ -89,10 +102,10 @@ export default function DppLessonPage() {
             lesson: decodedLesson,
           });
           setAllQuestions(fetchedQuestions);
-          setCurrentQuestionIndex(0); // Reset index when questions load
-          setUserAnswers({}); // Reset answers
-          setShowSolution(false); // Hide solution
-          setIsCorrect(null); // Reset correctness
+          setCurrentQuestionIndex(0); 
+          setUserAnswers({}); 
+          setShowSolution(false); 
+          setIsCorrect(null); 
         } catch (err) {
           console.error(`Failed to load questions for ${decodedSubject}/${decodedLesson}:`, err);
           setError('Could not load practice questions for this lesson.');
@@ -107,10 +120,8 @@ export default function DppLessonPage() {
     }
   }, [slug]);
 
-  // Fetch User Progress and Notebooks
    useEffect(() => {
        if (user?.id && subject && lesson) {
-            // Fetch DPP Progress
             setIsLoadingProgress(true);
             getDppProgress(user.id, subject, lesson)
                 .then(progress => {
@@ -119,7 +130,6 @@ export default function DppLessonPage() {
                 .catch(err => console.error("Failed to load DPP progress:", err))
                 .finally(() => setIsLoadingProgress(false));
 
-            // Fetch Notebooks
             setIsLoadingNotebooks(true);
             getUserNotebooks(user.id)
                 .then(data => {
@@ -137,24 +147,23 @@ export default function DppLessonPage() {
     return allQuestions.filter(q => q.difficulty === selectedDifficulty);
   }, [allQuestions, selectedDifficulty]);
 
-  const currentQuestion = filteredQuestions[currentQuestionIndex];
   const previousAttempts = currentQuestion ? dppProgress?.questionAttempts[currentQuestion.id] : [];
-  const lastAttempt = previousAttempts?.[0]; // Most recent attempt is first
+  const lastAttempt = previousAttempts?.[0]; 
 
 
   const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
     setSelectedDifficulty(difficulty);
-    setCurrentQuestionIndex(0); // Reset to first question of filtered list
+    setCurrentQuestionIndex(0); 
     setUserAnswers({});
     setShowSolution(false);
     setIsCorrect(null);
   };
 
   const handleOptionSelect = (questionId: string, selectedOption: string) => {
-      if (showSolution) return; // Don't allow changing answer after showing solution
+      if (showSolution) return; 
       setUserAnswers(prev => ({ ...prev, [questionId]: selectedOption }));
-      setIsCorrect(null); // Reset correctness check until submitted/checked
-      setShowSolution(false); // Hide solution if user selects a new answer
+      setIsCorrect(null); 
+      setShowSolution(false); 
   };
 
    const checkAnswer = async () => {
@@ -167,16 +176,14 @@ export default function DppLessonPage() {
 
        const correct = selected === currentQuestion.correct;
        setIsCorrect(correct);
-       setShowSolution(true); // Show solution after checking
+       setShowSolution(true); 
 
-       // Save attempt
        setIsSaving(true);
        try {
            const result = await saveDppAttempt(user.id, subject, lesson, currentQuestion.id, selected, correct);
            if (!result.success) {
                throw new Error(result.message || "Failed to save attempt.");
            }
-           // Optimistically update local progress state
            const newAttempt: DppAttempt = { timestamp: Date.now(), selectedOption: selected, isCorrect: correct };
            setDppProgress(prev => {
                const newAttempts = { ...(prev?.questionAttempts || {}) };
@@ -200,42 +207,39 @@ export default function DppLessonPage() {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
-           // Reset session answer for the new question if it wasn't already answered in this session
            const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
            if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
                setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
            }
        } else {
            toast({ title: "DPP Completed", description: "You've reached the end of this set."});
-           router.push('/dpp'); // Example: Navigate back to list
+           router.push('/dpp'); 
        }
    };
 
-   // Function to render question content (text or image)
    const renderQuestionContent = (q: QuestionBankItem) => {
        const imagePath = constructImagePath(q.subject, q.lesson, q.question.image);
 
        if (q.type === 'image' && imagePath) {
            return (
-                <div className="relative w-full max-w-lg h-64 mx-auto my-4"> {/* Adjust size as needed */}
+                <div className="relative w-full max-w-lg h-64 mx-auto my-4"> 
                     <Image
-                       src={imagePath} // Use the correctly constructed path
+                       src={imagePath} 
                        alt={`Question Image: ${q.id}`}
                        layout="fill"
                        objectFit="contain"
                        className="rounded border"
                        data-ai-hint="question diagram"
-                       priority={currentQuestionIndex < 2} // Prioritize first few images
-                       onError={(e) => { console.error(`Error loading question image: ${imagePath}`, e); (e.target as HTMLImageElement).style.display = 'none'; }} // Simplified error handling
-                       unoptimized // Keep this if local images might cause issues
+                       priority={currentQuestionIndex < 2} 
+                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
+                       unoptimized 
                     />
-                    {/* Consider adding a fallback text display on error if needed */}
                 </div>
            );
        } else if (q.type === 'text' && q.question.text) {
            return (
                 <div
-                   className="prose dark:prose-invert max-w-none mathjax-content mb-4" // Added margin-bottom
+                   className="prose dark:prose-invert max-w-none mathjax-content mb-4" 
                    dangerouslySetInnerHTML={{ __html: q.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
                 />
            );
@@ -243,24 +247,23 @@ export default function DppLessonPage() {
        return <p className="text-muted-foreground">Question content not available.</p>;
    };
 
-    // Function to render options
     const renderOptions = (q: QuestionBankItem) => {
         const questionId = q.id;
         const selectedOption = userAnswers[questionId];
-        const isAnswerChecked = showSolution; // Use showSolution state
+        const isAnswerChecked = showSolution; 
         const correctOption = q.correct;
 
         return (
             <RadioGroup
                 value={selectedOption ?? undefined}
                 onValueChange={(value) => handleOptionSelect(questionId, value)}
-                className="space-y-3 mt-4" // Added margin-top
-                disabled={showSolution || isSaving} // Disable while saving or showing solution
+                className="space-y-3 mt-4" 
+                disabled={showSolution || isSaving} 
             >
                 {Object.entries(q.options).map(([key, value]) => {
                     const isSelected = selectedOption === key;
                     const isCorrectOption = key === correctOption;
-                    let optionStyle = "border-border hover:border-primary"; // Base style
+                    let optionStyle = "border-border hover:border-primary"; 
 
                     if (isAnswerChecked) {
                         if (isSelected && isCorrectOption) {
@@ -268,10 +271,10 @@ export default function DppLessonPage() {
                         } else if (isSelected && !isCorrectOption) {
                              optionStyle = "border-destructive bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300";
                         } else if (!isSelected && isCorrectOption) {
-                             optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"; // Highlight correct if unselected
+                             optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"; 
                         }
                     } else if (isSelected) {
-                         optionStyle = "border-primary ring-2 ring-primary bg-primary/5"; // Highlight selected before check
+                         optionStyle = "border-primary ring-2 ring-primary bg-primary/5"; 
                     }
 
                     return (
@@ -281,134 +284,110 @@ export default function DppLessonPage() {
                             className={cn(
                                 "flex items-start space-x-3 p-4 border rounded-lg transition-all",
                                 optionStyle,
-                                (showSolution || isSaving) ? "cursor-default opacity-70" : "cursor-pointer" // Adjust cursor and opacity
+                                (showSolution || isSaving) ? "cursor-default opacity-70" : "cursor-pointer" 
                             )}
                         >
                             <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1"/>
                             <span className="font-medium">{key}.</span>
                             <div className="flex-1 mathjax-content" dangerouslySetInnerHTML={{ __html: value.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
-                            {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
-                            {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
-                        </Label>
+                              {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                              {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
+                          </Label>
                     );
                 })}
             </RadioGroup>
         );
     };
 
-    // Function to render explanation
-    const renderExplanation = (q: QuestionBankItem) => {
-        const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
-        const explanationImagePath = constructImagePath(q.subject, q.lesson, q.explanation.image);
-        const hasImage = !!explanationImagePath;
+     const renderExplanation = (q: QuestionBankItem) => {
+         const hasText = q.explanation.text && q.explanation.text.trim().length > 0;
+         const explanationImagePath = constructImagePath(q.subject, q.lesson, q.explanation.image);
+         const hasImage = !!explanationImagePath;
 
-        if (!hasText && !hasImage) return null; // No explanation to show
+         if (!hasText && !hasImage) return null; 
 
-        return (
-             <Card className="mt-6 bg-muted/40 dark:bg-muted/20 border-border">
-                 <CardHeader>
-                     <CardTitle className="text-lg">Explanation</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                     {hasText && (
-                         <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
-                     )}
-                     {hasImage && (
-                          <div className="relative w-full max-w-lg h-64 mx-auto mt-4">
-                             <Image
-                                 src={explanationImagePath!} // Assert non-null as hasImage is true
-                                 alt={`Explanation Image`}
-                                 layout="fill"
-                                 objectFit="contain"
-                                 className="rounded border"
-                                 data-ai-hint="explanation image"
-                                 onError={(e) => { console.error(`Error loading explanation image: ${explanationImagePath}`, e); }} // Simplified error logging
-                                 unoptimized // Keep this if local images might cause issues
-                             />
-                             {/* Consider adding a fallback text display on error if needed */}
-                          </div>
-                     )}
-                 </CardContent>
-             </Card>
-        );
-    }
+         return (
+              <Card className="mt-6 bg-muted/40 dark:bg-muted/20 border-border">
+                  <CardHeader> <CardTitle className="text-lg">Explanation</CardTitle> </CardHeader>
+                  <CardContent>
+                      {hasText && (
+                          <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                      )}
+                      {hasImage && <div className="relative w-full max-w-lg h-64 mx-auto mt-4"><Image src={explanationImagePath!}  alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded border" data-ai-hint="explanation image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
+                  </CardContent>
+              </Card>
+         );
+     };
 
-    // Helper to display PYQ info
-     const renderPyqInfo = (q: QuestionBankItem) => {
-        if (!q.isPyq || !q.pyqDetails) return null;
-        const { exam, date, shift } = q.pyqDetails;
-        return (
-            <Badge variant="outline" className="text-xs text-muted-foreground">
-                PYQ: {exam} ({new Date(date).getFullYear()} Shift {shift})
-            </Badge>
-        );
-     }
+      const renderPyqInfo = (q: QuestionBankItem) => {
+         if (!q.isPyq || !q.pyqDetails) return null;
+         const { exam, date, shift } = q.pyqDetails;
+         return <Badge variant="outline" className="text-xs text-muted-foreground">PYQ: {exam} ({new Date(date).getFullYear()} Shift {shift})</Badge>;
+      };
 
-     // Render previous attempt status
-     const renderPreviousAttemptStatus = () => {
-        if (isLoadingProgress) {
-            return <Skeleton className="h-4 w-24" />;
-        }
-        if (lastAttempt) {
-            const attemptDate = new Date(lastAttempt.timestamp).toLocaleDateString();
-            const statusText = lastAttempt.isCorrect ? "Correct" : "Incorrect";
-            const statusClass = lastAttempt.isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
-            return (
-                <span className={`text-xs flex items-center gap-1 ${statusClass}`}>
-                    <History className="h-3 w-3" /> Last Attempt ({attemptDate}): {statusText}
-                </span>
-            );
-        }
-        return <span className="text-xs text-muted-foreground">Not Attempted Before</span>;
-    };
-
-    // --- Notebook/Bookmark Handler ---
-    const handleOpenNotebookModal = () => {
-        if (isLoadingNotebooks) {
-             toast({ variant: "default", title: "Loading notebooks..." });
-             return;
-        }
-        if (!currentQuestion) return;
-        setIsNotebookModalOpen(true);
-    }
-
-    const handleCloseNotebookModal = () => {
-         setIsNotebookModalOpen(false);
-    }
-
-     const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
-         if (!user?.id || !currentQuestion) return;
-
-         const questionData = {
-             questionId: currentQuestion.id,
-             subject: currentQuestion.subject,
-             lesson: currentQuestion.lesson,
-             addedAt: Date.now(),
-             tags: tags,
-         };
-
-         setIsLoading(true); // Use general loading or a specific one
-         try {
-             const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
-             if (result.success) {
-                 toast({ title: "Saved!", description: "Question added to selected notebooks." });
-                 // Refresh notebook data? Or assume success? For now, just close.
-                 // await fetchNotebooks(); // Optionally refetch
-                 handleCloseNotebookModal();
-             } else {
-                  throw new Error(result.message || "Failed to save to notebooks.");
-             }
-         } catch (error: any) {
-              toast({ variant: "destructive", title: "Save Failed", description: error.message });
-         } finally {
-              setIsLoading(false);
+      const renderPreviousAttemptStatus = () => {
+         if (isLoadingProgress) return <Skeleton className="h-4 w-24" />;
+         if (lastAttempt) {
+             const attemptDate = new Date(lastAttempt.timestamp).toLocaleDateString();
+             const statusText = lastAttempt.isCorrect ? "Correct" : "Incorrect";
+             const statusClass = lastAttempt.isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
+             return <span className={`text-xs flex items-center gap-1 ${statusClass}`}><History className="h-3 w-3" /> Last Attempt ({attemptDate}): {statusText}</span>;
          }
-     }
+         return <span className="text-xs text-muted-foreground">Not Attempted Before</span>;
+     };
+   
+   const handleOpenNotebookModal = () => {
+       if (isLoadingNotebooks) {
+            toast({ variant: "default", title: "Loading notebooks..." });
+            return;
+       }
+       if (!currentQuestion) return;
+       setIsNotebookModalOpen(true);
+   }
 
-    // --- End Notebook/Bookmark Handler ---
+   const handleCloseNotebookModal = () => {
+        setIsNotebookModalOpen(false);
+   }
+
+    const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
+        if (!user?.id || !currentQuestion) return;
+        const questionData = {
+            questionId: currentQuestion.id,
+            subject: currentQuestion.subject,
+            lesson: currentQuestion.lesson,
+            addedAt: Date.now(),
+            tags: tags,
+        };
+        setIsSaving(true); 
+        try {
+            const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
+            if (result.success) {
+                toast({ title: "Saved!", description: "Question added to selected notebooks." });
+                handleCloseNotebookModal();
+            } else {
+                 throw new Error(result.message || "Failed to save to notebooks.");
+            }
+        } catch (error: any) {
+             toast({ variant: "destructive", title: "Save Failed", description: error.message });
+        } finally {
+             setIsSaving(false);
+        }
+    };
+    
+    const handleCreateNotebookCallback = useCallback(async (name: string) => {
+      if (!user?.id) return null;
+      const result = await createNotebook(user.id, name);
+      if (result.success && result.notebook) {
+        setNotebooks((prev) => [...prev, result.notebook!]);
+        return result.notebook;
+      } else {
+        toast({ variant: "destructive", title: "Failed to Create Notebook", description: result.message });
+        return null;
+      }
+    }, [user?.id, toast]);
 
 
-  if (isLoading || authLoading) { // Check authLoading as well
+  if (isLoading || authLoading) { 
     return (
       <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
         <Skeleton className="h-8 w-1/2 mb-2" />
@@ -439,9 +418,9 @@ export default function DppLessonPage() {
     );
   }
 
-  if (!user) { // Redirect if not logged in (after loading finishes)
+  if (!user) { 
      router.push('/auth/login?redirect=/dpp');
-     return ( // Show loading while redirecting
+     return ( 
         <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6 text-center">
              <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary"/>
              <p>Redirecting to login...</p>
@@ -476,7 +455,6 @@ export default function DppLessonPage() {
                 </div>
                  <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
                  <p className="text-muted-foreground">Subject: {subject}</p>
-                  {/* Filter buttons */}
                   <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
                     <Filter className="h-5 w-5 text-muted-foreground" />
                     <span className="font-medium mr-2">Difficulty:</span>
@@ -490,8 +468,6 @@ export default function DppLessonPage() {
                         {diff}
                         </Button>
                     ))}
-                    {/* Add Sort button later */}
-                    {/* <Button variant="outline" size="sm" className="ml-auto"><ArrowUpNarrowWide className="h-4 w-4 mr-1"/> Sort</Button> */}
                 </div>
                  <Card>
                     <CardContent className="p-10 text-center text-muted-foreground">
@@ -504,13 +480,11 @@ export default function DppLessonPage() {
 
   return (
     <>
-      {/* MathJax Script */}
        <Script
-        id="mathjax-script-dpp" // Unique ID
+        id="mathjax-script-dpp" 
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-            console.log('MathJax loaded for DPP page.');
             typesetMathJax();
         }}
       />
@@ -523,7 +497,6 @@ export default function DppLessonPage() {
         <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
         <p className="text-muted-foreground">Subject: {subject}</p>
 
-        {/* Filter buttons */}
         <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
              <Filter className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium mr-2">Difficulty:</span>
@@ -537,10 +510,8 @@ export default function DppLessonPage() {
                 {diff}
                 </Button>
             ))}
-            {/* <Button variant="outline" size="sm" className="ml-auto"><ArrowUpNarrowWide className="h-4 w-4 mr-1"/> Sort</Button> */}
         </div>
 
-        {/* Question Display Card */}
         {currentQuestion ? (
             <Card className="shadow-md">
             <CardHeader>
@@ -549,7 +520,6 @@ export default function DppLessonPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                         {renderPyqInfo(currentQuestion)}
                         <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
-                         {/* Display previous attempt status */}
                          {renderPreviousAttemptStatus()}
                     </div>
                 </div>
@@ -581,7 +551,7 @@ export default function DppLessonPage() {
                 )}
                 <Button
                     onClick={goToNextQuestion}
-                    disabled={!showSolution || isSaving} // Only enable Next after checking/showing solution and not saving
+                    disabled={!showSolution || isSaving} 
                 >
                     {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
                 </Button>
@@ -596,18 +566,18 @@ export default function DppLessonPage() {
         )}
       </div>
 
-      {/* Add to Notebook Dialog */}
         {currentQuestion && user && (
             <AddToNotebookDialog
                 isOpen={isNotebookModalOpen}
                 onClose={handleCloseNotebookModal}
                 notebooks={notebooks}
                 onSave={handleSaveToNotebooks}
-                isLoading={isLoading}
-                userId={user.id} // Pass userId to dialog for creating new notebooks
-                onNotebookCreated={(newNotebook) => setNotebooks(prev => [...prev, newNotebook])} // Update local state
+                isLoading={isSaving}
+                userId={user.id} 
+                onNotebookCreated={handleCreateNotebookCallback} 
             />
         )}
     </>
   );
 }
+

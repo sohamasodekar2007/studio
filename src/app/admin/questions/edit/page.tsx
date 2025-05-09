@@ -7,13 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label"; // Import Label
+import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Search, Edit, Trash2, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
+import { MoreHorizontal, Search, Edit, Trash2, FileText, ImageIcon, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem, ExamOption, ClassLevel } from '@/types';
-import { exams, classLevels } from '@/types'; // Import exams and classLevels
+import { exams, classLevels } from '@/types';
 import { Badge } from "@/components/ui/badge";
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson, deleteQuestion } from '@/actions/question-bank-query-actions';
 import EditQuestionDialog from '@/components/admin/edit-question-dialog';
@@ -28,20 +28,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import Script from 'next/script'; // For MathJax
-import Image from 'next/image'; // Import Image
+import Script from 'next/script';
+import Image from 'next/image';
 
-// Helper function to construct image paths relative to the public directory
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    const basePath = '/question_bank_images'; // Base path within public
+    const basePath = '/question_bank_images';
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
 
 
 export default function EditQuestionsPage() {
   const { toast } = useToast();
-  const [subjects, setSubjects] = useState<string[]>([]); // State for all available subjects
+  const [subjects, setSubjects] = useState<string[]>([]);
   const [lessons, setLessons] = useState<string[]>([]);
   const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -50,29 +49,35 @@ export default function EditQuestionsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<QuestionBankItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [selectedSubject, setSelectedSubject] = useState<string>(''); // Tracks the SUBJECT filter selection
-  const [selectedLesson, setSelectedLesson] = useState<string>(''); // Tracks the LESSON filter selection
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedClass, setSelectedClass] = useState<ClassLevel | 'all'>('all');
   const [selectedExam, setSelectedExam] = useState<ExamOption | 'all'>('all');
-  // const [useBothFilters, setUseBothFilters] = useState(false); // Kept for potential future use
 
-  // MathJax typesetting
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax) {
-        (window as any).MathJax.typesetPromise?.().catch((err: any) => console.error("MathJax typesetting error:", err));
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-content-preview'); // Use a specific class for previews
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (preview):", err));
+        }
     }
   }, []);
 
   useEffect(() => {
-      typesetMathJax();
-  }, [questions, typesetMathJax]); // Rerun when questions data changes
+    if (!isLoadingQuestions && questions.length > 0) {
+        const timerId = setTimeout(() => {
+            typesetMathJax();
+        }, 50);
+        return () => clearTimeout(timerId);
+    }
+  }, [isLoadingQuestions, questions, typesetMathJax]);
 
 
-   // Fetch ALL Subjects on mount
    const fetchSubjects = useCallback(async () => {
         setIsLoadingSubjects(true);
         try {
-            const fetchedSubjects = await getSubjects(); // Fetch all subjects
+            const fetchedSubjects = await getSubjects();
             setSubjects(fetchedSubjects);
         } catch (err) {
             toast({ variant: "destructive", title: "Error", description: "Could not load subjects." });
@@ -86,36 +91,34 @@ export default function EditQuestionsPage() {
         fetchSubjects();
     }, [fetchSubjects]);
 
-   // Fetch Lessons ONLY when a subject is selected in the filter
    const fetchLessons = useCallback(async () => {
-       if (selectedSubject) { // Check if a subject filter is active
+       if (selectedSubject) {
          setIsLoadingLessons(true);
-         setLessons([]); // Clear previous lessons
-         setQuestions([]); // Clear questions when subject filter changes
+         setLessons([]);
+         setQuestions([]);
          try {
            const fetchedLessons = await getLessonsForSubject(selectedSubject);
            setLessons(fetchedLessons);
-           setSelectedLesson(''); // Reset lesson filter selection
+           setSelectedLesson('');
          } catch (err) {
            toast({ variant: "destructive", title: "Error", description: `Could not load lessons for ${selectedSubject}.` });
            setLessons([]);
          } finally {
            setIsLoadingLessons(false);
          }
-       } else { // No subject filter selected, clear lessons and questions
+       } else {
          setLessons([]);
          setSelectedLesson('');
          setQuestions([]);
        }
-   }, [selectedSubject, toast]); // Re-run when selectedSubject filter changes
+   }, [selectedSubject, toast]);
 
    useEffect(() => {
        fetchLessons();
    }, [fetchLessons]);
 
-   // Fetch Questions when BOTH subject and lesson filters are selected
    const fetchQuestions = useCallback(async () => {
-      if (selectedSubject && selectedLesson) { // Fetch only if both are selected
+      if (selectedSubject && selectedLesson) {
            setIsLoadingQuestions(true);
            setQuestions([]);
            const filters = {
@@ -135,17 +138,16 @@ export default function EditQuestionsPage() {
                 setIsLoadingQuestions(false);
            }
        } else {
-           setQuestions([]); // Clear questions if subject or lesson filter is missing
+           setQuestions([]);
        }
    }, [selectedSubject, selectedLesson, selectedClass, selectedExam, toast]);
 
    useEffect(() => {
-       // No need to trigger fetch if subject/lesson aren't both set
        if (selectedSubject && selectedLesson) {
            fetchQuestions();
        } else {
-           setQuestions([]); // Clear questions if filters incomplete
-           setIsLoadingQuestions(false); // Ensure loading stops
+           setQuestions([]);
+           setIsLoadingQuestions(false);
        }
    }, [selectedSubject, selectedLesson, selectedClass, selectedExam, fetchQuestions]);
 
@@ -155,8 +157,8 @@ export default function EditQuestionsPage() {
         );
         setIsEditDialogOpen(false);
         setEditingQuestion(null);
-        typesetMathJax(); // Retypeset after update
-    }, [typesetMathJax]);
+        // No need to call typesetMathJax here as the main useEffect for questions will handle it.
+    }, []);
 
 
   const displayQuestions = useMemo(() => {
@@ -177,7 +179,7 @@ export default function EditQuestionsPage() {
          const result = await deleteQuestion({ questionId: id, subject, lesson });
          if (result.success) {
            toast({ title: "Question Deleted", description: `${id} has been removed.` });
-           await fetchQuestions(); // Re-fetch questions for the current filter
+           await fetchQuestions(); 
          } else {
            throw new Error(result.message || 'Failed to delete question.');
          }
@@ -192,16 +194,14 @@ export default function EditQuestionsPage() {
             return (
                 <span className="flex items-center gap-1 text-blue-600 hover:underline" title={`View Image: ${q.question.image}`}>
                     <ImageIcon className="h-4 w-4"/>
-                    {/* Display only ID for image questions */}
                     <span className="font-mono text-xs">({q.id})</span>
                 </span>
             );
         }
         const text = q.question.text || '[No Text]';
-        // For MathJax, ensure the text is directly in the HTML or handled by a MathJax component
         return (
             <span
-                className="line-clamp-1"
+                className="line-clamp-1 mathjax-content-preview" // Add specific class for preview typesetting
                 title={text}
                 dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
             />
@@ -211,14 +211,12 @@ export default function EditQuestionsPage() {
 
   return (
     <>
-    {/* MathJax Script */}
      <Script
-        id="mathjax-script-edit-questions" // Unique ID
+        id="mathjax-script-edit-questions"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-          console.log('MathJax loaded for edit questions page');
-          typesetMathJax(); // Initial typeset
+          typesetMathJax(); 
         }}
       />
     <div className="space-y-6">
@@ -234,12 +232,11 @@ export default function EditQuestionsPage() {
              <CardTitle>Filter Questions</CardTitle>
          </CardHeader>
          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {/* Subject Filter Dropdown - Now populates with all subjects */}
             <div className="space-y-1.5">
              <Label htmlFor="subject-filter">Subject *</Label>
              <Select
                value={selectedSubject}
-               onValueChange={setSelectedSubject} // Update subject filter state
+               onValueChange={setSelectedSubject}
                disabled={isLoadingSubjects}
              >
                <SelectTrigger id="subject-filter">
@@ -253,12 +250,11 @@ export default function EditQuestionsPage() {
              </Select>
             </div>
 
-            {/* Lesson Filter Dropdown - Populates based on selectedSubject */}
             <div className="space-y-1.5">
                 <Label htmlFor="lesson-filter">Lesson *</Label>
                 <Select
                     value={selectedLesson}
-                    onValueChange={setSelectedLesson} // Update lesson filter state
+                    onValueChange={setSelectedLesson}
                     disabled={isLoadingLessons || !selectedSubject || subjects.length === 0}
                 >
                     <SelectTrigger id="lesson-filter">
@@ -272,7 +268,6 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
-            {/* Class Filter Dropdown */}
             <div className="space-y-1.5">
                 <Label htmlFor="class-filter">Class</Label>
                 <Select
@@ -290,7 +285,6 @@ export default function EditQuestionsPage() {
                 </Select>
              </div>
 
-             {/* Exam Filter Dropdown */}
              <div className="space-y-1.5">
                 <Label htmlFor="exam-filter">Exam Type</Label>
                 <Select
@@ -453,5 +447,3 @@ export default function EditQuestionsPage() {
     </>
   );
 }
-
-    

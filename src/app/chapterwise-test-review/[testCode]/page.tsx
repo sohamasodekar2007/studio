@@ -22,7 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import Script from 'next/script';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
-    [QuestionStatusEnum.Answered]: "default", // Usually green, but use default primary here
+    [QuestionStatusEnum.Answered]: "default",
     [QuestionStatusEnum.Unanswered]: "destructive",
     [QuestionStatusEnum.MarkedForReview]: "secondary",
     [QuestionStatusEnum.AnsweredAndMarked]: "default",
@@ -36,19 +36,21 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
-
-// Helper function to construct image paths relative to the public directory
-// Ensures that the path starts with a '/'
 const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
     if (!imagePath) return null;
-    // If the path already seems like a public URL (starts with /), use it directly
-    if (imagePath.startsWith('/')) {
-        return imagePath;
+    if (imagePath.startsWith('/question_bank_images/')) return imagePath;
+    if (imagePath.startsWith('Q_') || imagePath.startsWith('E_')) {
+        // This case implies the path might be missing subject/lesson context from the report
+        // This function should ideally receive subject/lesson if paths in reports are relative to lesson
+        console.warn(`Constructing image path for potentially relative filename: ${imagePath}. This might fail if subject/lesson context is missing.`);
+        // Attempt a generic path, but this is fragile. The report should provide full relative paths.
+        return `/question_bank_images/unknown_subject/unknown_lesson/images/${imagePath}`;
     }
-    // This case should ideally not happen if test report generation is correct.
-    // It indicates the path in the report might not be a direct public URL.
+    // If it's already a seemingly valid public path or full URL
+    if (imagePath.startsWith('/') || imagePath.startsWith('http')) return imagePath;
+    
     console.warn(`constructPublicImagePath received an unexpected path format: ${imagePath}. Attempting to use as is, but may fail.`);
-    return imagePath; // Or handle error, e.g., return null
+    return imagePath;
 };
 
 
@@ -73,20 +75,22 @@ export default function TestReviewPage() {
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
   const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
 
-   const typesetMathJax = useCallback(() => {
-       if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
-            const elements = document.querySelectorAll('.mathjax-content');
-            if (elements.length > 0) {
-                 (window as any).MathJax.typesetPromise(Array.from(elements))
-                    .catch((err: any) => console.error("MathJax typeset error in review page (elements):", err));
-            } else {
-                 (window as any).MathJax.typesetPromise() // Fallback if no elements found, though unlikely needed
-                    .catch((err: any) => console.error("MathJax typeset error in review page (fallback):", err));
-            }
-       } else {
-           console.warn("MathJax or typesetPromise not available yet for typesetting on review page.");
-       }
-   }, []);
+ const typesetMathJax = useCallback(() => {
+    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
+        const elements = document.querySelectorAll('.mathjax-content');
+        if (elements.length > 0) {
+            (window as any).MathJax.typesetPromise(Array.from(elements))
+                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+        } else {
+            // Fallback for cases where '.mathjax-content' might not be immediately available or if global typesetting is preferred initially
+            (window as any).MathJax.typesetPromise()
+                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+        }
+    } else {
+        // console.warn("MathJax or typesetPromise not available yet for typesetting on review page.");
+    }
+  }, []);
+
 
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptTimestampStr) {
@@ -147,9 +151,13 @@ export default function TestReviewPage() {
 
   useEffect(() => {
     if (!isLoading && testReport) {
-        typesetMathJax();
+        const timerId = setTimeout(() => {
+            typesetMathJax();
+        }, 50); // Small delay to ensure DOM is ready
+        return () => clearTimeout(timerId);
     }
   }, [isLoading, testReport, currentQuestionReviewIndex, typesetMathJax]);
+
 
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
   const currentReviewQuestion: DetailedAnswer | undefined = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
@@ -166,9 +174,11 @@ export default function TestReviewPage() {
 
     const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
     const imagePathFromReport = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
-    const publicImagePath = constructPublicImagePath(imagePathFromReport);
+    
+    // The imagePathFromReport should already be the correct public path if test report generation is correct
+    const publicImagePath = imagePathFromReport;
 
-    if (publicImagePath) {
+    if (publicImagePath && (publicImagePath.startsWith('/') || publicImagePath.startsWith('http'))) {
       return (
          <div className="relative w-full max-w-xl h-auto mx-auto my-4">
             <Image
@@ -184,7 +194,9 @@ export default function TestReviewPage() {
             />
         </div>
       );
-    } else if (textContent) {
+    }
+    
+    if (textContent) {
       return (
          <div
             className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
@@ -213,7 +225,7 @@ export default function TestReviewPage() {
           else if (isSelected && !isCorrectOption) optionStyle = OPTION_STYLES.selectedIncorrect;
           else if (!isSelected && isCorrectOption) optionStyle = OPTION_STYLES.correctButNotSelected;
 
-          const displayValue = typeof optionText === 'string' ? optionText : `Option ${optionKey}`;
+          const displayValue = typeof optionText === 'string' ? optionText : `Option ${optionKey}`; // Fallback if optionText is null
 
           return (
             <div key={optionKey} className={cn("flex items-start space-x-3 p-4 border rounded-lg transition-all", optionStyle)}>
@@ -252,8 +264,9 @@ export default function TestReviewPage() {
         toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
         return;
      }
-     const subject = (currentReviewQuestion as any).subject || (testReport as ChapterwiseTestJson)?.test_subject?.[0] || 'Unknown Subject';
-     const lesson = (currentReviewQuestion as any).lesson || (testReport as ChapterwiseTestJson)?.lesson || testReport.testName || 'Unknown Lesson';
+     // Extract subject and lesson from the testReport or currentReviewQuestion if available
+     const subject = (testReport as ChapterwiseTestJson)?.test_subject?.[0] || 'Unknown Subject';
+     const lesson = (testReport as ChapterwiseTestJson)?.lesson || testReport.testName || 'Unknown Lesson';
 
 
      const questionData: BookmarkedQuestion = {
@@ -299,14 +312,11 @@ export default function TestReviewPage() {
         <Card>
           <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-48 w-full mb-4" />
+            <Skeleton className="h-48 w-full mb-4" /> {/* Skeleton for image area */}
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-24" />
-          </CardFooter>
+           <CardFooter className="flex justify-between"><Skeleton className="h-10 w-24" /><Skeleton className="h-10 w-24" /></CardFooter>
         </Card>
       </div>
     );
@@ -315,14 +325,8 @@ export default function TestReviewPage() {
   if (error) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
-        <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
-        <p className="text-muted-foreground mb-6">{error}</p>
-        <Button asChild variant="outline">
-            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
-             Back to Results
-           </Link>
-         </Button>
+        <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" /> <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1> <p className="text-muted-foreground mb-6">{error}</p>
+        <Button asChild variant="outline"><Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>Back to Results</Link></Button>
       </div>
     );
   }
@@ -330,18 +334,12 @@ export default function TestReviewPage() {
    if (!testReport || !currentReviewQuestion) {
      return (
        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
-         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-         <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1>
-         <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
-         <Button asChild variant="outline">
-            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
-             Back to Results
-           </Link>
-         </Button>
+         <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" /> <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1> <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
+         <Button asChild variant="outline"><Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>Back to Results</Link></Button>
        </div>
      );
    }
-
+  
   return (
     <>
       <Script
@@ -349,29 +347,23 @@ export default function TestReviewPage() {
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-             typesetMathJax();
+             typesetMathJax(); // Ensure typesetting happens after script load
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Results
-            </Link>
-          </Button>
+          <Button variant="outline" size="sm" asChild><Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button>
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={testReport.testName || testCode}>
             Test Review: {testReport.testName || testCode}
           </h1>
-          <div className="w-20 hidden sm:block"></div>
+          <div className="w-20 hidden sm:block"></div> {/* Spacer for alignment */}
         </div>
 
         <Card className="shadow-lg border-border">
           <CardHeader className="p-4 sm:p-6">
             <div className="flex justify-between items-center flex-wrap gap-2">
-              <CardTitle>Question {currentQuestionReviewIndex + 1} <span className="font-normal text-muted-foreground">of {totalQuestions}</span></CardTitle>
-              <Badge variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]} className="capitalize">
-                {questionStatus.replace('_', ' & ')}
-              </Badge>
+              <CardTitle className="text-lg sm:text-xl">Question {currentQuestionReviewIndex + 1} <span className="font-normal text-muted-foreground">of {totalQuestions}</span></CardTitle>
+              <Badge variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]} className="capitalize text-xs sm:text-sm">{questionStatus.replace('_', ' & ')}</Badge>
             </div>
             <CardDescription className="text-xs text-muted-foreground pt-1">
               Marks: {currentReviewQuestion.marks ?? 1} | ID: {currentReviewQuestion.questionId}
@@ -379,9 +371,7 @@ export default function TestReviewPage() {
           </CardHeader>
 
           <CardContent className="px-4 sm:px-6">
-            <div className="mb-5">
-              {renderContent('question')}
-            </div>
+            <div className="mb-5 min-h-[100px]">{renderContent('question')}</div> {/* Min height for question area */}
             <Separator className="my-5" />
             <h4 className="font-semibold mb-3 text-base">Your Answer & Options:</h4>
             {renderOptions()}
@@ -396,45 +386,20 @@ export default function TestReviewPage() {
             )}
           </CardContent>
 
-           <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t px-4 sm:px-6">
+           <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-2 pt-6 border-t px-4 sm:px-6 pb-4 sm:pb-6">
             <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-start">
-              <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
-                <Bookmark className="mr-2 h-4 w-4" />
-                {isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin" /> : "Bookmark"}
-              </Button>
+              <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}><Bookmark className="mr-2 h-4 w-4" />{isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin" /> : "Bookmark"}</Button>
             </div>
             <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end mt-2 sm:mt-0">
-              <Button
-                variant="outline"
-                onClick={() => navigateReview('prev')}
-                disabled={currentQuestionReviewIndex === 0}
-                className="flex-1 sm:flex-none"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-              </Button>
-              <Button
-                onClick={() => navigateReview('next')}
-                disabled={currentQuestionReviewIndex === totalQuestions - 1}
-                className="flex-1 sm:flex-none"
-              >
-                Next <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              <Button variant="outline" onClick={() => navigateReview('prev')} disabled={currentQuestionReviewIndex === 0} className="flex-1 sm:flex-none"><ArrowLeft className="mr-2 h-4 w-4" /> Previous</Button>
+              <Button onClick={() => navigateReview('next')} disabled={currentQuestionReviewIndex === totalQuestions - 1} className="flex-1 sm:flex-none">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
             </div>
           </CardFooter>
         </Card>
       </div>
 
-       {currentReviewQuestion && user && testReport && (
-            <AddToNotebookDialog
-                isOpen={isNotebookModalOpen}
-                onClose={handleCloseNotebookModal}
-                notebooks={notebooks}
-                onSave={handleSaveToNotebooks}
-                isLoading={isSavingToNotebook}
-                userId={user.id}
-                onNotebookCreated={handleCreateNotebookCallback}
-            />
-        )}
+       {currentReviewQuestion && user && testReport && (<AddToNotebookDialog isOpen={isNotebookModalOpen} onClose={handleCloseNotebookModal} notebooks={notebooks} onSave={handleSaveToNotebooks} isLoading={isSavingToNotebook} userId={user.id} onNotebookCreated={handleCreateNotebookCallback} />)}
     </>
   );
 }
+
