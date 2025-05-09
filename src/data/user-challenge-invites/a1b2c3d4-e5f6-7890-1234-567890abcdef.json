@@ -1,0 +1,15 @@
+{
+  "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "invites": [
+    {
+      "challengeCode": "CHL-6883-2465-HT",
+      "creatorId": "2d4574fb-c2a8-477f-8807-f01d15555cdd",
+      "creatorName": "Godwin",
+      "testName": "Chemistry - Chemical KInetics Challenge",
+      "numQuestions": 1,
+      "status": "accepted",
+      "createdAt": 1746773407890,
+      "expiresAt": 1746784207890
+    }
+  ]
+}

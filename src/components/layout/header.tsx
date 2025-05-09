@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import type { ChallengeInvite } from '@/types'; // Import ChallengeInvite type
+import { Badge } from '@/components/ui/badge'; // Import Badge component
 
 // Helper function to request notification permission
 const requestNotificationPermission = async () => {
@@ -81,13 +82,15 @@ export function AppHeader() {
   }, [user?.id, toast, router, hasNotificationPermission]);
 
   useEffect(() => {
-    requestNotificationPermission().then(setHasNotificationPermission);
-    
-    if (user?.id) {
-      fetchPendingInvites();
-      // Simulate polling for new invites
-      const intervalId = setInterval(fetchPendingInvites, 30000); // Check every 30 seconds
-      return () => clearInterval(intervalId);
+    if (typeof window !== 'undefined') { // Ensure this runs only on client
+        requestNotificationPermission().then(setHasNotificationPermission);
+        
+        if (user?.id) {
+          fetchPendingInvites();
+          // Simulate polling for new invites
+          const intervalId = setInterval(fetchPendingInvites, 30000); // Check every 30 seconds
+          return () => clearInterval(intervalId);
+        }
     }
   }, [user?.id, fetchPendingInvites]);
 
