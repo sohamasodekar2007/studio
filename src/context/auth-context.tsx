@@ -46,6 +46,8 @@ interface AuthContextProps {
   updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void;
   setUser: React.Dispatch<React.SetStateAction<ContextUser>>; // Expose setUser for external auth providers
   setLoading: React.Dispatch<React.SetStateAction<boolean>>; // Expose setLoading
+  mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; // Expose mapping function
+
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -59,6 +61,7 @@ const AuthContext = createContext<AuthContextProps>({
   updateUserData: () => { console.warn('Auth: updateUserData not implemented'); },
   setUser: () => {},
   setLoading: () => {},
+  mapUserProfileToContextUser: () => null,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -90,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           targetYear: userProfile.targetYear,
           telegramId: userProfile.telegramId,
           telegramUsername: userProfile.telegramUsername,
+          totalPoints: userProfile.totalPoints
       };
   }, []);
 
@@ -173,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (e: any) {
              console.error("AuthProvider: Error during session check:", e);
              setInitializationError(`Failed to verify session: ${e.message}. Ensure users.json is accessible and valid.`);
-             await logoutCallback(); // Logout on error
+             await logoutCallback("Session validation error. Please try logging in again.");
         } finally {
             setLoading(false);
             console.log("AuthProvider: Session check complete.");
@@ -200,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
        setLoading(false);
     }
-  }, [user, toast, mapUserProfileToContextUser, logoutCallback]); // Use logoutCallback here
+  }, [user, toast, mapUserProfileToContextUser, logoutCallback]);
 
 
  const login = useCallback(async (email: string, password?: string) => {
@@ -215,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     console.log(`AuthProvider: Attempting login for ${email}`);
     try {
-        const users = await readUsersWithPasswordsInternal(); // Reads the whole users.json
+        const users = await readUsersWithPasswordsInternal();
         const foundUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
 
         if (foundUser && foundUser.password) {
@@ -240,9 +244,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
-      console.error("Login failed in AuthProvider:", error);
+      console.error("Simulated login failed:", error); // Keep general log
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
-      throw error; // Re-throw for the component to handle if needed
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -309,18 +313,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
-    if (loading || !isMounted) return; // Don't run navigation logic until auth state is resolved and component is mounted
+    if (loading || !isMounted) return;
 
     const isAuthPage = pathname.startsWith('/auth');
     const isAdminRoute = pathname.startsWith('/admin');
     const publicRoutes = [
-        '/', '/help', '/terms', '/privacy', '/tests', '/dpp', '/pyq-dpps',
+        '/', '/help', '/terms', '/privacy', '/tests', '/dpp', '/pyq-dpps', '/take-test',
         '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review',
         '/challenge-test', '/challenge-test-result', '/challenge-test-review'
-    ]; // Added test interface related routes as public for now
+    ];
 
      const isPublicRoute = publicRoutes.some(route => {
-         if (pathname.startsWith(route + '/') && route !== '/') return true; // Handles dynamic segments like /tests/[id]
+         // Handle dynamic segments by checking if pathname starts with a public route that isn't just '/'
+         if (route !== '/' && pathname.startsWith(route + '/')) return true;
          return pathname === route;
      });
 
@@ -377,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    }
 
   return (
-    <AuthContext.Provider value={{ user, loading, initializationError, login, logout: logoutCallback, signUp, refreshUser, updateUserData, setUser, setLoading }}>
+    <AuthContext.Provider value={{ user, loading, initializationError, login, logout: logoutCallback, signUp, refreshUser, updateUserData, setUser, setLoading, mapUserProfileToContextUser }}>
       {children}
     </AuthContext.Provider>
   );
