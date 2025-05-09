@@ -6,6 +6,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Challenge, ChallengeTestConfig, ChallengeParticipant, TestQuestion, UserProfile, ChallengeInvite, UserChallengeInvites, QuestionBankItem, DifficultyLevel, ExamOption, UserAnswer, DetailedAnswer } from '@/types';
 import { getQuestionsForLesson } from './question-bank-query-actions'; // To fetch questions
+import { getUserById } from './user-actions'; // To fetch user names
 
 const challengesBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenges');
 const challengeInvitesBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenge-invites');
@@ -92,19 +93,16 @@ export async function createChallenge(
     const now = Date.now();
     const expiresAt = now + 3 * 60 * 60 * 1000; // 3 hours from now
 
-    // Fetch questions (simplified: assumes all questions are available for the lesson)
     const questionsFromBank = await getQuestionsForLesson({
         subject: testConfig.subject,
         lesson: testConfig.lesson,
         examType: testConfig.examFilter === 'all' ? undefined : testConfig.examFilter,
-        // Add class filter if needed, for now assuming DPPs are class-agnostic or handled by lesson choice
     });
 
     if (questionsFromBank.length < testConfig.numQuestions) {
         return { success: false, message: `Not enough questions available in the bank for ${testConfig.subject} - ${testConfig.lesson} (found ${questionsFromBank.length}, need ${testConfig.numQuestions}). Try different filters or add more questions.` };
     }
 
-    // Shuffle and pick questions
     const shuffledQuestions = [...questionsFromBank].sort(() => 0.5 - Math.random());
     const selectedBankQuestions = shuffledQuestions.slice(0, testConfig.numQuestions);
 
@@ -124,9 +122,11 @@ export async function createChallenge(
     const participants: Record<string, ChallengeParticipant> = {
       [creatorId]: { userId: creatorId, name: creatorName, status: 'accepted' },
     };
-    challengedUserIds.forEach(id => {
-      participants[id] = { userId: id, name: null, status: 'pending' }; // Name to be fetched on lobby/invite display
-    });
+    // Fetch and store names for challenged users
+    for (const id of challengedUserIds) {
+        const userProfile = await getUserById(id);
+        participants[id] = { userId: id, name: userProfile?.name || null, status: 'pending' };
+    }
 
     const newChallenge: Challenge = {
       challengeCode,
@@ -143,7 +143,6 @@ export async function createChallenge(
     const saveSuccess = await writeChallengeFile(newChallenge);
     if (!saveSuccess) throw new Error("Failed to save challenge data.");
 
-    // Create and send invites (save to each challenged user's invite file)
     const testNameForInvite = `${testConfig.subject} - ${testConfig.lesson} Challenge`;
     for (const challengedId of challengedUserIds) {
         const userInvitesData = await getUserInvites(challengedId);
@@ -183,9 +182,14 @@ export async function acceptChallenge(challengeCode: string, userId: string): Pr
 
     if (challenge.participants[userId]) {
         challenge.participants[userId].status = 'accepted';
-        // Optionally fetch user's name here if not already present
-        // const userProfile = await getUserById(userId);
-        // if (userProfile) challenge.participants[userId].name = userProfile.name;
+        // Fetch user's name if not already present or to update it
+        const userProfile = await getUserById(userId);
+        if (userProfile) {
+            challenge.participants[userId].name = userProfile.name;
+        } else if (!challenge.participants[userId].name) { // If profile not found and name was null
+             challenge.participants[userId].name = `User ${userId.substring(0,6)}`; // Fallback
+        }
+
 
         const saveSuccess = await writeChallengeFile(challenge);
         if (!saveSuccess) return { success: false, message: "Failed to update challenge status."};
@@ -231,13 +235,11 @@ export async function startChallenge(challengeCode: string, creatorId: string): 
     if (challenge.testStatus !== 'waiting') return { success: false, message: "Challenge already started or completed."};
     if (challenge.expiresAt < Date.now()) return { success: false, message: "Challenge has expired."};
 
-    // Check if all invited participants have accepted (or rejected - creator decides if they want to wait)
-    // For simplicity, let's assume all invited must accept to start.
     const allAccepted = Object.values(challenge.participants)
-                            .filter(p => p.userId !== creatorId) // Exclude creator from this check
+                            .filter(p => p.userId !== creatorId) 
                             .every(p => p.status === 'accepted');
 
-    if (!allAccepted && Object.values(challenge.participants).filter(p => p.userId !== creatorId).length > 0) { // Check if there are any actual challenged users
+    if (!allAccepted && Object.values(challenge.participants).filter(p => p.userId !== creatorId).length > 0) { 
         return { success: false, message: "Not all invited participants have accepted the challenge yet." };
     }
 
@@ -248,8 +250,6 @@ export async function startChallenge(challengeCode: string, creatorId: string): 
     return { success: saveSuccess, message: saveSuccess ? undefined : "Failed to start challenge."};
 }
 
-// submitChallengeAttempt, getChallengeResults, etc. will be added in next phases.
-// Placeholder for submitChallengeAttempt
 export async function submitChallengeAttempt(
   challengeCode: string,
   userId: string,
@@ -271,7 +271,6 @@ export async function submitChallengeAttempt(
   if (participant.status === 'completed') return { success: false, message: "You have already submitted this challenge."};
 
 
-  // Calculate score
   let score = 0;
   let correctCount = 0;
   let incorrectCount = 0;
@@ -279,7 +278,7 @@ export async function submitChallengeAttempt(
 
 
   challenge.questions.forEach((q, index) => {
-    const userAnswer = answers.find(a => a.questionId === q.id || a.questionId === `q-${index}`); // Match by ID or index fallback
+    const userAnswer = answers.find(a => a.questionId === q.id || a.questionId === `q-${index}`); 
     const isCorrect = userAnswer?.selectedOption === q.answer;
     if (userAnswer && userAnswer.selectedOption) {
       if (isCorrect) {
@@ -289,17 +288,15 @@ export async function submitChallengeAttempt(
         incorrectCount++;
       }
     }
-    // We can add more details to detailedAnswersForReport if needed for challenge review
   });
 
   participant.score = score;
   participant.timeTaken = timeTakenSeconds;
   participant.status = 'completed';
-  participant.answers = answers; // Store user's answers for this challenge
+  participant.answers = answers; 
 
-  // Check if all accepted participants have completed
-  const allCompleted = Object.values(challenge.participants).every(p => p.status === 'completed' || p.status === 'rejected' || p.userId === challenge.creatorId && p.status === 'accepted'); // Creator is accepted by default
-  if (allCompleted) {
+  const allCompletedOrRejected = Object.values(challenge.participants).every(p => p.status === 'completed' || p.status === 'rejected');
+  if (allCompletedOrRejected) {
     challenge.testStatus = 'completed';
   }
 
@@ -308,13 +305,10 @@ export async function submitChallengeAttempt(
 }
 
 export async function getChallengeResults(challengeCode: string): Promise<Challenge | null> {
-    // This will just return the full challenge object which includes participant scores and statuses.
-    // The client-side will then process this to display ranks, winner, etc.
     const challenge = await readChallengeFile(challengeCode);
     if (challenge && (challenge.testStatus === 'completed' || challenge.testStatus === 'expired')) {
-        // Sort participants by score (desc) then timeTaken (asc) to determine ranks
         const participantsArray = Object.values(challenge.participants)
-            .filter(p => p.status === 'completed') // Only rank completed
+            .filter(p => p.status === 'completed') 
             .sort((a, b) => {
                 const scoreDiff = (b.score ?? -1) - (a.score ?? -1);
                 if (scoreDiff !== 0) return scoreDiff;
@@ -326,8 +320,6 @@ export async function getChallengeResults(challengeCode: string): Promise<Challe
                  challenge.participants[p.userId].rank = index + 1;
             }
         });
-        // Persist ranks? For now, dynamically calculated.
-        // await writeChallengeFile(challenge); // Uncomment if you want to save ranks back to the file
     }
     return challenge;
 }
