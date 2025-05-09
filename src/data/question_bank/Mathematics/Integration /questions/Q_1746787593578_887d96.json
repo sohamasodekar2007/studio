@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593578_887d96",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Calculus",
+    "Trigonometric"
+  ],
+  "type": "text",
+  "question": {
+    "text": "What is $$\\int \\sec^2 x dx$$?",
+    "image": null
+  },
+  "options": {
+    "A": "$$\\tan x + C$$",
+    "B": "$$\\sec x + C$$",
+    "C": "$$\\cot x + C$$",
+    "D": "$$-\\tan x + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$\\sec^2 x$$ is $$\\tan x + C$$, as the derivative of $$\\tan x$$ is $$\\sec^2 x$$.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.578Z",
+  "modified": "2025-05-09T10:46:33.578Z"
+}

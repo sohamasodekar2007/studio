@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593547_54d388",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Calculus",
+    "Integration"
+  ],
+  "type": "text",
+  "question": {
+    "text": "What is the value of $$\\int x^2 dx$$?",
+    "image": null
+  },
+  "options": {
+    "A": "$$\\frac{x^3}{3} + C$$",
+    "B": "$$x^3 + C$$",
+    "C": "$$2x + C$$",
+    "D": "$$\\frac{x^2}{2} + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$x^n$$ is $$\\frac{x^{n+1}}{n+1} + C$$. Here, n=2, so the integral is $$\\frac{x^3}{3} + C$$.",
+    "image": null
+  },
+  "marks": 2,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.547Z",
+  "modified": "2025-05-09T10:46:33.547Z"
+}

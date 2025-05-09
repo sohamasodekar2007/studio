@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593556_099d36",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Calculus",
+    "Exponential"
+  ],
+  "type": "text",
+  "question": {
+    "text": "What is $$\\int e^x dx$$?",
+    "image": null
+  },
+  "options": {
+    "A": "$$e^x + C$$",
+    "B": "$$e^{x+1} + C$$",
+    "C": "$$\\ln x + C$$",
+    "D": "$$x e^x + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$e^x$$ is $$e^x + C$$, as the derivative of $$e^x$$ is itself.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.557Z",
+  "modified": "2025-05-09T10:46:33.557Z"
+}

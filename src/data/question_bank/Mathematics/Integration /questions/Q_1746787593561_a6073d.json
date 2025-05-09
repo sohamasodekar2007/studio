@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593561_a6073d",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Calculus",
+    "Logarithmic"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Evaluate $$\\int \\frac{1}{x} dx$$ for $$x > 0$$.",
+    "image": null
+  },
+  "options": {
+    "A": "$$\\ln |x| + C$$",
+    "B": "$$\\frac{1}{x^2} + C$$",
+    "C": "$$-\\frac{1}{x^2} + C$$",
+    "D": "$$x \\ln x + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$\\frac{1}{x}$$ is $$\\ln |x| + C$$. Since x > 0, absolute value is not needed here.",
+    "image": null
+  },
+  "marks": 2,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.561Z",
+  "modified": "2025-05-09T10:46:33.561Z"
+}

@@ -1,7 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -17,18 +15,24 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
-    // Local images from public/question_bank_images will be served directly,
-    // so no 'domains' configuration needed for them if using relative paths in next/image src.
   },
-   // Removed rewrite as images are now in public folder
-   // async rewrites() {
-   //   return [
-   //     {
-   //       source: '/question_bank_images/:subject/:lesson/images/:image',
-   //       destination: '/data/question_bank/:subject/:lesson/images/:image', // This was incorrect path for public serving
-   //     },
-   //   ]
-   // },
+  webpack(config) {
+    config.watchOptions = {
+      ...config.watchOptions,
+      // Ignore the src/data directory to prevent HMR on data file changes
+      // Also ignore .git and node_modules which Next.js usually does by default, but being explicit can help.
+      ignored: [
+        ...(config.watchOptions?.ignored || []),
+        '**/.git/**',
+        '**/node_modules/**',
+        '**/src/data/**',
+        '**/.next/**',
+      ],
+      poll: 1000, // Check for changes every second, if default watching is problematic
+      aggregateTimeout: 300, // Delay before rebuilding
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

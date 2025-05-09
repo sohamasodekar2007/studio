@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593592_faa564",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Calculus",
+    "Inverse Trigonometric"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Evaluate $$\\int \\frac{1}{1 + x^2} dx$$.",
+    "image": null
+  },
+  "options": {
+    "A": "$$\\tan^{-1} x + C$$",
+    "B": "$$\\ln (1 + x^2) + C$$",
+    "C": "$$\\sin^{-1} x + C$$",
+    "D": "$$\\cot^{-1} x + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$\\frac{1}{1 + x^2}$$ is $$\\tan^{-1} x + C$$, a standard inverse trigonometric result.",
+    "image": null
+  },
+  "marks": 2,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.593Z",
+  "modified": "2025-05-09T10:46:33.593Z"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593552_f2bbd2",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Calculus",
+    "Integration"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Evaluate $$\\int (3x^2 + 2x + 1) dx$$.",
+    "image": null
+  },
+  "options": {
+    "A": "$$x^3 + x^2 + x + C$$",
+    "B": "$$3x^3 + 2x^2 + x + C$$",
+    "C": "$$6x + 2 + C$$",
+    "D": "$$x^3 + x^2 + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "Integrate term by term: $$\\int 3x^2 dx = x^3$$, $$\\int 2x dx = x^2$$, $$\\int 1 dx = x$$. Sum them and add C.",
+    "image": null
+  },
+  "marks": 2,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.552Z",
+  "modified": "2025-05-09T10:46:33.552Z"
+}

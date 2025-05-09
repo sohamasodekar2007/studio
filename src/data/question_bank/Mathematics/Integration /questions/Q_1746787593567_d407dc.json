@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746787593567_d407dc",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Calculus",
+    "Trigonometric"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Find $$\\int \\sin x dx$$.",
+    "image": null
+  },
+  "options": {
+    "A": "$$-\\cos x + C$$",
+    "B": "$$\\cos x + C$$",
+    "C": "$$\\sin x + C$$",
+    "D": "$$-\\sin x + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The integral of $$\\sin x$$ is $$-\\cos x + C$$, as the derivative of $$-\\cos x$$ is $$\\sin x$$.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.567Z",
+  "modified": "2025-05-09T10:46:33.567Z"
+}

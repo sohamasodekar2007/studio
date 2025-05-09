@@ -1,0 +1,34 @@
+{
+  "id": "Q_1746787593606_d7de1b",
+  "subject": "Mathematics",
+  "lesson": "Integration ",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Calculus",
+    "Exponential",
+    "Substitution"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Find $$\\int x e^{x^2} dx$$.",
+    "image": null
+  },
+  "options": {
+    "A": "$$\\frac{1}{2} e^{x^2} + C$$",
+    "B": "$$e^{x^2} + C$$",
+    "C": "$$x e^{x^2} + C$$",
+    "D": "$$\\frac{1}{x} e^{x^2} + C$$"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "Use substitution: Let $$u = x^2$$, $$du = 2x dx$$. The integral becomes $$\\frac{1}{2} \\int e^u du = \\frac{1}{2} e^u + C$$.",
+    "image": null
+  },
+  "marks": 3,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T10:46:33.607Z",
+  "modified": "2025-05-09T10:46:33.607Z"
+}
