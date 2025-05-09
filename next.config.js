@@ -16,21 +16,31 @@ const nextConfig = {
       },
     ],
   },
-  webpack(config) {
-    config.watchOptions = {
-      ...config.watchOptions,
-      // Ignore the src/data directory to prevent HMR on data file changes
-      // Also ignore .git and node_modules which Next.js usually does by default, but being explicit can help.
-      ignored: [
-        ...(config.watchOptions?.ignored || []),
+  webpack: (config) => {
+    config.watchOptions = config.watchOptions || {}; // Ensure watchOptions is an object
+
+    let existingIgnored = [];
+    if (config.watchOptions.ignored) {
+        if (Array.isArray(config.watchOptions.ignored)) {
+            existingIgnored = config.watchOptions.ignored;
+        } else {
+            // If it's not an array but exists (e.g., a string or RegExp), wrap it in an array
+            existingIgnored = [config.watchOptions.ignored];
+        }
+    }
+
+    config.watchOptions.ignored = [
+        ...existingIgnored,
         '**/.git/**',
         '**/node_modules/**',
-        '**/src/data/**',
+        '**/src/data/**', // Keep ignoring data directory
         '**/.next/**',
-      ],
-      poll: 1000, // Check for changes every second, if default watching is problematic
-      aggregateTimeout: 300, // Delay before rebuilding
-    };
+    ];
+    
+    // Ensure poll and aggregateTimeout are numbers, or provide defaults if not set
+    config.watchOptions.poll = typeof config.watchOptions.poll === 'number' ? config.watchOptions.poll : 1000;
+    config.watchOptions.aggregateTimeout = typeof config.watchOptions.aggregateTimeout === 'number' ? config.watchOptions.aggregateTimeout : 300;
+    
     return config;
   },
 };
