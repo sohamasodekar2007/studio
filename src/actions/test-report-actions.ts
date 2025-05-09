@@ -66,15 +66,14 @@ function getAllQuestionsFromTestDefinition(testDef: GeneratedTest | null): TestQ
 
 // Helper: Calculate results - returns the full TestResultSummary
 function calculateResultsInternal(session: TestSession, testDef: GeneratedTest): TestResultSummary | null {
-    // console.log("Calculating results for session:", session.testId, "User:", session.userId);
     const allQuestions = getAllQuestionsFromTestDefinition(testDef);
      if (allQuestions.length === 0) {
          console.error(`Cannot calculate results for ${session.testId}: No questions in definition.`);
-         return null; // Cannot calculate results if definition has no questions
+         return null;
      }
       if (!session.answers) {
          console.error(`Cannot calculate results for ${session.testId}: Session answers are missing.`);
-         return null; // Cannot calculate results if answers are missing
+         return null;
      }
 
     let correctCount = 0;
@@ -89,18 +88,18 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
         if (!questionDef) {
              console.error(`Definition missing for question index ${index} in test ${session.testId}. Skipping calculation for this question.`);
              return {
-                questionId: userAns.questionId, // Use ID from user answer if definition missing
+                questionId: userAns.questionId,
                 questionIndex: index,
                 questionText: 'Error: Question definition missing',
                 questionImageUrl: null,
-                options: [], // No options available
+                options: [],
                 userAnswer: userAns.selectedOption,
                 correctAnswer: 'Error',
                 isCorrect: false,
                 status: userAns.status || QuestionStatusEnum.NotVisited,
                 explanationText: null,
                 explanationImageUrl: null,
-                marks: 0, // Assign 0 marks if definition is missing
+                marks: 0,
              };
         }
 
@@ -120,30 +119,35 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
                 incorrectCount++;
             }
         } else {
-            // Treat NotVisited, Unanswered, MarkedForReview as unanswered for scoring
             unansweredCount++;
         }
+        
+        // Robust image URL extraction
+        const qImageUrl = questionDef.question_image_url || (questionDef as any).image_url || null;
+        let explImageUrl = questionDef.explanation_image_url || null;
+        if (!explImageUrl && questionDef.explanation && typeof questionDef.explanation === 'string' && (questionDef.explanation.startsWith('/') || questionDef.explanation.startsWith('http'))) {
+            explImageUrl = questionDef.explanation; // Assume 'explanation' field might hold the path
+        }
+
 
         return {
-            questionId: questionDef.id || `q-${index}`, // Prefer definition ID
+            questionId: questionDef.id || `q-${index}`,
             questionIndex: index,
-            questionText: questionDef.question_text || questionDef.question || null, // Use specific text/question fields
-            questionImageUrl: questionDef.question_image_url || null,
-            options: questionDef.options || [], // Use options from definition
+            questionText: questionDef.question_text || questionDef.question || null,
+            questionImageUrl: qImageUrl,
+            options: questionDef.options || [],
             userAnswer: userAns.selectedOption,
             correctAnswer: correctAnswerKey,
             isCorrect,
             status: status,
-            explanationText: questionDef.explanation_text || questionDef.explanation || null, // Use specific text/explanation fields
-            explanationImageUrl: questionDef.explanation_image_url || null,
+            explanationText: (questionDef.explanation_text || (typeof questionDef.explanation === 'string' && !questionDef.explanation.includes('/') ? questionDef.explanation : null)) || null,
+            explanationImageUrl: explImageUrl,
             marks: currentMarks,
         };
     });
 
-    // Ensure total matches
     const calculatedUnanswered = allQuestions.length - correctCount - incorrectCount;
     if (calculatedUnanswered !== unansweredCount) {
-        console.warn(`Mismatch in unanswered count calculation for test ${session.testId}. Calculated: ${calculatedUnanswered}, Tracked: ${unansweredCount}. Using calculated value.`);
         unansweredCount = calculatedUnanswered;
     }
     attemptedCount = correctCount + incorrectCount;
@@ -170,9 +174,7 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
         percentage: percentage,
         timeTakenMinutes,
         detailedAnswers,
-        // pointsEarned will be calculated later
     };
-    // console.log("Calculated results summary (pre-points):", summary);
     return summary;
 }
 
@@ -200,28 +202,22 @@ export async function saveTestReport(
     }
 
     try {
-        // 1. Calculate initial results
         const resultsSummary = calculateResultsInternal(sessionData, testDefinition);
         if (!resultsSummary) {
             throw new Error('Failed to calculate test results.');
         }
 
-        // 2. Calculate points earned for this test
         const pointsEarned = calculatePointsForTest(resultsSummary);
-        resultsSummary.pointsEarned = pointsEarned; // Add points to the summary object
+        resultsSummary.pointsEarned = pointsEarned;
 
-        // 3. Update user's total points
         try {
             await updateUserPoints(sessionData.userId, pointsEarned);
         } catch (pointsError: any) {
             console.error(`Failed to update total points for user ${sessionData.userId} after test ${sessionData.testId}:`, pointsError);
-            // Log the error but continue saving the report
-            // Optionally, you could add a flag to the report indicating point update failure
         }
 
-        // 4. Save the complete report (including pointsEarned)
         const userReportDir = path.join(reportsBasePath, sessionData.userId);
-        await ensureDirExists(userReportDir); // Ensure user-specific directory exists
+        await ensureDirExists(userReportDir);
 
         const filename = `${resultsSummary.testCode}-${resultsSummary.userId}-${resultsSummary.attemptTimestamp}.json`;
         const filePath = path.join(userReportDir, filename);
@@ -230,7 +226,7 @@ export async function saveTestReport(
         await fs.writeFile(filePath, JSON.stringify(resultsSummary, null, 2), 'utf-8');
         console.log(`Test report saved successfully: ${filePath}`);
 
-        return { success: true, results: resultsSummary, filePath }; // Return results including points
+        return { success: true, results: resultsSummary, filePath };
 
     } catch (error: any) {
         console.error(`Error saving test report for user ${sessionData.userId}, test ${sessionData.testId}:`, error);
@@ -249,25 +245,22 @@ export async function saveTestReport(
 export async function getTestReport(
     userId: string,
     testCode: string,
-    attemptTimestamp: number | string // Accept number or string
+    attemptTimestamp: number | string
 ): Promise<TestResultSummary | null> {
     if (!userId || !testCode || !attemptTimestamp) {
         console.error("Missing parameters for getTestReport");
         return null;
     }
 
-    // Ensure attemptTimestamp is a string for filename consistency if passed as number
     const timestampStr = typeof attemptTimestamp === 'number' ? attemptTimestamp.toString() : attemptTimestamp;
 
     const filename = `${testCode}-${userId}-${timestampStr}.json`;
     const filePath = path.join(reportsBasePath, userId, filename);
-    // console.log(`Attempting to read report from: ${filePath}`);
 
     try {
-        await fs.access(filePath); // Check if file exists
+        await fs.access(filePath);
         const fileContent = await fs.readFile(filePath, 'utf-8');
         const reportData: TestResultSummary = JSON.parse(fileContent);
-         // console.log(`Report found and parsed for attempt ${timestampStr}`);
         return reportData;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
@@ -285,26 +278,21 @@ export async function getTestReport(
  * @param userId - The ID of the user.
  * @returns Promise resolving to an array of TestResultSummary objects (potentially partial if file parse fails), sorted newest first.
  */
-export async function getAllTestReportsForUser(userId: string): Promise<Array<Partial<TestResultSummary> & { attemptTimestamp: number }>> { // Ensure attemptTimestamp is returned
+export async function getAllTestReportsForUser(userId: string): Promise<Array<Partial<TestResultSummary> & { attemptTimestamp: number }>> {
     if (!userId) return [];
-    // console.log(`Fetching all reports for user: ${userId}`);
 
     const userReportDir = path.join(reportsBasePath, userId);
-    // State holds partial summaries as some data might be missing if parsing failed on backend
     const reports: Array<Partial<TestResultSummary> & { attemptTimestamp: number }> = [];
 
     try {
-        await ensureDirExists(userReportDir); // Ensure directory exists
+        await ensureDirExists(userReportDir);
         const files = await fs.readdir(userReportDir);
-        // Filename format: {testCode}-{userId}-{startTime}.json
         const jsonFiles = files.filter(file => file.endsWith('.json') && file.includes(`-${userId}-`));
-        // console.log(`Found ${jsonFiles.length} potential report files for user ${userId}.`);
 
         for (const file of jsonFiles) {
             const filePath = path.join(userReportDir, file);
-            // Extract timestamp from filename
             const parts = file.replace('.json', '').split('-');
-            const timestampStr = parts[parts.length - 1]; // Last part should be the timestamp
+            const timestampStr = parts[parts.length - 1];
             const timestamp = parseInt(timestampStr, 10);
 
             if (isNaN(timestamp)) {
@@ -315,20 +303,15 @@ export async function getAllTestReportsForUser(userId: string): Promise<Array<Pa
             try {
                 const fileContent = await fs.readFile(filePath, 'utf-8');
                 const reportData: TestResultSummary = JSON.parse(fileContent);
-                // Add the parsed timestamp back to the object
                 reports.push({ ...reportData, attemptTimestamp: timestamp });
             } catch (parseError) {
                 console.error(`Error parsing report file ${filePath}:`, parseError);
-                // Push partial data or skip? Pushing partial with timestamp for identification.
                 const parts = file.replace('.json','').split('-');
                 reports.push({ testCode: parts[0], userId, attemptTimestamp: timestamp });
             }
         }
 
-        // Sort by attemptTimestamp descending (newest first)
         reports.sort((a, b) => (b.attemptTimestamp ?? 0) - (a.attemptTimestamp ?? 0));
-
-         // console.log(`Returning ${reports.length} processed reports for user ${userId}.`);
         return reports;
 
     } catch (error: any) {
@@ -351,14 +334,12 @@ export async function getAllTestReportsForUser(userId: string): Promise<Array<Pa
  */
 export async function getAllReportsForTest(testCode: string): Promise<Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null }>> {
     if (!testCode) return [];
-    // console.log(`Fetching all reports for test code: ${testCode}`);
 
     const allReports: Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null }> = [];
 
     try {
-        await ensureDirExists(reportsBasePath); // Ensure base directory exists
+        await ensureDirExists(reportsBasePath);
         const userDirs = await fs.readdir(reportsBasePath, { withFileTypes: true });
-        // console.log(`Scanning ${userDirs.length} directories in ${reportsBasePath}`);
 
         for (const userDirEntry of userDirs) {
             if (userDirEntry.isDirectory()) {
@@ -366,7 +347,6 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
                 const userReportDir = path.join(reportsBasePath, userId);
                 try {
                     const files = await fs.readdir(userReportDir);
-                    // Filter for files matching the pattern: {testCode}-{userId}-{timestamp}.json
                     const relevantFiles = files.filter(file => file.startsWith(`${testCode}-${userId}-`) && file.endsWith('.json'));
 
                     for (const file of relevantFiles) {
@@ -374,9 +354,8 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
                         try {
                             const fileContent = await fs.readFile(filePath, 'utf-8');
                             const reportData: TestResultSummary = JSON.parse(fileContent);
-                             // Fetch user profile to include in the result
-                            const userProfile = await getUserById(userId); // getUserById returns Omit<UserProfile, 'password'>
-                            allReports.push({ ...reportData, user: userProfile }); // Add user profile (can be null if user deleted)
+                            const userProfile = await getUserById(userId);
+                            allReports.push({ ...reportData, user: userProfile });
                         } catch (parseError) {
                             console.error(`Error parsing report file ${filePath}:`, parseError);
                         }
@@ -385,11 +364,9 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
                     if (readDirError.code !== 'ENOENT') {
                          console.error(`Error reading directory ${userReportDir}:`, readDirError);
                     }
-                    // Continue to next user directory if one fails
                 }
             }
         }
-        // console.log(`Found ${allReports.length} total reports for test ${testCode}.`);
         return allReports;
 
     } catch (error: any) {

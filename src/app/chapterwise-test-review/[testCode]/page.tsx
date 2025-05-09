@@ -15,15 +15,14 @@ import { getTestReport } from '@/actions/test-report-actions';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-// Removed Script import as MathJax is loaded in layout.tsx
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
+import Script from 'next/script';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
-    [QuestionStatusEnum.Answered]: "default",
+    [QuestionStatusEnum.Answered]: "default", // Usually green, but use default primary here
     [QuestionStatusEnum.Unanswered]: "destructive",
     [QuestionStatusEnum.MarkedForReview]: "secondary",
     [QuestionStatusEnum.AnsweredAndMarked]: "default",
@@ -37,18 +36,21 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
-// Helper to construct correct image paths relative to the public folder
-const constructPublicImagePath = (relativePath: string | null | undefined): string | null => {
-    if (!relativePath) return null;
-    if (relativePath.startsWith('/question_bank_images/')) {
-        return relativePath;
+
+// Helper function to construct image paths relative to the public directory
+// Ensures that the path starts with a '/'
+const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
+    if (!imagePath) return null;
+    // If the path already seems like a public URL (starts with /), use it directly
+    if (imagePath.startsWith('/')) {
+        return imagePath;
     }
-    // This case should ideally not happen if paths are stored correctly
-    console.warn(`constructPublicImagePath: Encountered an unexpected image path format: ${relativePath}. It might not load correctly.`);
-    return null; // Or attempt to build a path if a pattern is known, but safer to return null
-
-
+    // This case should ideally not happen if test report generation is correct.
+    // It indicates the path in the report might not be a direct public URL.
+    console.warn(`constructPublicImagePath received an unexpected path format: ${imagePath}. Attempting to use as is, but may fail.`);
+    return imagePath; // Or handle error, e.g., return null
 };
+
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -73,13 +75,12 @@ export default function TestReviewPage() {
 
    const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
-           console.log("Attempting MathJax typesetting on review page...");
             const elements = document.querySelectorAll('.mathjax-content');
             if (elements.length > 0) {
-                 (window as any).MathJax.typesetPromise(Array.from(elements)) // Pass NodeList as Array
+                 (window as any).MathJax.typesetPromise(Array.from(elements))
                     .catch((err: any) => console.error("MathJax typeset error in review page (elements):", err));
             } else {
-                 (window as any).MathJax.typesetPromise() // Fallback for full page
+                 (window as any).MathJax.typesetPromise() // Fallback if no elements found, though unlikely needed
                     .catch((err: any) => console.error("MathJax typeset error in review page (fallback):", err));
             }
        } else {
@@ -155,32 +156,32 @@ export default function TestReviewPage() {
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const correctOptionKey = currentReviewQuestion?.correctAnswer;
+  const correctOptionKey = currentReviewQuestion?.correctAnswer?.replace('Option ', '').trim() ?? currentReviewQuestion?.correctAnswer;
   const userSelectedOptionKey = currentReviewQuestion?.userAnswer;
-  const isUserCorrect = !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentReviewQuestion?.status || QuestionStatusEnum.NotVisited;
+
 
   const renderContent = useCallback((context: 'question' | 'explanation') => {
     if (!currentReviewQuestion) return <p className="text-sm text-muted-foreground">Content not available.</p>;
 
     const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
-    const relativeImageUrl = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
-    const publicImagePath = constructPublicImagePath(relativeImageUrl);
+    const imagePathFromReport = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
+    const publicImagePath = constructPublicImagePath(imagePathFromReport);
 
     if (publicImagePath) {
       return (
-        <div className="relative w-full max-w-xl h-auto mx-auto my-4">
-          <Image
-            src={publicImagePath}
-            alt={context === 'question' ? "Question Image" : "Explanation Image"}
-            width={800}
-            height={600}
-            className="rounded-md border bg-card object-contain"
-            data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-            priority={currentQuestionReviewIndex < 3 && context === 'question'}
-            unoptimized
-            onError={(e) => { console.error(`Error loading image: ${publicImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
-          />
+         <div className="relative w-full max-w-xl h-auto mx-auto my-4">
+            <Image
+                src={publicImagePath}
+                alt={context === 'question' ? "Question Image" : "Explanation Image"}
+                width={800}
+                height={600}
+                className="rounded-md border bg-card object-contain"
+                data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
+                priority={currentQuestionReviewIndex < 3 && context === 'question'}
+                unoptimized
+                onError={(e) => { console.error(`Error loading image: ${publicImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
+            />
         </div>
       );
     } else if (textContent) {
@@ -188,11 +189,12 @@ export default function TestReviewPage() {
          <div
             className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
             dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-         ></div>
+         />
       );
     }
     return <p className="text-sm text-muted-foreground">{context === 'question' ? 'Question content not available.' : 'Explanation not available.'}</p>;
   }, [currentReviewQuestion, currentQuestionReviewIndex]);
+
 
   const renderOptions = useCallback(() => {
     if (!currentReviewQuestion || !currentReviewQuestion.options) return null;
@@ -250,8 +252,9 @@ export default function TestReviewPage() {
         toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
         return;
      }
-     const subject = currentReviewQuestion.questionText ? (currentReviewQuestion as any).subject : (testReport as ChapterwiseTestJson).test_subject?.[0] || 'Unknown Subject';
-     const lesson = currentReviewQuestion.questionText ? (currentReviewQuestion as any).lesson : (testReport as ChapterwiseTestJson).lesson || testReport.testName || 'Unknown Lesson';
+     const subject = (currentReviewQuestion as any).subject || (testReport as ChapterwiseTestJson)?.test_subject?.[0] || 'Unknown Subject';
+     const lesson = (currentReviewQuestion as any).lesson || (testReport as ChapterwiseTestJson)?.lesson || testReport.testName || 'Unknown Lesson';
+
 
      const questionData: BookmarkedQuestion = {
          questionId: currentReviewQuestion.questionId,
@@ -291,16 +294,19 @@ export default function TestReviewPage() {
   if (isLoading || authLoading) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <Skeleton className="h-8 w-1/3 mb-4" />
+        <Skeleton className="h-8 w-1/4 mb-4" />
         <Skeleton className="h-10 w-full mb-6" />
         <Card>
           <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <Skeleton className="h-48 w-full mb-4" />
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
-          <CardFooter className="flex justify-between"><Skeleton className="h-10 w-24" /><Skeleton className="h-10 w-24" /></CardFooter>
+          <CardFooter className="flex justify-between">
+            <Skeleton className="h-10 w-24" />
+            <Skeleton className="h-10 w-24" />
+          </CardFooter>
         </Card>
       </div>
     );
@@ -338,8 +344,15 @@ export default function TestReviewPage() {
 
   return (
     <>
-      {/* MathJax script is loaded globally in layout.tsx, no need to load it here again */}
-      <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
+      <Script
+        id="mathjax-script-review"
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+             typesetMathJax();
+        }}
+      />
+    <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
@@ -383,7 +396,7 @@ export default function TestReviewPage() {
             )}
           </CardContent>
 
-          <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t px-4 sm:px-6">
+           <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t px-4 sm:px-6">
             <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-start">
               <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
                 <Bookmark className="mr-2 h-4 w-4" />
