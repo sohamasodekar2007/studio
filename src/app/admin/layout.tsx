@@ -2,7 +2,7 @@
 'use client';
 
 import { AuthProvider } from '@/context/auth-context';
-import { SidebarProvider } from '@/components/ui/sidebar'; // Import SidebarProvider
+import { SidebarProvider } from '@/components/ui/sidebar';
 import AdminLayoutContent from '@/components/admin/admin-layout';
 
 export default function AdminRootLayout({
@@ -12,7 +12,8 @@ export default function AdminRootLayout({
 }>) {
   return (
     <AuthProvider>
-      <SidebarProvider defaultOpen> {/* Ensure SidebarProvider wraps AdminLayoutContent */}
+      {/* Admin routes have their own SidebarProvider instance */}
+      <SidebarProvider defaultOpen>
         <AdminLayoutContent>{children}</AdminLayoutContent>
       </SidebarProvider>
     </AuthProvider>

@@ -6,11 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, Award, Trophy, User } from 'lucide-react';
+import { AlertTriangle, Award, Trophy, User, Medal, Gem, ShieldCheck } from 'lucide-react'; // Added Medal, Gem
 import type { UserProfile } from '@/types';
 import type { UserPoints } from '@/actions/points-actions';
 import { getAllUserPoints } from '@/actions/points-actions'; // Action to get all points
 import { readUsers } from '@/actions/user-actions'; // Action to get user details
+import { useAuth } from '@/context/auth-context';
 
 interface LeaderboardEntry extends UserPoints {
     rank: number;
@@ -18,6 +19,7 @@ interface LeaderboardEntry extends UserPoints {
 }
 
 export default function LeaderboardPage() {
+    const { user: currentUser, loading: authLoading } = useAuth();
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -64,11 +66,13 @@ export default function LeaderboardPage() {
         fetchLeaderboard();
     }, []);
 
-    const getInitials = (name?: string | null, email?: string | null) => {
-        if (name) return name.charAt(0).toUpperCase();
-        // If no name, fallback to email initial, but email is now removed from display
-        // if (email) return email.charAt(0).toUpperCase();
-        return <User className="h-4 w-4"/>; // Generic fallback
+    const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4"/>;
+
+    const getRankIcon = (rank: number) => {
+        if (rank === 1) return <Trophy className="h-4 w-4 inline text-yellow-400 mr-1.5" />;
+        if (rank === 2) return <Medal className="h-4 w-4 inline text-gray-400 mr-1.5" />;
+        if (rank === 3) return <Gem className="h-4 w-4 inline text-orange-400 mr-1.5" />;
+        return <span className="font-semibold mr-1.5 w-4 inline-block text-center">{rank}</span>;
     }
 
 
@@ -80,19 +84,23 @@ export default function LeaderboardPage() {
                 <p className="text-muted-foreground">See how you rank against other students based on points earned!</p>
             </div>
 
-            <Card>
+            <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle>Top Students</CardTitle>
-                    <CardDescription>Ranking based on total points accumulated from tests and DPPs.</CardDescription>
+                    <CardDescription>Ranking based on total points accumulated from tests and DPPs. Admins are excluded.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? (
+                    {isLoading || authLoading ? (
                         <div className="space-y-2">
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
+                            {Array.from({ length: 10 }).map((_, i) => (
+                                <div key={i} className="flex items-center justify-between p-3 border-b">
+                                    <div className="flex items-center gap-3">
+                                        <Skeleton className="h-8 w-8 rounded-full" />
+                                        <Skeleton className="h-5 w-32" />
+                                    </div>
+                                    <Skeleton className="h-5 w-12" />
+                                </div>
+                            ))}
                         </div>
                     ) : error ? (
                          <div className="text-center py-10 text-destructive flex flex-col items-center gap-2">
@@ -107,38 +115,32 @@ export default function LeaderboardPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-[60px] text-center">Rank</TableHead>
+                                    <TableHead className="w-[80px] text-center">Rank</TableHead>
                                     <TableHead>User</TableHead>
                                     <TableHead className="text-right">Total Points</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {leaderboard.map((entry) => {
-                                    // Construct avatar source using fallback logic
-                                    const avatarSrc = entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : `https://avatar.vercel.sh/${entry.userId}.png`; // Fallback to userId for vercel avatar
+                                    const avatarSrc = entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : `https://avatar.vercel.sh/${entry.userId}.png?size=32`;
+                                    const isCurrentUser = currentUser?.id === entry.userId;
                                     return (
-                                        <TableRow key={entry.userId}>
+                                        <TableRow key={entry.userId} className={isCurrentUser ? "bg-primary/10" : ""}>
                                             <TableCell className="font-medium text-center">
-                                                {entry.rank === 1 && <Award className="h-4 w-4 inline text-yellow-500 mr-1" />}
-                                                {entry.rank === 2 && <Award className="h-4 w-4 inline text-gray-400 mr-1" />}
-                                                {entry.rank === 3 && <Award className="h-4 w-4 inline text-orange-400 mr-1" />}
-                                                {entry.rank}
+                                                {getRankIcon(entry.rank)}
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-8 w-8">
                                                         <AvatarImage src={avatarSrc} alt={entry.userProfile?.name || 'User'} />
-                                                        <AvatarFallback>{getInitials(entry.userProfile?.name, entry.userProfile?.email)}</AvatarFallback>
+                                                        <AvatarFallback>{getInitials(entry.userProfile?.name)}</AvatarFallback>
                                                     </Avatar>
                                                     <div>
-                                                        {/* Display only the name */}
-                                                        <p className="font-medium text-sm truncate">{entry.userProfile?.name || 'Anonymous User'}</p>
-                                                        {/* Removed email display */}
-                                                        {/* <p className="text-xs text-muted-foreground truncate">{entry.userProfile?.email || 'No Email'}</p> */}
+                                                        <p className={`font-medium text-sm truncate ${isCurrentUser ? 'text-primary' : ''}`}>{entry.userProfile?.name || 'Anonymous User'} {isCurrentUser && '(You)'}</p>
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-right font-semibold text-lg">{entry.totalPoints}</TableCell>
+                                            <TableCell className={`text-right font-semibold text-lg ${isCurrentUser ? 'text-primary' : ''}`}>{entry.totalPoints}</TableCell>
                                         </TableRow>
                                     );
                                 })}

@@ -1,3 +1,4 @@
+// src/app/auth/login/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react"; // Removed GraduationCap
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
@@ -36,7 +37,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     if (initializationError) {
-        toast({ variant: 'destructive', title: 'System Error', description: "Authentication system not ready. Please contact support.", duration: 7000 });
+        toast({ variant: 'destructive', title: 'System Error', description: initializationError, duration: 7000 });
         return;
     }
     setIsLoading(true);
@@ -58,17 +59,24 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="space-y-1 text-center">
            <div className="flex justify-center mb-4">
-             {/* EduNexus Logo */}
               <Image
-                  src="/EduNexus-logo-black.jpg" // Assuming black logo for light theme
+                  src="/EduNexus-logo-black.jpg" // Use black logo for light theme default
                   alt="EduNexus Logo"
                   width={48}
                   height={48}
-                  className="h-12 w-12" // Adjust size as needed
+                  className="h-12 w-12 dark:hidden" // Hide on dark mode
+                  unoptimized
               />
+             <Image
+                src="/EduNexus-logo-white.jpg" // White logo for dark theme
+                alt="EduNexus Logo"
+                width={48} 
+                height={48}
+                className="h-12 w-12 hidden dark:block" // Show only on dark mode
+                unoptimized 
+            />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back!</CardTitle>
-          {/* Updated description */}
           <CardDescription>Enter your email below to access your EduNexus account.</CardDescription>
         </CardHeader>
         <Form {...form}>
@@ -108,7 +116,7 @@ export default function LoginPage() {
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               <Button type="submit" className="w-full" disabled={combinedLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {combinedLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Log in
               </Button>
               <div className="text-center text-sm mt-2">
