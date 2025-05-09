@@ -30,7 +30,7 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit for profile pictures
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 // Generate dynamic year options for Target Year
-const getCurrentAndFutureYears = (count = 3) => {
+const getCurrentAndFutureYears = (count = 5) => { // Increased count to 5 for more options
   const currentYear = new Date().getFullYear();
   return Array.from({ length: count }, (_, i) => (currentYear + i).toString());
 };
@@ -39,8 +39,7 @@ const getCurrentAndFutureYears = (count = 3) => {
 // --- Profile Form Schema ---
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  // Phone number is now disabled, so no validation needed here, but keep for form structure
-  phone: z.string().optional(),
+  phone: z.string().optional(), // Phone is disabled, validation might not be strictly needed if not sent
   academicStatus: z.enum(academicStatuses, { required_error: "Academic status is required." }).nullable(),
   targetYear: z.string({ required_error: "Target year is required." }).min(4, "Target year is required.").nullable(),
   avatarFile: z.any()
@@ -162,12 +161,14 @@ export default function SettingsPage() {
   };
 
   const removeAvatar = () => {
-    profileForm.setValue("avatarFile", null);
-    setAvatarPreview(null);
-    if (avatarInputRef.current) avatarInputRef.current.value = "";
+    profileForm.setValue("avatarFile", null); // Ensure form field is cleared
+    setAvatarPreview(null); // Clear preview
+    if (avatarInputRef.current) avatarInputRef.current.value = ""; // Reset file input
     profileForm.clearErrors("avatarFile");
+    // No need to call profileForm.setValue('removeAvatar', true) here, this flag will be set in FormData
     toast({ title: "Avatar Marked for Removal", description: "Click 'Save Profile Changes' to confirm." });
   };
+
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
     if (!user || !fullUserProfile || !fullUserProfile.id) {
@@ -176,50 +177,34 @@ export default function SettingsPage() {
       return;
     }
     setIsLoadingProfile(true);
-    
+
     const formData = new FormData();
+    formData.append('userId', user.id); // Pass userId separately or include in formData
     formData.append('name', data.name);
-    // Phone is disabled, so we don't need to append it if it wasn't changed.
-    // However, updateUserInJson will use existing if not provided.
-    // For this example, we assume the form structure ensures phone is available if needed.
-    formData.append('phone', fullUserProfile.phone || ''); // Send current phone if not editable, or make it editable and send data.phone
-    
+    // Phone is disabled and not intended to be updated by the user from this form
+    // If it were editable: formData.append('phone', data.phone || ''); 
     if (data.academicStatus) formData.append('class', data.academicStatus);
     if (data.targetYear) formData.append('targetYear', data.targetYear);
 
-    let removeAvatarFlag = false;
     if (data.avatarFile instanceof File) {
       formData.append('avatarFile', data.avatarFile);
     } else if (avatarPreview === null && fullUserProfile.avatarUrl) {
       // This means the user explicitly removed the avatar without uploading a new one
       formData.append('removeAvatar', 'true');
-      removeAvatarFlag = true;
     }
+    // Note: model and expiry_date are not part of this form, they are managed by admin
 
     try {
-      const updatePayload: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt'>> & { avatarFile?: File | null, removeAvatar?: boolean } = {
-        name: data.name,
-        class: data.academicStatus,
-        targetYear: data.targetYear,
-        // Phone is intentionally not sent here if it's disabled.
-        // If you want to allow phone update, add: phone: data.phone
-      };
-
-      if (data.avatarFile instanceof File) {
-        updatePayload.avatarFile = data.avatarFile;
-      } else if (removeAvatarFlag) {
-        updatePayload.removeAvatar = true;
-      }
-      
-      const updateResult = await updateUserInJson(user.id, updatePayload);
+      // Pass FormData directly to the server action
+      const updateResult = await updateUserInJson(formData);
 
       if (!updateResult.success || !updateResult.user) {
         throw new Error(updateResult.message || "Failed to save profile updates.");
       }
 
-      await refreshUser(); // Refresh context to reflect changes everywhere
-      updateContextUserData(updateResult.user); // Update context for immediate reflection
-      setFullUserProfile(updateResult.user); // Update local state for this component
+      await refreshUser();
+      updateContextUserData(updateResult.user);
+      setFullUserProfile(updateResult.user);
       toast({ title: "Profile Updated", description: "Your profile info has been saved." });
       profileForm.reset({
         name: updateResult.user.name || "",
@@ -233,13 +218,15 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error("Profile update failed:", error);
       toast({ variant: 'destructive', title: "Update Failed", description: error.message });
-       if (data.avatarFile && !(avatarPreview === null && fullUserProfile?.avatarUrl)) {
+      // Revert preview if upload failed but an image was selected
+      if (data.avatarFile && !(avatarPreview === null && fullUserProfile?.avatarUrl)) {
            setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null);
       }
     } finally {
       setIsLoadingProfile(false);
     }
   };
+
 
   const onPasswordSubmit = async (data: PasswordFormValues) => {
     if (!user || !user.id || !user.email) {

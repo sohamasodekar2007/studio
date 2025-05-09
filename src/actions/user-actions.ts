@@ -10,13 +10,12 @@ import crypto from 'crypto'; // Import crypto for hashing
 
 const SALT_ROUNDS = 10;
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
-// Avatars are now stored in public/avatars for direct serving
 const publicAvatarsPath = path.join(process.cwd(), 'public', 'avatars');
 const dataBasePath = path.join(process.cwd(), 'src', 'data');
 
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
-const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234'; // Default password for primary admin
+const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234';
 
 async function ensureDirExists(dirPath: string): Promise<boolean> {
   try {
@@ -61,7 +60,6 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
         if (!await ensureDirExists(dataBasePath)) {
              throw new Error(`Failed to create base data directory: ${dataBasePath}`);
         }
-        // Ensure public/avatars directory exists
         if (!await ensureDirExists(publicAvatarsPath)) { 
             throw new Error(`Failed to create public avatars directory: ${publicAvatarsPath}`);
         }
@@ -228,10 +226,9 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
   }
 }
 
-// Updated to save to public/avatars
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
-        if (!await ensureDirExists(publicAvatarsPath)) { // Save to public path
+        if (!await ensureDirExists(publicAvatarsPath)) {
              console.error(`Failed to ensure public avatars directory exists: ${publicAvatarsPath}`);
              return null;
         }
@@ -239,21 +236,20 @@ async function saveAvatarLocally(userId: string, avatarFile: File): Promise<stri
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         const extension = path.extname(avatarFile.name).substring(1) || 'png';
         const filename = `avatar-${userId}-${uniqueSuffix}.${extension}`;
-        const filePath = path.join(publicAvatarsPath, filename); // Path within public
+        const filePath = path.join(publicAvatarsPath, filename);
 
         await fs.writeFile(filePath, fileBuffer);
         console.log(`Avatar saved to public path for user ${userId}: ${filePath}`);
-        return filename; // Return only the filename
+        return filename;
     } catch (error) {
         console.error(`Error saving avatar locally for user ${userId}:`, error);
         return null;
     }
 }
 
-// Updated to delete from public/avatars
 async function deleteAvatarLocally(filename: string): Promise<boolean> {
     try {
-        const filePath = path.join(publicAvatarsPath, filename); // Path within public
+        const filePath = path.join(publicAvatarsPath, filename);
         await fs.access(filePath); 
         await fs.unlink(filePath);
         console.log(`Deleted local public avatar: ${filePath}`);
@@ -336,10 +332,16 @@ export async function addUserToJson(
 }
 
 export async function updateUserInJson(
-    userId: string,
-    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'totalPoints' | 'email' | 'role'>> & { avatarFile?: File | null, removeAvatar?: boolean }
+    formData: FormData
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
+        const userId = formData.get('userId') as string;
+        const name = formData.get('name') as string | null;
+        const academicStatus = formData.get('class') as AcademicStatus | null;
+        const targetYear = formData.get('targetYear') as string | null;
+        const avatarFile = formData.get('avatarFile') as File | null;
+        const removeAvatar = formData.get('removeAvatar') === 'true';
+
         if (!userId || typeof userId !== 'string') {
             return { success: false, message: "Invalid user ID provided for update." };
         }
@@ -352,10 +354,6 @@ export async function updateUserInJson(
         }
 
         const existingUser = users[userIndex];
-        // Email and role cannot be changed through this function
-        // They are managed by updateUserRole and specific email change logic (if implemented)
-
-        const { avatarFile, removeAvatar, ...otherUpdates } = updatedData;
         let newAvatarFilename = existingUser.avatarUrl || null;
 
         if (avatarFile instanceof File) {
@@ -367,31 +365,20 @@ export async function updateUserInJson(
             newAvatarFilename = null;
         }
         
-        // Apply other updatable fields
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
-            name: otherUpdates.name !== undefined ? otherUpdates.name : existingUser.name,
-            phone: otherUpdates.phone !== undefined ? otherUpdates.phone : existingUser.phone, // Phone is now NOT editable via settings page
-            class: otherUpdates.class !== undefined ? otherUpdates.class : existingUser.class,
-            model: otherUpdates.model !== undefined ? otherUpdates.model : existingUser.model,
-            expiry_date: otherUpdates.expiry_date !== undefined 
-                            ? (otherUpdates.expiry_date instanceof Date ? otherUpdates.expiry_date.toISOString() : otherUpdates.expiry_date) 
-                            : existingUser.expiry_date,
-            targetYear: otherUpdates.targetYear !== undefined ? otherUpdates.targetYear : existingUser.targetYear,
+            name: name !== undefined ? name : existingUser.name,
+            class: academicStatus !== undefined ? academicStatus : existingUser.class,
+            targetYear: targetYear !== undefined ? targetYear : existingUser.targetYear,
             avatarUrl: newAvatarFilename,
-            // Preserve existing email and role
-            email: existingUser.email,
-            role: existingUser.role,
+            // Fields not updated through this specific form action
+            // phone: existingUser.phone,
+            // model: existingUser.model,
+            // expiry_date: existingUser.expiry_date,
+            // email: existingUser.email,
+            // role: existingUser.role,
         };
-         // Validate model and expiry for non-admin users
-         if (userWithUpdatesApplied.role === 'User') {
-            if (userWithUpdatesApplied.model === 'free') {
-                userWithUpdatesApplied.expiry_date = null;
-            } else if (!userWithUpdatesApplied.expiry_date) {
-                 return { success: false, message: "Expiry date is required for paid models." };
-            }
-        }
-
+        // Note: Model, expiry_date, email, role updates should be handled by separate dedicated admin actions for clarity and security.
 
         users[userIndex] = userWithUpdatesApplied;
         const success = await writeUsers(users);
@@ -402,7 +389,7 @@ export async function updateUserInJson(
             return { success: false, message: 'Failed to write users file.' };
         }
     } catch (error: any) {
-        console.error(`Error in updateUserInJson for ${userId}:`, error);
+        console.error(`Error in updateUserInJson:`, error);
         return { success: false, message: `Server error: ${error.message || 'Could not update user.'}` };
     }
 }
@@ -446,10 +433,7 @@ export async function updateUserRole(
             userToUpdate.model = 'combo';
             userToUpdate.expiry_date = '2099-12-31T00:00:00.000Z';
         } else { 
-            // When demoting to User, revert to 'free' if they were 'combo'
-            // Or keep their existing plan if it was 'chapterwise' or 'full_length'
-            // For simplicity, we'll set to 'free' here. More complex logic can be added.
-            if (userToUpdate.model === 'combo' || userToUpdate.model === 'Admin') { // 'Admin' model type is legacy, ensure it's handled
+            if (userToUpdate.model === 'combo' || (userToUpdate.model as any) === 'Admin') { 
                 userToUpdate.model = 'free';
                 userToUpdate.expiry_date = null;
             }
