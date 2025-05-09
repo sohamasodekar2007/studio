@@ -1,0 +1,51 @@
+[
+  {
+    "questionText": "What is the value of $$\\int x^2 dx$$?",
+    "options": {
+      "A": "$$\\frac{x^3}{3} + C$$",
+      "B": "$$x^3 + C$$",
+      "C": "$$2x + C$$",
+      "D": "$$\\frac{x^2}{2} + C$$"
+    },
+    "correctAnswer": "A",
+    "explanationText": "The integral of $$x^n$$ is $$\\frac{x^{n+1}}{n+1} + C$$. Here, n=2, so the integral is $$\\frac{x^3}{3} + C$$.",
+    "marks": 2,
+    "difficulty": "Medium",
+    "tags": ["Calculus", "Integration"],
+    "classLevel": "12"
+  },
+  {
+    "questionText": "If a force vector is given by $$\\vec{F} = (3\\hat{i} + 4\\hat{j}) N$$, what is its magnitude?",
+    "options": {
+      "A": "3 N",
+      "B": "4 N",
+      "C": "5 N",
+      "D": "7 N"
+    },
+    "correctAnswer": "C",
+    "explanationText": "The magnitude of a vector $$\\vec{V} = a\\hat{i} + b\\hat{j}$$ is $$\\sqrt{a^2 + b^2}$$. So, for $$\\vec{F}$$, magnitude = $$\\sqrt{3^2 + 4^2} = \\sqrt{9 + 16} = \\sqrt{25} = 5 N$$.",
+    "marks": 1,
+    "difficulty": "Easy",
+    "tags": ["Vectors", "Physics"],
+    "classLevel": "11",
+    "isPyq": true,
+    "pyqExam": "JEE Main",
+    "pyqDate": "2023-01-25",
+    "pyqShift": "S1"
+  },
+  {
+    "questionText": "What is the formula for kinetic energy?",
+    "options": {
+        "A": "$$E = mc^2$$",
+        "B": "$$K = \\frac{1}{2}mv^2$$",
+        "C": "$$P = mv$$",
+        "D": "$$F = ma$$"
+    },
+    "correctAnswer": "B",
+    "explanationText": "Kinetic energy (K) is given by the formula $$K = \\frac{1}{2}mv^2$$, where m is mass and v is velocity.",
+    "marks": 1,
+    "difficulty": "Easy",
+    "tags": ["Physics", "Mechanics", "Energy"],
+    "classLevel": "11"
+  }
+]

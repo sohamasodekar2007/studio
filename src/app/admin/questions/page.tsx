@@ -14,13 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"; // Added FormDescription
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from '@/hooks/use-toast';
-import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon, FileJson, FileUp } from "lucide-react";
+import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon, FileJson, FileUp, AlignLeft, FileType } from "lucide-react";
 import {
     type QuestionBankItem, questionTypes, difficultyLevels, exams, classLevels, type QuestionType,
     pyqShifts, type PyqShift, type ExamOption
@@ -108,9 +108,8 @@ const bulkUploadSchema = z.object({
     subject: z.string().min(1, "Subject is required"),
     lesson: z.string().min(1, "Lesson name is required (can be new)"),
     examType: z.enum(exams, { required_error: "Default exam type for questions in file is required" }),
-    jsonFile: z.any().refine(file => file instanceof File, "JSON file is required.")
-        .refine(file => file instanceof File && file.type === ACCEPTED_JSON_TYPE, "File must be a JSON.")
-        .refine(file => file instanceof File && file.size <= MAX_FILE_SIZE * 5, `JSON file size max ${MAX_FILE_SIZE*5 /1024/1024}MB.`), // 20MB for JSON
+    jsonFile: z.any().optional(), // File input is optional
+    // jsonInputText: z.string().optional(), // We'll handle this via component state and logic, not directly in Zod for now
     isAllPyq: z.boolean().default(false).optional(),
     pyqExamForAll: z.enum(exams).optional(),
     pyqYearForAll: z.string().optional().refine(year => !year || /^\d{4}$/.test(year), "Invalid year format (YYYY)."),
@@ -136,6 +135,7 @@ export default function AdminQuestionBankPage() {
   const [bulkLessonPopoverOpen, setBulkLessonPopoverOpen] = useState(false);
 
   const [uploadMode, setUploadMode] = useState<'single' | 'bulk'>('single');
+  const [jsonInputText, setJsonInputText] = useState(''); // State for JSON textarea
 
   const singleForm = useForm<SingleQuestionFormValues>({
     resolver: zodResolver(singleQuestionSchema),
@@ -360,44 +360,63 @@ export default function AdminQuestionBankPage() {
   };
 
   const onBulkSubmit = async (data: BulkUploadFormValues) => {
-      setIsLoading(true);
-      try {
-          const formData = new FormData();
-          formData.append('subject', data.subject);
-          formData.append('lesson', data.lesson);
-          formData.append('examType', data.examType);
-          if (data.jsonFile instanceof File) {
-            formData.append('jsonFile', data.jsonFile);
-          } else {
-            throw new Error("JSON File is missing or invalid.");
-          }
-          formData.append('isAllPyq', data.isAllPyq ? 'true' : 'false');
-          if (data.isAllPyq) {
-              if (data.pyqExamForAll) formData.append('pyqExamForAll', data.pyqExamForAll);
-              if (data.pyqYearForAll) formData.append('pyqYearForAll', data.pyqYearForAll);
-          }
+    setIsLoading(true);
+    try {
+        const formData = new FormData();
+        formData.append('subject', data.subject);
+        formData.append('lesson', data.lesson);
+        formData.append('examType', data.examType);
+        formData.append('isAllPyq', data.isAllPyq ? 'true' : 'false');
+        if (data.isAllPyq) {
+            if (data.pyqExamForAll) formData.append('pyqExamForAll', data.pyqExamForAll);
+            if (data.pyqYearForAll) formData.append('pyqYearForAll', data.pyqYearForAll);
+        }
 
-          const result = await addBulkQuestionsToBank(formData);
+        let jsonFileToUpload: File | null = null;
 
-          if (result.success) {
-              toast({
-                  title: "Bulk Upload Successful!",
-                  description: `${result.questionsAdded} questions added. ${result.questionsFailed} failed.`,
-              });
-              bulkForm.reset();
-              if (jsonFileInputRef.current) jsonFileInputRef.current.value = "";
-              if (data.subject && !lessons.includes(data.lesson)) { // If a new lesson was implicitly created
-                fetchLessonsForSubject(data.subject, bulkForm);
-              }
-          } else {
-              throw new Error(result.message || "Bulk upload failed.");
-          }
-      } catch (error: any) {
-          console.error("Bulk upload failed:", error);
-          toast({ variant: "destructive", title: "Bulk Upload Failed", description: error.message });
-      } finally {
-          setIsLoading(false);
-      }
+        if (jsonInputText.trim()) {
+            try {
+                JSON.parse(jsonInputText); // Validate JSON structure
+                jsonFileToUpload = new File([jsonInputText], "bulk_input.json", { type: "application/json" });
+            } catch (e) {
+                toast({ variant: "destructive", title: "Invalid JSON", description: "The provided JSON text is not valid." });
+                setIsLoading(false);
+                return;
+            }
+        } else if (data.jsonFile instanceof File) {
+            jsonFileToUpload = data.jsonFile;
+        }
+
+        if (!jsonFileToUpload) {
+             toast({ variant: "destructive", title: "No JSON Data", description: "Please upload a JSON file or paste JSON content." });
+             setIsLoading(false);
+             return;
+        }
+
+        formData.append('jsonFile', jsonFileToUpload);
+
+        const result = await addBulkQuestionsToBank(formData);
+
+        if (result.success) {
+            toast({
+                title: "Bulk Upload Successful!",
+                description: `${result.questionsAdded} questions added. ${result.questionsFailed} failed.`,
+            });
+            bulkForm.reset();
+            setJsonInputText(''); // Clear textarea
+            if (jsonFileInputRef.current) jsonFileInputRef.current.value = "";
+            if (data.subject && !lessons.includes(data.lesson)) {
+              fetchLessonsForSubject(data.subject, bulkForm);
+            }
+        } else {
+            throw new Error(result.message || "Bulk upload failed.");
+        }
+    } catch (error: any) {
+        console.error("Bulk upload failed:", error);
+        toast({ variant: "destructive", title: "Bulk Upload Failed", description: error.message });
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   return (
@@ -442,7 +461,7 @@ export default function AdminQuestionBankPage() {
                     )}
                 >
                      <RadioGroupItem value="bulk" id="bulk-mode" className="sr-only" />
-                    Bulk Upload (JSON)
+                    Bulk Upload
                 </Label>
             </RadioGroup>
         </div>
@@ -492,8 +511,11 @@ export default function AdminQuestionBankPage() {
                 <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-8">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><FileUp className="h-5 w-5 text-primary"/> Bulk Question Upload (JSON)</CardTitle>
-                            <CardDescription>Upload multiple questions at once using a JSON file. Ensure the JSON format is correct. Download sample JSON <a href="/sample-bulk-questions.json" download className="text-primary underline hover:text-primary/80">here</a>.</CardDescription>
+                            <CardTitle className="flex items-center gap-2"><FileType className="h-5 w-5 text-primary"/> Bulk Question Upload</CardTitle>
+                            <CardDescription>
+                                Upload multiple text-based questions using a JSON file or paste JSON content.
+                                Download sample JSON for text questions <a href="/sample-bulk-text-questions.json" download className="text-primary underline hover:text-primary/80">here</a>.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <FormField control={bulkForm.control} name="subject" render={({ field }) => (<FormItem><FormLabel>Subject *</FormLabel><Select onValueChange={(value) => { field.onChange(value); }} value={field.value} disabled={isLoading || isLoadingSubjects}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} /></SelectTrigger></FormControl><SelectContent>{subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -505,10 +527,27 @@ export default function AdminQuestionBankPage() {
                                 <FormField control={bulkForm.control} name="pyqExamForAll" render={({ field }) => ( <FormItem><FormLabel>PYQ Exam (for all) *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select PYQ Exam" /></SelectTrigger></FormControl><SelectContent>{exams.map((exam) => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem> )} />
                                 <FormField control={bulkForm.control} name="pyqYearForAll" render={({ field }) => ( <FormItem><FormLabel>PYQ Year (for all) *</FormLabel><FormControl><Input type="text" placeholder="YYYY" {...field} disabled={isLoading} maxLength={4} /></FormControl><FormMessage /></FormItem> )} />
                             </>)}
+                            
+                            {/* JSON Text Input Area */}
+                            <div className="md:col-span-2 space-y-2">
+                                <Label htmlFor="json-input-text">Paste JSON Content Here</Label>
+                                <Textarea
+                                    id="json-input-text"
+                                    placeholder="Paste your array of questions in JSON format here..."
+                                    value={jsonInputText}
+                                    onChange={(e) => setJsonInputText(e.target.value)}
+                                    rows={10}
+                                    disabled={isLoading}
+                                    className="font-mono text-xs"
+                                />
+                                <FormDescription>This will be used if no file is uploaded. Supports only text-based questions with MathJax syntax.</FormDescription>
+                            </div>
+                            
+                            <div className="md:col-span-2 flex items-center justify-center text-sm text-muted-foreground">OR</div>
 
                             <FormField control={bulkForm.control} name="jsonFile" render={({ field: { onChange, value, ...rest } }) => (
                                 <FormItem className="md:col-span-2">
-                                    <FormLabel>JSON File *</FormLabel>
+                                    <FormLabel>Upload JSON File</FormLabel>
                                     <FormControl>
                                         <Input
                                             type="file"
@@ -520,14 +559,14 @@ export default function AdminQuestionBankPage() {
                                         />
                                     </FormControl>
                                     <FormMessage />
-                                    <p className="text-xs text-muted-foreground">Max file size: {MAX_FILE_SIZE*5 /1024/1024}MB. Must be a valid JSON array of questions.</p>
+                                    <FormDescription>Max file size: {MAX_FILE_SIZE*5 /1024/1024}MB. Ensure it's a valid JSON array of questions.</FormDescription>
                                 </FormItem>
                             )} />
                         </CardContent>
                         <CardFooter>
                             <Button type="submit" disabled={isLoading}>
                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4"/>}
-                                Upload and Process JSON
+                                Upload and Process
                             </Button>
                         </CardFooter>
                     </Card>
