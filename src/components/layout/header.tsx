@@ -5,24 +5,24 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, HelpCircle, Loader2, Trophy, Bell, X } from 'lucide-react'; // Added Bell, X
+import { User, Settings, LogOut, HelpCircle, Loader2, Trophy, Bell, X } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import type { ChallengeInvite } from '@/types'; // Import ChallengeInvite type
-import { Badge } from '@/components/ui/badge'; // Import Badge component
+import type { ChallengeInvite } from '@/types';
+import { Badge } from '@/components/ui/badge';
 
 // Helper function to request notification permission
 const requestNotificationPermission = async () => {
-  if (!("Notification" in window)) {
+  if (typeof window !== 'undefined' && !("Notification" in window)) {
     console.log("This browser does not support desktop notification");
     return false;
-  } else if (Notification.permission === "granted") {
+  } else if (typeof window !== 'undefined' && Notification.permission === "granted") {
     return true;
-  } else if (Notification.permission !== "denied") {
+  } else if (typeof window !== 'undefined' && Notification.permission !== "denied") {
     const permission = await Notification.requestPermission();
     return permission === "granted";
   }
@@ -31,7 +31,7 @@ const requestNotificationPermission = async () => {
 
 // Helper function to display a browser notification
 const showBrowserNotification = (title: string, options?: NotificationOptions) => {
-  if (Notification.permission === "granted") {
+  if (typeof window !== 'undefined' && Notification.permission === "granted") {
     new Notification(title, options);
   }
 };
@@ -45,50 +45,69 @@ export function AppHeader() {
   const [pendingInvites, setPendingInvites] = useState<ChallengeInvite[]>([]);
   const [showNotificationDot, setShowNotificationDot] = useState(false);
   const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
+  const [actualPendingInvitesCount, setActualPendingInvitesCount] = useState(0); // For badge display
 
   const fetchPendingInvites = useCallback(async () => {
-    if (user?.id) {
+    if (user?.id && typeof window !== 'undefined') {
       try {
-        // In a real app, this would be an API call or a subscription
-        // For local storage simulation, we'll read from a key updated by the invites page
         const invitesJson = localStorage.getItem(`userChallengeInvites_${user.id}`);
         if (invitesJson) {
           const allInvites: ChallengeInvite[] = JSON.parse(invitesJson);
           const newPending = allInvites.filter(inv => inv.status === 'pending' && inv.expiresAt > Date.now());
           
-          // Check if there are new invites compared to what's already shown to avoid repeated notifications
-          const lastSeenInvitesCount = parseInt(localStorage.getItem(`lastSeenInvitesCount_${user.id}`) || '0', 10);
+          const lastSeenInvitesCount = parseInt(localStorage.getItem(`lastSeenInvitesCount_${user.id}_header`) || '0', 10);
+          const newUnseenInvites = newPending.length > lastSeenInvitesCount;
 
-          if (newPending.length > lastSeenInvitesCount && hasNotificationPermission) {
-            showBrowserNotification("New Challenge Invite!", { body: `You have ${newPending.length - lastSeenInvitesCount} new challenge invites.` });
-            toast({
-              title: "New Challenge Invite!",
-              description: `You have ${newPending.length - lastSeenInvitesCount} new challenge invites. Check the bell icon.`,
-              action: (
-                <Button variant="outline" size="sm" asChild onClick={() => router.push('/challenges/invites')}>
-                  <Link href="/challenges/invites">View</Link>
-                </Button>
-              )
-            });
+          if (newUnseenInvites && newPending.length > 0 && hasNotificationPermission) {
+            const newInviteCount = newPending.length - lastSeenInvitesCount;
+             if (newInviteCount > 0) { // Only show if there are genuinely new invites
+                showBrowserNotification("New Challenge Invite!", { 
+                    body: `You have ${newInviteCount} new challenge invite${newInviteCount > 1 ? 's' : ''}.`,
+                    icon: '/EduNexus-logo-black.jpg' 
+                });
+                toast({
+                  title: "New Challenge Invite!",
+                  description: `You have ${newInviteCount} new challenge invite${newInviteCount > 1 ? 's' : ''}. Check the bell icon.`,
+                  action: (
+                    <Button variant="outline" size="sm" asChild onClick={() => router.push('/challenges/invites')}>
+                      <Link href="/challenges/invites">View</Link>
+                    </Button>
+                  )
+                });
+            }
           }
           setPendingInvites(newPending);
-          setShowNotificationDot(newPending.length > 0);
-          // localStorage.setItem(`lastSeenInvitesCount_${user.id}`, newPending.length.toString()); // Update only when dropdown is opened
+          setActualPendingInvitesCount(newPending.length); // Update count for badge
+          // Show dot if there are new invites that haven't been seen by opening the dropdown
+          setShowNotificationDot(newPending.length > 0 && newPending.length > lastSeenInvitesCount);
+        } else {
+            setPendingInvites([]);
+            setActualPendingInvitesCount(0);
+            setShowNotificationDot(false);
         }
       } catch (error) {
         console.error("Error fetching simulated pending invites:", error);
+        setPendingInvites([]);
+        setActualPendingInvitesCount(0);
+        setShowNotificationDot(false);
       }
     }
   }, [user?.id, toast, router, hasNotificationPermission]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') { // Ensure this runs only on client
-        requestNotificationPermission().then(setHasNotificationPermission);
+    if (typeof window !== 'undefined') {
+        requestNotificationPermission().then(permissionGranted => {
+            setHasNotificationPermission(permissionGranted);
+            if (user?.id && permissionGranted) { // Fetch immediately if permission granted
+                fetchPendingInvites();
+            }
+        });
         
         if (user?.id) {
+          // Initial fetch
           fetchPendingInvites();
           // Simulate polling for new invites
-          const intervalId = setInterval(fetchPendingInvites, 30000); // Check every 30 seconds
+          const intervalId = setInterval(fetchPendingInvites, 15000); // Check every 15 seconds
           return () => clearInterval(intervalId);
         }
     }
@@ -126,10 +145,10 @@ export function AppHeader() {
   const avatarKey = user?.avatarUrl || user?.email || user?.id;
 
   const handleBellClick = () => {
-    // When bell is clicked, mark current invites as seen
     if (user?.id) {
-      localStorage.setItem(`lastSeenInvitesCount_${user.id}`, pendingInvites.length.toString());
-      setShowNotificationDot(false); // Hide dot immediately
+      // When bell dropdown is opened, mark current pending invites as "seen" for the dot purpose
+      localStorage.setItem(`lastSeenInvitesCount_${user.id}_header`, pendingInvites.length.toString());
+      setShowNotificationDot(false); // Hide dot immediately as user is viewing them
     }
   };
 
@@ -168,7 +187,7 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full">
                 <Bell className="h-5 w-5" />
-                {showNotificationDot && (
+                {showNotificationDot && actualPendingInvitesCount > 0 && (
                   <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
@@ -179,13 +198,13 @@ export function AppHeader() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
               <DropdownMenuLabel className="flex justify-between items-center">
-                Notifications
-                {pendingInvites.length > 0 && <Badge variant="destructive">{pendingInvites.length}</Badge>}
+                Challenge Invites
+                {actualPendingInvitesCount > 0 && <Badge variant="destructive">{actualPendingInvitesCount}</Badge>}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               {pendingInvites.length === 0 ? (
                 <DropdownMenuItem disabled className="text-sm text-muted-foreground text-center py-4">
-                  No new notifications
+                  No new challenge invites
                 </DropdownMenuItem>
               ) : (
                 pendingInvites.map(invite => (
@@ -271,3 +290,4 @@ export function AppHeader() {
     </header>
   );
 }
+

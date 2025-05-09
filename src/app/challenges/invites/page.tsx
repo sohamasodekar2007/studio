@@ -8,12 +8,14 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell, Check, X, Loader2, AlertTriangle, Eye, History, ClockIcon } from 'lucide-react';
+import { Bell, Check, X, Loader2, AlertTriangle, Eye, History, ClockIcon, Info } from 'lucide-react';
 import type { ChallengeInvite } from '@/types';
 import { getUserChallengeInvites, acceptChallenge, rejectChallenge } from '@/actions/challenge-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 export default function ChallengeInvitesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -25,6 +27,13 @@ export default function ChallengeInvitesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<NotificationPermission | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && "Notification" in window) {
+      setNotificationPermissionStatus(Notification.permission);
+    }
+  }, []);
 
   const fetchInvites = useCallback(async () => {
     if (!user?.id) {
@@ -41,14 +50,18 @@ export default function ChallengeInvitesPage() {
                                         .sort((a, b) => b.createdAt - a.createdAt);
       
       const currentPast = data.invites.filter(inv => inv.status !== 'pending' || inv.expiresAt <= now)
-                                    .sort((a, b) => b.createdAt - a.createdAt); // Show newest past first
+                                    .sort((a, b) => b.createdAt - a.createdAt); 
 
       setPendingActiveInvites(currentPending);
       setPastInvites(currentPast);
 
-      // Update local storage for notification simulation based on active pending invites
-      localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites));
-      localStorage.setItem(`lastSeenInvitesCount_${user.id}`, currentPending.length.toString());
+      // Update local storage for notification simulation when this page is visited
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites));
+        localStorage.setItem(`lastSeenInvitesCount_${user.id}_header`, currentPending.length.toString());
+         // Trigger a custom event to let AppHeader know that invites page was visited, so it can refresh its dot
+         window.dispatchEvent(new CustomEvent('invitesPageVisited'));
+      }
 
     } catch (err: any) {
       setError(err.message || "Failed to load challenge invites.");
@@ -103,10 +116,22 @@ export default function ChallengeInvitesPage() {
         return <Badge variant="destructive" className="text-xs">Rejected</Badge>;
       case 'pending':
         return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">Pending</Badge>;
-      case 'expired': // Explicitly handle 'expired' status if set by backend
+      case 'expired': 
         return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">Expired</Badge>;
       default:
         return <Badge variant="outline" className="text-xs">{invite.status}</Badge>;
+    }
+  };
+
+  const handleRequestNotificationPermission = async () => {
+    if (typeof window !== 'undefined' && "Notification" in window) {
+        const permission = await Notification.requestPermission();
+        setNotificationPermissionStatus(permission);
+        if (permission === 'granted') {
+            toast({ title: "Notifications Enabled!", description: "You'll now receive real-time challenge invites." });
+        } else {
+            toast({ variant: "default", title: "Notifications Blocked", description: "You can enable notifications from browser settings." });
+        }
     }
   };
 
@@ -138,6 +163,21 @@ export default function ChallengeInvitesPage() {
         <p className="text-muted-foreground">Accept or reject challenges from your friends.</p>
       </div>
 
+      {notificationPermissionStatus && notificationPermissionStatus !== 'granted' && (
+        <Alert variant="default" className="mb-6 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700">
+          <Info className="h-4 w-4 !text-blue-600 dark:!text-blue-400" />
+          <AlertTitle className="text-blue-700 dark:text-blue-300">Enable Notifications for Real-time Invites</AlertTitle>
+          <AlertDescription className="text-blue-600 dark:text-blue-400 text-xs">
+            To get instant notifications for new challenges, please allow browser notifications.
+            If you've recently changed permissions, a page reload might be needed for it to take effect.
+            <Button variant="link" size="sm" className="p-0 h-auto ml-1 text-blue-700 dark:text-blue-300 underline" onClick={handleRequestNotificationPermission}>
+              Request Permission
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+
       {/* Pending Active Invites */}
       {pendingActiveInvites.length > 0 && (
         <Card>
@@ -154,7 +194,7 @@ export default function ChallengeInvitesPage() {
                     Test: {invite.testName} ({invite.numQuestions} Qs)
                     <br />
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ClockIcon className="h-3 w-3"/> Expires: {new Date(invite.expiresAt).toLocaleTimeString()}
+                      <ClockIcon className="h-3 w-3"/> Expires: {new Date(invite.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </CardDescription>
                 </CardHeader>
@@ -215,9 +255,8 @@ export default function ChallengeInvitesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {getInviteStatusBadge(invite)}
-                   {invite.status === 'accepted' && ( // If invite was accepted
+                   {invite.status === 'accepted' && ( 
                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
-                        {/* Always link to results page if it's a past accepted invite */}
                         <Link href={`/challenge-test-result/${invite.challengeCode}`}>View Result</Link>
                      </Button>
                    )}
@@ -230,4 +269,3 @@ export default function ChallengeInvitesPage() {
     </div>
   );
 }
-

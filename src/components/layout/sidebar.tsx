@@ -118,7 +118,7 @@ const tutorialSteps: Step[] = [
   },
   {
     target: '#tutorial-target-ai-tools-group',
-    content: 'Utilize AI features like Doubt Solving (Premium).', // Updated content
+    content: 'Utilize AI features like Doubt Solving (Premium).',
     placement: 'right',
     disableBeacon: true,
   },
@@ -140,15 +140,36 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme(); 
 
   const isAdmin = user?.role === 'Admin';
-  const [pendingInvitesCount, setPendingInvitesCount] = useState(0); 
+  const [actualPendingInvitesCount, setActualPendingInvitesCount] = useState(0); 
+
+  const fetchPendingInvitesCount = useCallback(() => {
+    if (user?.id && typeof window !== 'undefined') {
+        try {
+            const invitesJson = localStorage.getItem(`userChallengeInvites_${user.id}`);
+            if (invitesJson) {
+                const allInvites: ChallengeInvite[] = JSON.parse(invitesJson);
+                const newPending = allInvites.filter(inv => inv.status === 'pending' && inv.expiresAt > Date.now());
+                setActualPendingInvitesCount(newPending.length);
+            } else {
+                setActualPendingInvitesCount(0);
+            }
+        } catch (error) {
+            console.error("Error fetching pending invites count for sidebar:", error);
+            setActualPendingInvitesCount(0);
+        }
+    } else {
+        setActualPendingInvitesCount(0);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
-    if (user) {
-      setPendingInvitesCount(0); 
-    } else {
-      setPendingInvitesCount(0);
-    }
-  }, [user]);
+    fetchPendingInvitesCount();
+    // Optionally, set an interval to refresh this count if it needs to be highly real-time,
+    // or rely on AppHeader to update localStorage which might trigger a re-render if this component
+    // is sensitive to localStorage changes (not directly, but if parent re-renders).
+    const intervalId = setInterval(fetchPendingInvitesCount, 30000); // Poll every 30s
+    return () => clearInterval(intervalId);
+  }, [fetchPendingInvitesCount]);
 
 
   const isActive = (href: string) => {
@@ -156,7 +177,6 @@ export function AppSidebar() {
         '/',
         '/settings',
         '/help',
-        // '/study-tips', // Removed
         '/doubt-solving',
         '/progress',
         '/notebooks',
@@ -338,8 +358,8 @@ export function AppSidebar() {
                             <SidebarMenuButton as="a" isActive={isActive('/challenges/invites')} tooltip="Challenge Invites" id="tutorial-target-challenge-invites">
                                 <Bell />
                                 <span className="group-data-[state=collapsed]:hidden">Challenge Invites</span>
-                                {pendingInvitesCount > 0 && (
-                                    <SidebarMenuBadge>{pendingInvitesCount}</SidebarMenuBadge>
+                                {actualPendingInvitesCount > 0 && (
+                                    <SidebarMenuBadge>{actualPendingInvitesCount}</SidebarMenuBadge>
                                 )}
                             </SidebarMenuButton>
                         </Link>
@@ -382,7 +402,6 @@ export function AppSidebar() {
 
             <SidebarGroup id="tutorial-target-ai-tools-group">
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">AI Tools</SidebarGroupLabel>
-              {/* AI Study Tips link removed */}
               <SidebarMenuItem>
                 <Link href="/doubt-solving" passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive('/doubt-solving')} tooltip="Doubt Solving" id="tutorial-target-doubt-solving">
@@ -467,3 +486,4 @@ export function AppSidebar() {
     </>
   );
 }
+
