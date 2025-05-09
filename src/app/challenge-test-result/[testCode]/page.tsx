@@ -1,4 +1,4 @@
-// src/app/challenge-test-result/[challengeCode]/page.tsx
+// src/app/challenge-test-result/[testCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -13,33 +13,32 @@ import type { Challenge, ChallengeParticipant } from '@/types';
 import { getChallengeResults } from '@/actions/challenge-actions';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge'; // Import Badge component
+import { Badge } from '@/components/ui/badge';
 
 export default function ChallengeTestResultPage() {
   const params = useParams();
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
-  const challengeCode = params.challengeCode as string;
+  const testCode = params.testCode as string; // Changed from challengeCode
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchResults = useCallback(async () => {
-    if (!challengeCode) {
+    if (!testCode) { // Changed from challengeCode
       setError("Invalid challenge link.");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await getChallengeResults(challengeCode);
+      const data = await getChallengeResults(testCode); // Changed from challengeCode
       if (!data || (data.testStatus !== 'completed' && data.testStatus !== 'expired')) {
-        // If test not completed/expired, redirect to lobby or show appropriate message
         setError("Challenge results are not yet available or challenge has expired without completion.");
-        setChallenge(data); // Set data to show status
+        setChallenge(data);
         if (data && data.testStatus === 'waiting' || data?.testStatus === 'started') {
-           setTimeout(() => router.push(`/challenge/lobby/${challengeCode}`), 3000);
+           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); // Changed from challengeCode
         }
       } else {
         setChallenge(data);
@@ -49,17 +48,17 @@ export default function ChallengeTestResultPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [challengeCode, router]);
+  }, [testCode, router]); // Changed from challengeCode
 
   useEffect(() => {
      if (!authLoading) {
         if (!user) {
-            router.push(`/auth/login?redirect=/challenge-test-result/${challengeCode}`);
+            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); // Changed from challengeCode
             return;
         }
         fetchResults();
     }
-  }, [authLoading, user, challengeCode, fetchResults, router]);
+  }, [authLoading, user, testCode, fetchResults, router]); // Changed from challengeCode
 
   const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : '?';
 
@@ -72,13 +71,13 @@ export default function ChallengeTestResultPage() {
 
   const sortedParticipants = challenge?.participants ? 
     Object.values(challenge.participants)
-        .filter(p => p.status === 'completed') // Only show completed
+        .filter(p => p.status === 'completed')
         .sort((a, b) => (a.rank || Infinity) - (b.rank || Infinity)) 
     : [];
   
   const winner = sortedParticipants.length > 0 ? sortedParticipants[0] : null;
 
-  if (isLoading || authLoading) { /* Skeleton */ 
+  if (isLoading || authLoading) {
     return (
         <div className="container mx-auto py-8 px-4 max-w-2xl text-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
@@ -87,7 +86,7 @@ export default function ChallengeTestResultPage() {
     );
   }
 
-  if (error) { /* Error display */ 
+  if (error) {
     return (
       <div className="container mx-auto py-8 px-4 max-w-lg text-center">
         <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -98,7 +97,7 @@ export default function ChallengeTestResultPage() {
     );
   }
 
-  if (!challenge) { /* No data */ 
+  if (!challenge) {
     return (
         <div className="container mx-auto py-8 px-4 max-w-lg text-center">
              <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -160,7 +159,7 @@ export default function ChallengeTestResultPage() {
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 pt-6 border-t">
             <Button variant="outline" asChild>
-                <Link href={`/challenge-test-review/${challengeCode}?userId=${user?.id}`}> {/* Ensure userId for personal review */}
+                <Link href={`/challenge-test-review/${testCode}?userId=${user?.id}`}> {/* Changed from challengeCode */}
                     <Eye className="mr-2 h-4 w-4"/> Review Your Answers
                 </Link>
             </Button>

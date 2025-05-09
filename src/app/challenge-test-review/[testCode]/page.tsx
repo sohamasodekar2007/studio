@@ -38,10 +38,7 @@ const OPTION_STYLES = {
 
 const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
     if (!imagePath) return null;
-    if (imagePath.startsWith('/')) return imagePath; // Already a public path
-    // If it's just a filename, it implies it's relative to the challenge/test's image asset structure.
-    // This logic might need to be adjusted based on how image paths are stored in Challenge.questions
-    // For now, assume it's already a directly usable public path if not null.
+    if (imagePath.startsWith('/')) return imagePath;
     console.warn(`constructPublicImagePath in challenge review received: ${imagePath}. Assuming it's a direct public path or needs context.`);
     return imagePath;
 };
@@ -54,7 +51,7 @@ export default function ChallengeTestReviewPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const challengeCode = params.challengeCode as string;
+  const testCode = params.testCode as string; // Changed from challengeCode
   const viewingUserId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -72,16 +69,18 @@ export default function ChallengeTestReviewPage() {
             const elements = document.querySelectorAll('.mathjax-content');
             if (elements.length > 0) {
                  (window as any).MathJax.typesetPromise(Array.from(elements))
-                    .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+                    .catch((err: any) => console.error("MathJax typeset error in review page (elements):", err));
             } else {
                  (window as any).MathJax.typesetPromise() 
-                    .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+                    .catch((err: any) => console.error("MathJax typeset error in review page (fallback):", err));
             }
+       } else {
+           console.warn("MathJax or typesetPromise not available yet for typesetting on review page.");
        }
    }, []);
 
   const fetchChallengeData = useCallback(async () => {
-    if (!challengeCode || !viewingUserId) {
+    if (!testCode || !viewingUserId) { // Changed from challengeCode
       setError("Missing information to load challenge review.");
       setIsLoading(false);
       return;
@@ -89,8 +88,8 @@ export default function ChallengeTestReviewPage() {
     setIsLoading(true);
     setError(null);
     try {
-        const data = await getChallengeDetails(challengeCode);
-        if (!data) throw new Error(`Challenge data not found for code ${challengeCode}.`);
+        const data = await getChallengeDetails(testCode); // Changed from challengeCode
+        if (!data) throw new Error(`Challenge data not found for code ${testCode}.`); // Changed from challengeCode
         
         if (!data.participants[viewingUserId] || data.participants[viewingUserId].status !== 'completed') {
             setError("This user did not complete the challenge, or results are not available.");
@@ -103,12 +102,12 @@ export default function ChallengeTestReviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [challengeCode, viewingUserId]);
+  }, [testCode, viewingUserId]); // Changed from challengeCode
 
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
-        router.push(`/auth/login?redirect=/challenge-test-review/${challengeCode}?userId=${viewingUserId}`);
+        router.push(`/auth/login?redirect=/challenge-test-review/${testCode}?userId=${viewingUserId}`); // Changed from challengeCode
       } else if (user.id !== viewingUserId) {
         console.warn("Attempting to view another user's challenge review.");
         fetchChallengeData(); 
@@ -116,7 +115,7 @@ export default function ChallengeTestReviewPage() {
         fetchChallengeData();
       }
     }
-  }, [user, authLoading, router, challengeCode, viewingUserId, fetchChallengeData]);
+  }, [user, authLoading, router, testCode, viewingUserId, fetchChallengeData]); // Changed from challengeCode
 
   useEffect(() => {
     if (user?.id) {
@@ -145,14 +144,13 @@ export default function ChallengeTestReviewPage() {
   const totalQuestions = useMemo(() => allQuestionsFromChallenge.length || 0, [allQuestionsFromChallenge]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  // Extract user's answer details for the current question
   const currentUserAnswerDetailed = useMemo(() => {
       if (!participantData?.answers || !currentReviewQuestion?.id) return null;
       return participantData.answers.find(ans => ans.questionId === currentReviewQuestion.id);
   }, [participantData, currentReviewQuestion]);
 
   const userSelectedOptionKey = currentUserAnswerDetailed?.selectedOption;
-  const correctOptionKey = currentReviewQuestion?.answer; // Assuming answer is 'A', 'B', 'C', or 'D'
+  const correctOptionKey = currentReviewQuestion?.answer;
   const questionStatus = currentUserAnswerDetailed?.status || QuestionStatusEnum.NotVisited;
 
   const renderContent = useCallback((context: 'question' | 'explanation') => {
@@ -204,7 +202,7 @@ export default function ChallengeTestReviewPage() {
         })}
       </div>
     );
-  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]);
+  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]); 
   const navigateReview = (direction: 'prev' | 'next') => { 
       setCurrentQuestionReviewIndex(prev => {
       const newIndex = direction === 'prev' ? prev - 1 : prev + 1;
@@ -255,7 +253,7 @@ export default function ChallengeTestReviewPage() {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" /> <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1> <p className="text-muted-foreground mb-6">{error}</p>
-        <Button asChild variant="outline"><Link href={`/challenge-test-result/${challengeCode}`}>Back to Results</Link></Button>
+        <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> {/* Changed from challengeCode */}
       </div>
     );
   }
@@ -263,7 +261,7 @@ export default function ChallengeTestReviewPage() {
      return (
        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" /> <h1 className="text-2xl font-bold mb-2">Challenge Review Data Not Found</h1> <p className="text-muted-foreground mb-6">Could not load the details for this challenge review.</p>
-         <Button asChild variant="outline"><Link href={`/challenge-test-result/${challengeCode}`}>Back to Results</Link></Button>
+         <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> {/* Changed from challengeCode */}
        </div>
      );
   }
@@ -273,7 +271,7 @@ export default function ChallengeTestReviewPage() {
       <Script id="mathjax-script-challenge-review" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={typesetMathJax} />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${challengeCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button>
+          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${testCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button> {/* Changed from challengeCode */}
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={`${challengeData.testConfig.subject} - ${challengeData.testConfig.lesson}`}>
             Challenge Review: {challengeData.testConfig.subject} - {challengeData.testConfig.lesson}
           </h1>
@@ -311,4 +309,3 @@ export default function ChallengeTestReviewPage() {
     </>
   );
 }
-

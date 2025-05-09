@@ -1,62 +1,53 @@
-// src/app/tests/[testId]/page.tsx
+// src/app/tests/[testCode]/page.tsx
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, HelpCircle, ListChecks, CheckCircle, Tag, BookOpen, CalendarDays, CheckSquare, AlertTriangle } from "lucide-react"; // Added icons
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
 import Link from "next/link";
-import { notFound } from 'next/navigation'; // Import notFound
-// Import the correct action from the correct file
+import { notFound } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
-import StartTestButton from '@/components/test-interface/start-test-button'; // Import the StartTestButton component
-import type { PricingType } from '@/types'; // Import PricingType
+import StartTestButton from '@/components/test-interface/start-test-button';
+import type { PricingType } from '@/types';
 
-// Helper function to format pricing type for display
 const formatPricing = (pricing: PricingType) => {
     switch (pricing) {
       case 'FREE': return 'Free';
-      case 'PAID': return 'Premium'; // Changed 'Paid' to 'Premium' for consistency
-      case 'FREE_PREMIUM': return 'Free Premium'; // Display "Free Premium" clearly
+      case 'PAID': return 'Premium';
+      case 'FREE_PREMIUM': return 'Free Premium';
       default: return pricing;
     }
 };
 
-// Helper function to get badge variant based on pricing
 const getPricingBadgeVariant = (pricing: PricingType): "default" | "secondary" | "destructive" | "outline" => {
     switch (pricing) {
-        case 'FREE': return 'default'; // Often green, but use default primary here
-        case 'PAID': return 'destructive'; // Red for premium/paid
-        case 'FREE_PREMIUM': return 'secondary'; // Blue/purple for free_premium
+        case 'FREE': return 'default';
+        case 'PAID': return 'destructive';
+        case 'FREE_PREMIUM': return 'secondary';
         default: return 'outline';
     }
 };
 
-// Helper function to get badge classes based on pricing
 const getPricingBadgeClasses = (pricing: PricingType): string => {
     switch (pricing) {
         case 'FREE': return 'bg-green-600 text-white border-green-600';
         case 'PAID': return 'bg-red-600 text-white border-red-600';
-        case 'FREE_PREMIUM': return 'bg-blue-600 text-white border-blue-600'; // Example: Blue for FREE_PREMIUM
+        case 'FREE_PREMIUM': return 'bg-blue-600 text-white border-blue-600';
         default: return '';
     }
 };
 
-
-// --- Page Component ---
-export default async function TestDetailPage({ params }: { params: { testId: string } }) {
-  const testId = params.testId;
-  // Use the imported getGeneratedTestByCode function
-  const testData = await getGeneratedTestByCode(testId);
+export default async function TestDetailPage({ params }: { params: { testCode: string } }) {
+  const testCode = params.testCode; // Changed from testId to testCode
+  const testData = await getGeneratedTestByCode(testCode);
 
   if (!testData) {
-    // Use Next.js notFound() to render the 404 page
     notFound();
   }
 
-  // Determine syllabus - handle both chapterwise and full_length
   const syllabusCovered = testData.testType === 'chapterwise' && testData.lesson
-    ? [testData.lesson] // For chapterwise, syllabus is the lesson name
-    : testData.test_subject.map(s => `Full Syllabus - ${s}`); // For full_length, list subjects
+    ? [testData.lesson]
+    : testData.test_subject.map(s => `Full Syllabus - ${s}`);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -64,14 +55,13 @@ export default async function TestDetailPage({ params }: { params: { testId: str
       <Card className="overflow-hidden bg-card">
         <CardHeader className="relative p-0">
            <Image
-                // Use a placeholder image, maybe based on subject or test code
                 src={`https://picsum.photos/seed/${testData.test_code}/800/300`}
                 alt={testData.name}
                 width={800}
                 height={300}
                 className="w-full h-48 object-cover"
-                data-ai-hint={testData.test_subject.join(' ') + " test"} // Use subjects for hint
-                priority // Prioritize loading the main image
+                data-ai-hint={testData.test_subject.join(' ') + " test"}
+                priority
             />
              <div className="absolute top-4 right-4 flex gap-1">
                 <Badge
@@ -84,17 +74,13 @@ export default async function TestDetailPage({ params }: { params: { testId: str
         </CardHeader>
         <CardContent className="p-6 space-y-4">
             <div className="flex flex-wrap gap-2 mb-2">
-                {/* Assuming 'audience' exists on testData */}
                  <Badge variant="outline"><CalendarDays className="h-4 w-4 mr-1"/>For: {testData.audience}</Badge>
-                {/* Display Stream or Test Type */}
                  <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testType === 'full_length' && testData.stream ? testData.stream : testData.testType.replace('_', ' ')}</Badge>
-                {/* Display Subjects */}
                 {testData.test_subject.map(sub => (
                    <Badge key={sub} variant="secondary"><BookOpen className="h-4 w-4 mr-1"/>{sub}</Badge>
                 ))}
             </div>
             <CardTitle className="text-2xl lg:text-3xl">{testData.name}</CardTitle>
-            {/* Optional Description */}
              <CardDescription>Test Code: {testData.test_code}</CardDescription>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-border">
@@ -134,12 +120,10 @@ export default async function TestDetailPage({ params }: { params: { testId: str
                )}
                {formatPricing(testData.type)} Access
             </p>
-            {/* Use the client component for the button logic */}
             <StartTestButton test={testData} />
         </CardFooter>
       </Card>
 
-      {/* Instructions Section */}
        <Card className="bg-card">
         <CardHeader>
           <CardTitle>Instructions</CardTitle>
@@ -158,7 +142,6 @@ export default async function TestDetailPage({ params }: { params: { testId: str
           </ul>
         </CardContent>
       </Card>
-
     </div>
   );
 }

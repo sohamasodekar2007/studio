@@ -1,4 +1,4 @@
-// src/app/challenge-test/[challengeCode]/page.tsx
+// src/app/challenge-test/[testCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -45,7 +45,7 @@ export default function ChallengeTestPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const challengeCode = params.challengeCode as string;
+  const testCode = params.testCode as string; // Changed from challengeCode
   const userId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -83,7 +83,7 @@ export default function ChallengeTestPage() {
 
 
   const loadChallenge = useCallback(async () => {
-    if (!challengeCode) {
+    if (!testCode) { // Changed from challengeCode
       setError("Challenge code is missing.");
       setIsLoading(false);
       return;
@@ -91,14 +91,14 @@ export default function ChallengeTestPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getChallengeDetails(challengeCode);
+      const data = await getChallengeDetails(testCode); // Changed from challengeCode
       if (!data) {
         setError("Challenge not found or has expired.");
         setChallengeData(null);
       } else if (data.testStatus !== 'started') {
         setError(`Challenge is not active. Status: ${data.testStatus}. Redirecting to lobby...`);
         setChallengeData(data); 
-        setTimeout(() => router.push(`/challenge/lobby/${challengeCode}`), 3000);
+        setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); // Changed from challengeCode
       }
       else {
         setChallengeData(data);
@@ -119,12 +119,12 @@ export default function ChallengeTestPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [challengeCode, router]);
+  }, [testCode, router]); // Changed from challengeCode
 
   useEffect(() => {
     if (!authLoading) {
         if (!user) {
-          router.push(`/auth/login?redirect=/challenge-test/${challengeCode}?userId=${userId}`);
+          router.push(`/auth/login?redirect=/challenge-test/${testCode}?userId=${userId}`); // Changed from challengeCode
           return;
         }
         if (user.id !== userId) {
@@ -134,7 +134,7 @@ export default function ChallengeTestPage() {
         }
         loadChallenge();
     }
-  }, [challengeCode, userId, authLoading, user, router, toast, loadChallenge]);
+  }, [testCode, userId, authLoading, user, router, toast, loadChallenge]); // Changed from challengeCode
 
   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!challengeData || !user || !userId || isSubmitting || !startTime) return;
@@ -149,10 +149,10 @@ export default function ChallengeTestPage() {
     }));
 
     try {
-        const result = await submitChallengeAttempt(challengeCode, userId, submittedAnswers, timeTakenSeconds);
+        const result = await submitChallengeAttempt(testCode, userId, submittedAnswers, timeTakenSeconds); // Changed from challengeCode
         if (result.success) {
              toast({ title: "Challenge Submitted!", description: "Your responses have been saved." });
-             router.push(`/challenge-test-result/${challengeCode}`);
+             router.push(`/challenge-test-result/${testCode}`); // Changed from challengeCode
         } else {
              throw new Error(result.message || "Failed to submit challenge attempt.");
         }
@@ -160,7 +160,7 @@ export default function ChallengeTestPage() {
        toast({ variant: 'destructive', title: 'Submission Failed', description: e.message });
        setIsSubmitting(false);
     }
-  }, [challengeData, user, userId, isSubmitting, startTime, challengeCode, userAnswers, questionStatuses, toast, router, timeLeft]);
+  }, [challengeData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router, timeLeft]); // Changed from challengeCode
 
   useEffect(() => {
     if (timeLeft <= 0 || !challengeData || isSubmitting || !startTime || challengeData.testStatus !== 'started') return;
@@ -259,7 +259,7 @@ export default function ChallengeTestPage() {
    const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : '?';
 
    const renderQuestionContent = (question: TestQuestion) => {
-     const imageUrl = question.question_image_url; // This should be the full public path from the challenge data
+     const imageUrl = question.question_image_url;
      if (imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
        return <Image src={imageUrl} alt={`Question ${currentQuestionIndex + 1}`} width={600} height={400} className="rounded-md border max-w-full h-auto mx-auto my-4" data-ai-hint="question diagram" priority={currentQuestionIndex < 3} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized />;
      } else if (question.question_text || question.question) {
@@ -405,4 +405,3 @@ export default function ChallengeTestPage() {
     </>
   );
 }
-
