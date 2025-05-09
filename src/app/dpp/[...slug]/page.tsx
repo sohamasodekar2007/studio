@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions'; 
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark } from 'lucide-react'; 
+import { AlertTriangle, Filter, ArrowLeft, CheckCircle, XCircle, Loader2, History, Bookmark } from 'lucide-react'; 
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,7 @@ type DifficultyFilter = DifficultyLevel | 'All';
 
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
+    // Ensure this path matches how images are stored in public/question_bank_images
     const basePath = '/question_bank_images'; 
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
@@ -61,10 +62,10 @@ export default function DppLessonPage() {
         const elements = document.querySelectorAll('.mathjax-content');
         if (elements.length > 0) {
             (window as any).MathJax.typesetPromise(Array.from(elements))
-                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
+                .catch((err: any) => console.error("MathJax typeset error (DPP elements):", err));
         } else {
             (window as any).MathJax.typesetPromise()
-                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+                .catch((err: any) => console.error("MathJax typeset error (DPP fallback):", err));
         }
     }
   }, []);
@@ -388,196 +389,69 @@ export default function DppLessonPage() {
 
 
   if (isLoading || authLoading) { 
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-        <Skeleton className="h-8 w-1/2 mb-2" />
-        <Skeleton className="h-6 w-3/4 mb-6" />
-        <div className="flex gap-2 mb-4">
-            <Skeleton className="h-10 w-20" />
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-24" />
-        </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-1/4" />
-             <Skeleton className="h-4 w-1/3" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-40 w-full mb-4" />
-            <Skeleton className="h-10 w-full mb-2" />
-            <Skeleton className="h-10 w-full mb-2" />
-            <Skeleton className="h-10 w-full" />
-          </CardContent>
-           <CardFooter className="flex justify-between">
-                <Skeleton className="h-10 w-28" />
-                <Skeleton className="h-10 w-28" />
-           </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!user) { 
-     router.push('/auth/login?redirect=/dpp');
-     return ( 
-        <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6 text-center">
-             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary"/>
-             <p>Redirecting to login...</p>
+    return ( 
+        <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+            <Skeleton className="h-6 w-1/4 mb-4" />
+            <Skeleton className="h-8 w-1/2 mb-2" />
+            <Skeleton className="h-6 w-3/4 mb-6" />
+            <div className="flex gap-2 mb-4"> <Skeleton className="h-10 w-20" /> <Skeleton className="h-10 w-24" /> </div>
+            <Card>
+            <CardHeader><Skeleton className="h-6 w-1/4" /><Skeleton className="h-4 w-1/3" /></CardHeader>
+            <CardContent><Skeleton className="h-40 w-full mb-4" /><Skeleton className="h-10 w-full mb-2" /><Skeleton className="h-10 w-full" /></CardContent>
+            <CardFooter className="flex justify-between"><Skeleton className="h-10 w-28" /><Skeleton className="h-10 w-28" /></CardFooter>
+            </Card>
         </div>
      );
-  }
+   }
+    if (!user) { router.push('/auth/login?redirect=/dpp'); return null; } 
+    if (error) { return ( 
+         <div className="container mx-auto py-8 px-4 max-w-4xl text-center space-y-4">
+           <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+           <h1 className="text-2xl font-bold text-destructive">Error</h1>
+           <p className="text-muted-foreground">{error}</p>
+           <Button asChild variant="outline"><Link href="/dpp">Back to DPP List</Link></Button>
+         </div>
+    ); }
+    if (filteredQuestions.length === 0) { return ( 
+         <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+             <div className="mb-4"><Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to DPP List</Link></div>
+             <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
+             <p className="text-muted-foreground">Subject: {subject}</p>
+              <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4"> <Filter className="h-5 w-5 text-muted-foreground" /> <span className="font-medium mr-2">Difficulty:</span> {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (<Button key={diff} variant={selectedDifficulty === diff ? 'default' : 'outline'} size="sm" onClick={() => handleDifficultyFilter(diff)}>{diff}</Button>))} </div>
+             <Card><CardContent className="p-10 text-center text-muted-foreground">No questions found matching the '{selectedDifficulty}' filter for this lesson.</CardContent></Card>
+          </div>
+     ); }
 
-  if (error) {
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center space-y-4">
-        <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
-        <h1 className="text-2xl font-bold text-destructive">Error</h1>
-        <p className="text-muted-foreground">{error}</p>
-        <Button asChild variant="outline">
-          <Link href="/dpp">Back to DPP List</Link>
-        </Button>
-      </div>
-    );
-  }
 
-  if (!subject || !lesson) {
-     return <div className="container mx-auto py-8 px-4 text-center">Loading lesson details...</div>;
-  }
+   return (
+     <>
+       <Script id="mathjax-script-dpp" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={() => { typesetMathJax(); }} />
+       <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+         <div className="mb-4"> <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to DPP List</Link> </div>
+         <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
+         <p className="text-muted-foreground">Subject: {subject}</p>
+         <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4"> <Filter className="h-5 w-5 text-muted-foreground" /> <span className="font-medium mr-2">Difficulty:</span> {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (<Button key={diff} variant={selectedDifficulty === diff ? 'default' : 'outline'} size="sm" onClick={() => handleDifficultyFilter(diff)}>{diff}</Button>))} </div>
 
-   if (filteredQuestions.length === 0) {
-        return (
-            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-                <div className="mb-4">
-                    <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary">
-                    &larr; Back to DPP List
-                    </Link>
-                </div>
-                 <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
-                 <p className="text-muted-foreground">Subject: {subject}</p>
-                  <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
-                    <Filter className="h-5 w-5 text-muted-foreground" />
-                    <span className="font-medium mr-2">Difficulty:</span>
-                    {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
-                        <Button
-                        key={diff}
-                        variant={selectedDifficulty === diff ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => handleDifficultyFilter(diff)}
-                        >
-                        {diff}
-                        </Button>
-                    ))}
-                </div>
-                 <Card>
-                    <CardContent className="p-10 text-center text-muted-foreground">
-                        No questions found matching the '{selectedDifficulty}' filter for this lesson.
-                    </CardContent>
-                 </Card>
-             </div>
-        );
-    }
-
-  return (
-    <>
-       <Script
-        id="mathjax-script-dpp" 
-        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-        strategy="lazyOnload"
-        onLoad={() => {
-            typesetMathJax();
-        }}
-      />
-      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
-        <div className="mb-4">
-          <Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary">
-            &larr; Back to DPP List
-          </Link>
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
-        <p className="text-muted-foreground">Subject: {subject}</p>
-
-        <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4">
-             <Filter className="h-5 w-5 text-muted-foreground" />
-            <span className="font-medium mr-2">Difficulty:</span>
-            {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
-                <Button
-                key={diff}
-                variant={selectedDifficulty === diff ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleDifficultyFilter(diff)}
-                >
-                {diff}
-                </Button>
-            ))}
-        </div>
-
-        {currentQuestion ? (
-            <Card className="shadow-md">
-            <CardHeader>
-                <div className="flex justify-between items-start flex-wrap gap-2">
-                    <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {renderPyqInfo(currentQuestion)}
-                        <Badge variant="secondary">{currentQuestion.difficulty}</Badge>
-                         {renderPreviousAttemptStatus()}
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                {renderQuestionContent(currentQuestion)}
-                {renderOptions(currentQuestion)}
-                {showSolution && renderExplanation(currentQuestion)}
-            </CardContent>
-            <CardFooter className="flex justify-between items-center flex-wrap gap-2">
-                 <div className="flex gap-2">
-                      <Button
-                          variant="secondary"
-                          onClick={checkAnswer}
-                          disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}
-                      >
-                          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          Check Answer
-                      </Button>
-                      <Button variant="outline" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks}>
-                            <Bookmark className="mr-2 h-4 w-4" />
-                            Bookmark
-                      </Button>
+         {currentQuestion ? (
+             <Card className="shadow-md">
+             <CardHeader>
+                 <div className="flex justify-between items-start flex-wrap gap-2">
+                     <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
+                     <div className="flex items-center gap-2 flex-wrap"> {renderPyqInfo(currentQuestion)} <Badge variant="secondary">{currentQuestion.difficulty}</Badge> {renderPreviousAttemptStatus()} </div>
                  </div>
-                {isCorrect !== null && (
-                    <span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                        {isCorrect ? 'Correct!' : 'Incorrect'}
-                    </span>
-                )}
-                <Button
-                    onClick={goToNextQuestion}
-                    disabled={!showSolution || isSaving} 
-                >
-                    {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}
-                </Button>
-            </CardFooter>
-            </Card>
-        ) : (
-             <Card>
-                <CardContent className="p-10 text-center text-muted-foreground">
-                    Loading question...
-                </CardContent>
-            </Card>
-        )}
-      </div>
-
-        {currentQuestion && user && (
-            <AddToNotebookDialog
-                isOpen={isNotebookModalOpen}
-                onClose={handleCloseNotebookModal}
-                notebooks={notebooks}
-                onSave={handleSaveToNotebooks}
-                isLoading={isSaving}
-                userId={user.id} 
-                onNotebookCreated={handleCreateNotebookCallback} 
-            />
-        )}
-    </>
-  );
-}
-
+             </CardHeader>
+             <CardContent> {renderQuestionContent(currentQuestion)} {renderOptions(currentQuestion)} {showSolution && renderExplanation(currentQuestion)} </CardContent>
+             <CardFooter className="flex justify-between items-center flex-wrap gap-2">
+                  <div className="flex gap-2"> <Button variant="secondary" onClick={checkAnswer} disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer</Button> <Button variant="outline" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks}><Bookmark className="mr-2 h-4 w-4" />Bookmark</Button> </div>
+                 {isCorrect !== null && (<span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>{isCorrect ? 'Correct!' : 'Incorrect'}</span>)}
+                 <Button onClick={goToNextQuestion} disabled={!showSolution || isSaving}>{currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}</Button>
+             </CardFooter>
+             </Card>
+         ) : (
+              <Card><CardContent className="p-10 text-center text-muted-foreground">Loading question...</CardContent></Card>
+         )}
+       </div>
+        {currentQuestion && user && (<AddToNotebookDialog isOpen={isNotebookModalOpen} onClose={handleCloseNotebookModal} notebooks={notebooks} onSave={handleSaveToNotebooks} isLoading={isSaving} userId={user.id} onNotebookCreated={handleCreateNotebookCallback} />)}
+     </>
+   );
+ }
