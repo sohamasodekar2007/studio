@@ -1,7 +1,11 @@
 {
   "maintenanceModeEnabled": false,
   "newRegistrationsOpen": true,
-  "defaultTestAccess": "free",
+  "defaultTestAccess": "FREE",
   "enableEmailNotifications": true,
-  "enableInAppNotifications": true
+  "enableInAppNotifications": true,
+  "paymentGatewayEnabled": false,
+  "stripeApiKey": null,
+  "razorpayApiKey": null,
+  "instamojoApiKey": null
 }

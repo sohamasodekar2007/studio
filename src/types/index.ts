@@ -400,8 +400,13 @@ export interface AppNotification {
 export interface PlatformSettings {
   maintenanceModeEnabled: boolean;
   newRegistrationsOpen: boolean;
-  defaultTestAccess: PricingType; // Changed from 'free' | 'paid' to PricingType
+  defaultTestAccess: PricingType;
   enableEmailNotifications: boolean;
   enableInAppNotifications: boolean;
+  // Payment Gateway Settings
+  paymentGatewayEnabled: boolean;
+  stripeApiKey?: string | null;
+  razorpayApiKey?: string | null;
+  instamojoApiKey?: string | null;
   // Add other platform-wide settings here
 }

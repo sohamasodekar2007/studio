@@ -28,9 +28,13 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
   const defaultSettings: PlatformSettings = {
     maintenanceModeEnabled: false,
     newRegistrationsOpen: true,
-    defaultTestAccess: 'FREE', // Changed to PricingType
+    defaultTestAccess: 'FREE', 
     enableEmailNotifications: true,
     enableInAppNotifications: true,
+    paymentGatewayEnabled: false, // Default to disabled
+    stripeApiKey: null,
+    razorpayApiKey: null,
+    instamojoApiKey: null,
   };
 
   try {
@@ -41,19 +45,16 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     return { ...defaultSettings, ...settings };
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      // File doesn't exist, try to write default settings and return them
       console.warn(`Platform settings file not found at ${settingsFilePath}. Creating with defaults.`);
       try {
         await fs.writeFile(settingsFilePath, JSON.stringify(defaultSettings, null, 2), 'utf-8');
         return defaultSettings;
       } catch (writeError) {
         console.error('Failed to write default platform settings:', writeError);
-        // Return default settings anyway on write failure
         return defaultSettings;
       }
     }
     console.error('Error reading platform settings:', error);
-    // Return default settings on other errors
     return defaultSettings;
   }
 }
@@ -63,11 +64,18 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
  * @param newSettings - The PlatformSettings object with new values.
  * @returns A promise resolving to true on success, false on failure.
  */
-export async function updatePlatformSettings(newSettings: PlatformSettings): Promise<boolean> {
+export async function updatePlatformSettings(newSettings: Partial<PlatformSettings>): Promise<boolean> {
   try {
     await ensureDirExists(path.dirname(settingsFilePath));
-    // Validate or sanitize newSettings if necessary before writing
-    await fs.writeFile(settingsFilePath, JSON.stringify(newSettings, null, 2), 'utf-8');
+    const currentSettings = await getPlatformSettings();
+    const updatedSettings = { ...currentSettings, ...newSettings };
+    
+    // Ensure API keys are set to null if empty string is passed, or keep existing if undefined
+    updatedSettings.stripeApiKey = newSettings.stripeApiKey === '' ? null : newSettings.stripeApiKey ?? currentSettings.stripeApiKey;
+    updatedSettings.razorpayApiKey = newSettings.razorpayApiKey === '' ? null : newSettings.razorpayApiKey ?? currentSettings.razorpayApiKey;
+    updatedSettings.instamojoApiKey = newSettings.instamojoApiKey === '' ? null : newSettings.instamojoApiKey ?? currentSettings.instamojoApiKey;
+    
+    await fs.writeFile(settingsFilePath, JSON.stringify(updatedSettings, null, 2), 'utf-8');
     console.log('Platform settings updated successfully.');
     return true;
   } catch (error) {

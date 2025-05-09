@@ -8,22 +8,31 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, KeyRound, Power, AlertTriangle } from "lucide-react"; // Added icons
 import { getPlatformSettings, updatePlatformSettings } from '@/actions/settings-actions';
-import type { PlatformSettings, PricingType } from '@/types'; // Import PricingType
-import { pricingTypes } from '@/types'; // Import pricingTypes for Select options
+import type { PlatformSettings, PricingType } from '@/types'; 
+import { pricingTypes } from '@/types'; 
 import { Skeleton } from "@/components/ui/skeleton"; 
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"; // Import Select components
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"; 
 
 export default function AdminSettingsPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+    
+    // General Settings
     const [newRegistrationsOpen, setNewRegistrationsOpen] = useState(true);
-    const [defaultTestAccess, setDefaultTestAccess] = useState<PricingType>('FREE'); // Use PricingType
+    const [defaultTestAccess, setDefaultTestAccess] = useState<PricingType>('FREE'); 
     const [enableEmailNotifications, setEnableEmailNotifications] = useState(true);
     const [enableInAppNotifications, setEnableInAppNotifications] = useState(true);
     const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
+
+    // Payment Gateway Settings
+    const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(false);
+    const [stripeApiKey, setStripeApiKey] = useState('');
+    const [razorpayApiKey, setRazorpayApiKey] = useState('');
+    const [instamojoApiKey, setInstamojoApiKey] = useState('');
+
 
     useEffect(() => {
         setIsLoadingSettings(true);
@@ -31,10 +40,15 @@ export default function AdminSettingsPage() {
             .then(settings => {
                 if (settings) {
                     setNewRegistrationsOpen(settings.newRegistrationsOpen ?? true);
-                    setDefaultTestAccess(settings.defaultTestAccess ?? 'FREE'); // Default to FREE if undefined
+                    setDefaultTestAccess(settings.defaultTestAccess ?? 'FREE'); 
                     setEnableEmailNotifications(settings.enableEmailNotifications ?? true);
                     setEnableInAppNotifications(settings.enableInAppNotifications ?? true);
                     setMaintenanceModeEnabled(settings.maintenanceModeEnabled ?? false);
+                    // Load payment gateway settings
+                    setPaymentGatewayEnabled(settings.paymentGatewayEnabled ?? false);
+                    setStripeApiKey(settings.stripeApiKey || ''); // Use empty string if null
+                    setRazorpayApiKey(settings.razorpayApiKey || '');
+                    setInstamojoApiKey(settings.instamojoApiKey || '');
                 }
             })
             .catch(e => {
@@ -48,12 +62,16 @@ export default function AdminSettingsPage() {
 
     const handleSaveChanges = async () => {
         setIsLoading(true);
-        const settingsToSave: PlatformSettings = {
+        const settingsToSave: Partial<PlatformSettings> = {
             newRegistrationsOpen,
             defaultTestAccess,
             enableEmailNotifications,
             enableInAppNotifications,
             maintenanceModeEnabled,
+            paymentGatewayEnabled,
+            stripeApiKey: stripeApiKey.trim() || null, // Store as null if empty
+            razorpayApiKey: razorpayApiKey.trim() || null,
+            instamojoApiKey: instamojoApiKey.trim() || null,
         };
 
         try {
@@ -85,6 +103,7 @@ export default function AdminSettingsPage() {
                  <Skeleton className="h-48 w-full" />
                  <Skeleton className="h-32 w-full" />
                  <Skeleton className="h-64 w-full" />
+                 <Skeleton className="h-80 w-full" /> {/* Added skeleton for integrations */}
             </div>
         );
     }
@@ -161,7 +180,7 @@ export default function AdminSettingsPage() {
                     </div>
                 </CardContent>
             </Card>
-
+            
             <Card>
                  <CardHeader>
                     <CardTitle>System Configuration</CardTitle>
@@ -187,30 +206,57 @@ export default function AdminSettingsPage() {
                         <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
                             <span>In-App Notifications</span>
                             <span className="font-normal leading-snug text-muted-foreground">
-                                Show notifications within the EduNexus platform. (Coming Soon)
+                                Show notifications within the EduNexus platform.
                             </span>
                         </Label>
                         <Switch
                             id="in-app-notifications"
                             checked={enableInAppNotifications}
                             onCheckedChange={setEnableInAppNotifications}
-                             disabled // Enable when implemented
+                             disabled={isLoading} 
                         />
                     </div>
 
-                     <h3 className="text-lg font-medium border-b pb-2 pt-4">Integrations</h3>
+                     <h3 className="text-lg font-medium border-b pb-2 pt-4">Payment Gateway</h3>
+                      <div className="flex items-center justify-between space-x-2 p-4 border rounded-lg">
+                        <Label htmlFor="payment-gateway-switch" className="flex flex-col space-y-1">
+                            <span>Enable Payment Gateway</span>
+                            <span className="font-normal leading-snug text-muted-foreground">
+                                Allow users to purchase premium tests.
+                            </span>
+                        </Label>
+                        <Switch
+                            id="payment-gateway-switch"
+                            checked={paymentGatewayEnabled}
+                            onCheckedChange={setPaymentGatewayEnabled}
+                            disabled={isLoading}
+                        />
+                    </div>
+
+                    <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600"/> API Keys are sensitive. Store them securely. These are for local demonstration and will be stored in a JSON file.
+                        </p>
+                        <div className="space-y-2">
+                            <Label htmlFor="stripe-api-key" className="flex items-center gap-1"><KeyRound className="h-4 w-4"/>Stripe API Key</Label>
+                            <Input id="stripe-api-key" type="password" value={stripeApiKey} onChange={(e) => setStripeApiKey(e.target.value)} placeholder="sk_test_••••••••••••••••" disabled={isLoading || !paymentGatewayEnabled}/>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="razorpay-api-key" className="flex items-center gap-1"><KeyRound className="h-4 w-4"/>Razorpay API Key</Label>
+                            <Input id="razorpay-api-key" type="password" value={razorpayApiKey} onChange={(e) => setRazorpayApiKey(e.target.value)} placeholder="rzp_test_••••••••••••" disabled={isLoading || !paymentGatewayEnabled}/>
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="instamojo-api-key" className="flex items-center gap-1"><KeyRound className="h-4 w-4"/>Instamojo API Key</Label>
+                            <Input id="instamojo-api-key" type="password" value={instamojoApiKey} onChange={(e) => setInstamojoApiKey(e.target.value)} placeholder="test_•••••••••••••••" disabled={isLoading || !paymentGatewayEnabled}/>
+                        </div>
+                    </div>
+
+
+                     <h3 className="text-lg font-medium border-b pb-2 pt-4">Other Integrations</h3>
                      <div className="space-y-2 p-4 border rounded-lg">
                         <Label htmlFor="google-ai-key">Google AI API Key</Label>
-                        <Input id="google-ai-key" type="password" value="**********" disabled />
-                         <p className="text-xs text-muted-foreground">Managed via environment variables (.env).</p>
-                    </div>
-                     <div className="space-y-2 p-4 border rounded-lg">
-                        <Label>Payment Gateway (Placeholder)</Label>
-                         <p className="text-sm text-muted-foreground pb-2">
-                           Configure Stripe/Razorpay keys for paid tests. (Coming Soon)
-                         </p>
-                         <Input id="payment-key" type="password" value="**********" disabled />
-                          <p className="text-xs text-muted-foreground">Managed via environment variables or secure config.</p>
+                        <Input id="google-ai-key" type="password" value={process.env.GOOGLE_GENAI_API_KEY ? '••••••••••••••••••' : 'Not Set'} disabled />
+                         <p className="text-xs text-muted-foreground">Managed via GOOGLE_GENAI_API_KEY environment variable (.env).</p>
                     </div>
                 </CardContent>
                  <CardFooter>
