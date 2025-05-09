@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: edunexus
+    env: node
+    plan: free # Or your desired plan
+    buildCommand: "npm install && npm run build"
+    startCommand: "npm run start"
+    healthCheckPath: /api/health # Basic health check, can be any public route
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_ADMIN_EMAIL # User should set this in Render dashboard
+        sync: false
+      - key: ADMIN_PASSWORD # User should set this in Render dashboard
+        sync: false
+      - key: GOOGLE_GENAI_API_KEY # User should set this in Render dashboard
+        sync: false
+      - key: PORT # Render will set this, but good to have a default if needed
+        value: 9002
+    # Optional: Add a persistent disk if attempting to make users.json work,
+    # but this is generally not recommended for production due to potential data loss.
+    # A proper database is better for user data.
+    # disk:
+    #   name: data
+    #   mountPath: /opt/render/project/src/src/data # Adjust path to match where users.json is
+    #   sizeGB: 1

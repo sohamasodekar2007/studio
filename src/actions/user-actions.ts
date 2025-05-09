@@ -10,12 +10,18 @@ import crypto from 'crypto'; // Import crypto for hashing
 
 const SALT_ROUNDS = 10;
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
-// Path for storing avatar files within the src/data structure for local persistence
-// This is NOT served directly by Next.js static serving like the `public` folder.
-// A separate mechanism would be needed if these avatars need to be served.
-// For this local-only setup, we'll assume avatarUrl stores a relative path or filename.
 const dataAvatarsPath = path.join(process.cwd(), 'src', 'data', 'avatars');
 
+// --- IMPORTANT NOTE ON users.json PERSISTENCE ---
+// Writing to local files like users.json directly within server actions
+// has limitations on serverless deployment platforms (e.g., Netlify, Vercel, Render free tiers):
+// 1. Read-Only Filesystem: Many platforms have a read-only filesystem for deployed functions.
+// 2. Ephemeral Storage: Even if writable, the filesystem might be ephemeral, meaning
+//    changes are lost on new deployments or when the function instance is recycled.
+// For persistent user data in production, a proper database (e.g., PostgreSQL, MongoDB, Firebase Firestore)
+// is strongly recommended. This local JSON approach is suitable for local development and demonstration.
+// Client-side Local Storage is unaffected by these server-side limitations.
+// ---
 
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
@@ -60,10 +66,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
     let users: UserProfile[] = [];
     let writeNeeded = false;
 
-    // Ensure the src/data/avatars directory exists for local avatar storage
-    // This is different from public/avatars.
     await ensureDirExists(dataAvatarsPath);
-
 
     try {
         await fs.access(usersFilePath);
@@ -192,7 +195,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
         }
         processedUsers.push({
             id: uuidv4(),
-            email: primaryAdminEmail, // Use the defined constant
+            email: primaryAdminEmail,
             password: adminPasswordHash,
             name: 'Admin User (Primary)',
             phone: '0000000000',
@@ -235,48 +238,36 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
 }
 
 
-/**
- * Saves an avatar file to the local `src/data/avatars` directory.
- * THIS IS FOR LOCAL DEMONSTRATION ONLY. Not suitable for production serverless.
- * @param userId The ID of the user.
- * @param avatarFile The File object to save.
- * @returns The filename if saved successfully, otherwise null.
- */
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
-        await ensureDirExists(dataAvatarsPath); // Ensure src/data/avatars exists
+        await ensureDirExists(dataAvatarsPath);
 
         const fileBuffer = Buffer.from(await avatarFile.arrayBuffer());
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = path.extname(avatarFile.name).substring(1) || 'png'; // Default to png if no extension
+        const extension = path.extname(avatarFile.name).substring(1) || 'png';
         const filename = `avatar-${userId}-${uniqueSuffix}.${extension}`;
         const filePath = path.join(dataAvatarsPath, filename);
 
         await fs.writeFile(filePath, fileBuffer);
         console.log(`Avatar saved locally for user ${userId}: ${filePath}`);
-        return filename; // Return just the filename, to be stored in user.avatarUrl
+        return filename;
     } catch (error) {
         console.error(`Error saving avatar locally for user ${userId}:`, error);
         return null;
     }
 }
 
-/**
- * Deletes an avatar file from the local `src/data/avatars` directory.
- * @param filename The name of the avatar file to delete.
- * @returns True if deletion was successful or file didn't exist, false on error.
- */
 async function deleteAvatarLocally(filename: string): Promise<boolean> {
     try {
         const filePath = path.join(dataAvatarsPath, filename);
-        await fs.access(filePath); // Check if file exists
+        await fs.access(filePath);
         await fs.unlink(filePath);
         console.log(`Deleted local avatar: ${filePath}`);
         return true;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
             console.warn(`Avatar file not found for deletion (local): ${filename}`);
-            return true; // File doesn't exist, consider it success
+            return true;
         }
         console.error(`Error deleting local avatar ${filename}:`, error);
         return false;
@@ -325,7 +316,7 @@ export async function addUserToJson(
             role: assignedRole,
             expiry_date: expiryDate,
             createdAt: new Date().toISOString(),
-            avatarUrl: null, // Avatars handled separately or default
+            avatarUrl: null,
             referral: '',
             totalPoints: 0,
         };
@@ -346,7 +337,6 @@ export async function addUserToJson(
         }
     } catch (error: any) {
         console.error('Error adding user to JSON:', error);
-        // Check for specific error codes like ENOENT if ensureDirExists was too aggressive
         if (error.code === 'ENOENT' && error.syscall === 'mkdir') {
              return { success: false, message: `Failed to add user. Reason: ${error.code}: no such file or directory, ${error.syscall} '${error.path}'` };
         }
@@ -357,7 +347,7 @@ export async function addUserToJson(
 
 export async function updateUserInJson(
     userId: string,
-    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'role' | 'totalPoints' | 'avatarUrl'>> & { avatarFile?: File | null, removeAvatar?: boolean }
+    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'totalPoints'>> & { avatarFile?: File | null, removeAvatar?: boolean }
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     if (!userId || typeof userId !== 'string') {
         return { success: false, message: "Invalid user ID provided for update." };
@@ -371,23 +361,21 @@ export async function updateUserInJson(
         }
 
         const existingUser = users[userIndex];
-        const currentRole = existingUser.role;
+        const currentRole = existingUser.role; // Get existing role
 
         const { avatarFile, removeAvatar, ...otherUpdates } = updatedData;
         let newAvatarFilename = existingUser.avatarUrl || null;
 
-        // Handle avatar update/removal
         if (avatarFile instanceof File) {
-            if (existingUser.avatarUrl) { // Delete old avatar if exists
+            if (existingUser.avatarUrl) {
                 await deleteAvatarLocally(existingUser.avatarUrl);
             }
-            newAvatarFilename = await saveAvatarLocally(userId, avatarFile); // Save new one, get filename
+            newAvatarFilename = await saveAvatarLocally(userId, avatarFile);
             if (!newAvatarFilename) console.warn("Failed to save new avatar, keeping old one if any.");
         } else if (removeAvatar && existingUser.avatarUrl) {
             await deleteAvatarLocally(existingUser.avatarUrl);
             newAvatarFilename = null;
         }
-
 
         const newEmail = otherUpdates.email?.trim().toLowerCase() || existingUser.email?.trim().toLowerCase();
         const isEmailChanged = newEmail !== existingUser.email?.trim().toLowerCase();
@@ -398,8 +386,12 @@ export async function updateUserInJson(
 
         const newRoleDerived = getRoleFromEmail(newEmail);
         if (currentRole === 'User' && newRoleDerived === 'Admin') {
-             return { success: false, message: `Cannot change email to an admin format ('${newEmail}') for a User role.` };
+             return { success: false, message: `Cannot change email to an admin format ('${newEmail}') for a User role unless role is also changed to Admin.` };
         }
+         if (currentRole === 'Admin' && newRoleDerived === 'User') {
+            return { success: false, message: `Cannot change email to a non-admin format for an Admin role unless role is also changed to User.` };
+        }
+
 
         if (isEmailChanged) {
             const conflictingUser = users.find(u => u.email?.toLowerCase() === newEmail && u.id !== userId);
@@ -423,13 +415,15 @@ export async function updateUserInJson(
         }
         const finalExpiryDateString = finalExpiryDate ? finalExpiryDate.toISOString() : null;
 
+        // Preserve the existing role, do not allow role change through this function
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
             ...otherUpdates,
             email: newEmail,
-            avatarUrl: newAvatarFilename, // Store the new filename or null
+            avatarUrl: newAvatarFilename,
             model: finalModel,
             expiry_date: finalExpiryDateString,
+            role: currentRole, // Ensure existing role is maintained
         };
 
         users[userIndex] = userWithUpdatesApplied;
@@ -467,12 +461,15 @@ export async function updateUserRole(
              return { success: false, message: "Cannot change the role of the primary admin account." };
          }
 
-         if (newRole === 'Admin' && userToUpdate.email?.toLowerCase() !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(userToUpdate.email ?? '')) {
-              return { success: false, message: `Cannot promote to Admin. Email '${userToUpdate.email}' does not follow the admin pattern ('username-admin@edunexus.com'). Change email first.` };
+         // Check if the email format is appropriate for the new role
+         const emailLower = userToUpdate.email?.toLowerCase() || '';
+         if (newRole === 'Admin' && emailLower !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(emailLower)) {
+              return { success: false, message: `Cannot promote to Admin. Email '${userToUpdate.email}' does not follow admin pattern ('username-admin@edunexus.com' or primary admin). Change email first or use an appropriate email.` };
          }
-         if (newRole === 'User' && (userToUpdate.email?.toLowerCase() === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(userToUpdate.email ?? ''))) {
-              return { success: false, message: `Cannot demote to User if email format is for Admins. Change email first.` };
+         if (newRole === 'User' && (emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower))) {
+              return { success: false, message: `Cannot demote to User. Email format '${userToUpdate.email}' is reserved for Admins. Change email first.` };
          }
+
 
          if (userToUpdate.role === newRole) {
              const { password, ...userWithoutPassword } = userToUpdate;
@@ -484,8 +481,12 @@ export async function updateUserRole(
              userToUpdate.model = 'combo';
              userToUpdate.expiry_date = '2099-12-31T00:00:00.000Z';
          } else {
-             userToUpdate.model = 'free';
-             userToUpdate.expiry_date = null;
+             // When demoting to User, if current model is 'combo' (likely from Admin role),
+             // reset to 'free' or a sensible default.
+             if (userToUpdate.model === 'combo') {
+                 userToUpdate.model = 'free';
+                 userToUpdate.expiry_date = null;
+             }
          }
 
          users[userIndex] = userToUpdate;
@@ -582,22 +583,19 @@ export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanVa
         return { isPlanValid: false, message: "User ID not provided." };
     }
     try {
-        const currentUser = await getUserById(userId); // This gets user WITHOUT password
+        const currentUser = await getUserById(userId);
         if (!currentUser) {
             return { isPlanValid: false, message: "User not found." };
         }
 
-        // Admins always have a valid plan (combo, long expiry)
         if (currentUser.role === 'Admin') {
              return { isPlanValid: true };
         }
 
-        // Free users always have a valid plan (no expiry check needed)
         if (currentUser.model === 'free') {
             return { isPlanValid: true };
         }
 
-        // For paid models (non-admin, non-free)
         if (!currentUser.expiry_date) {
             return { isPlanValid: false, message: "Subscription details incomplete (missing expiry date)." };
         }
@@ -623,7 +621,7 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
           ...existingUser,
           ...userData,
           password: userData.password ?? existingUser.password,
-          role: userData.role ?? existingUser.role, // Keep role if not provided
+          role: userData.role ?? existingUser.role,
           totalPoints: userData.totalPoints ?? existingUser.totalPoints ?? 0,
           createdAt: userData.createdAt ?? existingUser.createdAt ?? new Date().toISOString(),
           id: userData.id ?? existingUser.id,
