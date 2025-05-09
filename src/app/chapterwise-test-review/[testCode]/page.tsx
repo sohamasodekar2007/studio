@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
@@ -20,7 +20,7 @@ import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Added import for Label
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -37,10 +37,26 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
+// Helper to construct correct image paths relative to the public folder
 const constructPublicImagePath = (relativePath: string | null | undefined): string | null => {
-    if (!relativePath || !relativePath.startsWith('/')) return null;
-    return relativePath;
+    // Ensure the path starts with a slash and is correctly formed
+    if (!relativePath) return null;
+    // If already starts with /question_bank_images, use as is.
+    if (relativePath.startsWith('/question_bank_images/')) {
+        return relativePath;
+    }
+    // If it's just a filename, prepend the assumed base path (this case should be less common now)
+    if (!relativePath.includes('/')) {
+        // This might need adjustment based on how `questionImageUrl` is stored in `DetailedAnswer`
+        // For now, assume it's already a full relative path from public or null.
+        console.warn(`constructPublicImagePath: Encountered a filename without path: ${relativePath}. It might not load correctly.`);
+        return `/question_bank_images/unknown_subject/unknown_lesson/images/${relativePath}`; // Fallback
+    }
+    // If it's a relative path but doesn't start with /question_bank_images, it might be an old format.
+    // It's safer to return null or log an error if paths are not consistently structured.
+    return null;
 };
+
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -147,7 +163,7 @@ export default function TestReviewPage() {
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const correctOptionKey = currentReviewQuestion?.correctAnswer?.replace('Option ', '').trim() || currentReviewQuestion?.correctAnswer;
+  const correctOptionKey = currentReviewQuestion?.correctAnswer; // Assuming correctAnswer is just "A", "B", etc.
   const userSelectedOptionKey = currentReviewQuestion?.userAnswer;
   const isUserCorrect = !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentReviewQuestion?.status || QuestionStatusEnum.NotVisited;
@@ -157,6 +173,8 @@ export default function TestReviewPage() {
 
     const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
     const relativeImageUrl = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
+
+    // Use the helper to construct the full public path
     const publicImagePath = constructPublicImagePath(relativeImageUrl);
 
     if (publicImagePath) {
@@ -165,12 +183,13 @@ export default function TestReviewPage() {
           <Image
             src={publicImagePath}
             alt={context === 'question' ? "Question Image" : "Explanation Image"}
-            width={800}
-            height={600}
-            className="rounded-md border bg-card object-contain"
+            width={800} // Provide a sensible default width
+            height={600} // Provide a sensible default height
+            className="rounded-md border bg-card object-contain" // Ensure object-contain
             data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-            priority={currentQuestionReviewIndex < 3 && context === 'question'}
-            unoptimized
+            priority={currentQuestionReviewIndex < 3 && context === 'question'} // Prioritize initial images
+            unoptimized // Good for local dev to avoid Vercel optimization issues with local files
+            onError={(e) => { console.error(`Error loading image: ${publicImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
           />
         </div>
       );
@@ -241,8 +260,10 @@ export default function TestReviewPage() {
         toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
         return;
      }
-     const subject = currentReviewQuestion.subject || (testReport.test_subject && testReport.test_subject[0]) || "Unknown Subject";
-     const lesson = currentReviewQuestion.lesson || testReport.lesson || testReport.testName || "Unknown Lesson";
+     // Attempt to derive subject and lesson from currentReviewQuestion, fallback to testReport
+     const subject = currentReviewQuestion.questionText ? (currentReviewQuestion as any).subject : (testReport as ChapterwiseTestJson).test_subject?.[0] || 'Unknown Subject';
+     const lesson = currentReviewQuestion.questionText ? (currentReviewQuestion as any).lesson : (testReport as ChapterwiseTestJson).lesson || testReport.testName || 'Unknown Lesson';
+
      const questionData: BookmarkedQuestion = {
          questionId: currentReviewQuestion.questionId,
          subject: subject,
@@ -280,13 +301,13 @@ export default function TestReviewPage() {
 
   if (isLoading || authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl">
-        <Skeleton className="h-8 w-1/4 mb-4" />
+      <div className="container mx-auto py-8 px-4 max-w-3xl"> {/* Adjusted max-width */}
+        <Skeleton className="h-8 w-1/3 mb-4" /> {/* Adjusted width */}
         <Skeleton className="h-10 w-full mb-6" />
         <Card>
-          <CardHeader><Skeleton className="h-6 w-1/3" /></CardHeader>
+          <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader> {/* Adjusted width */}
           <CardContent>
-            <Skeleton className="h-40 w-full mb-4" />
+            <Skeleton className="h-48 w-full mb-4" /> {/* Adjusted height */}
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
@@ -298,7 +319,7 @@ export default function TestReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+      <div className="container mx-auto py-8 px-4 max-w-3xl text-center"> {/* Adjusted max-width */}
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
@@ -313,7 +334,7 @@ export default function TestReviewPage() {
 
    if (!testReport || !currentReviewQuestion) {
      return (
-       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+       <div className="container mx-auto py-8 px-4 max-w-3xl text-center"> {/* Adjusted max-width */}
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
          <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1>
          <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
@@ -336,7 +357,7 @@ export default function TestReviewPage() {
             if (!isLoading) typesetMathJax();
         }}
       />
-      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+      <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6"> {/* Adjusted max-width */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
