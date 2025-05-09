@@ -8,20 +8,23 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell, Check, X, Loader2, AlertTriangle, Eye } from 'lucide-react';
+import { Bell, Check, X, Loader2, AlertTriangle, Eye, History, ClockIcon } from 'lucide-react';
 import type { ChallengeInvite } from '@/types';
 import { getUserChallengeInvites, acceptChallenge, rejectChallenge } from '@/actions/challenge-actions';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 export default function ChallengeInvitesPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
-  const [invites, setInvites] = useState<ChallengeInvite[]>([]);
+  const [pendingActiveInvites, setPendingActiveInvites] = useState<ChallengeInvite[]>([]);
+  const [pastInvites, setPastInvites] = useState<ChallengeInvite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({}); // For accept/reject loading
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
   const fetchInvites = useCallback(async () => {
     if (!user?.id) {
@@ -32,12 +35,20 @@ export default function ChallengeInvitesPage() {
     setError(null);
     try {
       const data = await getUserChallengeInvites(user.id);
-      const pending = data.invites.filter(inv => inv.status === 'pending' && inv.expiresAt > Date.now()).sort((a, b) => b.createdAt - a.createdAt);
-      setInvites(pending);
+      const now = Date.now();
+      
+      const currentPending = data.invites.filter(inv => inv.status === 'pending' && inv.expiresAt > now)
+                                        .sort((a, b) => b.createdAt - a.createdAt);
+      
+      const currentPast = data.invites.filter(inv => inv.status !== 'pending' || inv.expiresAt <= now)
+                                    .sort((a, b) => b.createdAt - a.createdAt); // Show newest past first
 
-      // Update local storage for notification simulation
-      localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites)); // Store all invites
-      localStorage.setItem(`lastSeenInvitesCount_${user.id}`, pending.length.toString()); // Update count of currently pending
+      setPendingActiveInvites(currentPending);
+      setPastInvites(currentPast);
+
+      // Update local storage for notification simulation based on active pending invites
+      localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites));
+      localStorage.setItem(`lastSeenInvitesCount_${user.id}`, currentPending.length.toString());
 
     } catch (err: any) {
       setError(err.message || "Failed to load challenge invites.");
@@ -66,7 +77,7 @@ export default function ChallengeInvitesPage() {
 
       if (result.success) {
         toast({ title: `Challenge ${action === 'accept' ? 'Accepted' : 'Rejected'}!` });
-        fetchInvites(); // Refresh invites list (which also updates local storage)
+        fetchInvites(); 
         if (action === 'accept' && result.challenge) {
           router.push(`/challenge/lobby/${result.challenge.challengeCode}`);
         }
@@ -77,6 +88,23 @@ export default function ChallengeInvitesPage() {
       toast({ variant: 'destructive', title: 'Action Failed', description: err.message });
     } finally {
       setActionLoading(prev => ({ ...prev, [challengeCode]: false }));
+    }
+  };
+
+  const getInviteStatusBadge = (invite: ChallengeInvite) => {
+    const now = Date.now();
+    if (invite.status === 'pending' && invite.expiresAt <= now) {
+      return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600">Expired</Badge>;
+    }
+    switch (invite.status) {
+      case 'accepted':
+        return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Accepted</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive" className="text-xs">Rejected</Badge>;
+      case 'pending':
+        return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700">Pending</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs">{invite.status}</Badge>;
     }
   };
 
@@ -101,59 +129,101 @@ export default function ChallengeInvitesPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-2xl space-y-6">
+    <div className="container mx-auto py-8 px-4 max-w-2xl space-y-8">
       <div className="text-center">
         <Bell className="h-12 w-12 text-primary mx-auto mb-2" />
         <h1 className="text-3xl font-bold tracking-tight">Challenge Invites</h1>
         <p className="text-muted-foreground">Accept or reject challenges from your friends.</p>
       </div>
 
-      {invites.length === 0 ? (
+      {/* Pending Active Invites */}
+      {pendingActiveInvites.length > 0 && (
         <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Pending Invites</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {pendingActiveInvites.map((invite) => (
+              <Card key={invite.challengeCode} className="hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <CardTitle className="text-lg">Challenge from {invite.creatorName || 'A friend'}</CardTitle>
+                  <CardDescription>
+                    Test: {invite.testName} ({invite.numQuestions} Qs)
+                    <br />
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ClockIcon className="h-3 w-3"/> Expires: {new Date(invite.expiresAt).toLocaleTimeString()}
+                    </span>
+                  </CardDescription>
+                </CardHeader>
+                <CardFooter className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAction(invite.challengeCode, 'reject')}
+                    disabled={actionLoading[invite.challengeCode]}
+                  >
+                    {actionLoading[invite.challengeCode] ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="mr-1 h-4 w-4" />}
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleAction(invite.challengeCode, 'accept')}
+                    disabled={actionLoading[invite.challengeCode]}
+                  >
+                     {actionLoading[invite.challengeCode] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                    Accept & Join
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      
+      {(pendingActiveInvites.length === 0 && pastInvites.length === 0 && !isLoading) && (
+         <Card>
           <CardContent className="p-10 text-center">
-            <p className="text-muted-foreground">You have no pending challenge invites.</p>
+            <p className="text-muted-foreground">You have no challenge invites at the moment.</p>
             <Button asChild variant="link" className="mt-2">
                 <Link href="/challenge/create">Create a new challenge?</Link>
             </Button>
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-4">
-          {invites.map((invite) => (
-            <Card key={invite.challengeCode} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="text-lg">Challenge from {invite.creatorName || 'A friend'}</CardTitle>
-                <CardDescription>
-                  Test: {invite.testName} ({invite.numQuestions} Qs)
-                  <br />
-                  <span className="text-xs text-muted-foreground">
-                    Created: {new Date(invite.createdAt).toLocaleString()} | Expires: {new Date(invite.expiresAt).toLocaleString()}
-                  </span>
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleAction(invite.challengeCode, 'reject')}
-                  disabled={actionLoading[invite.challengeCode]}
-                >
-                  {actionLoading[invite.challengeCode] ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="mr-1 h-4 w-4" />}
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleAction(invite.challengeCode, 'accept')}
-                  disabled={actionLoading[invite.challengeCode]}
-                >
-                   {actionLoading[invite.challengeCode] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-                  Accept & Join Lobby
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+      )}
+
+      {/* Past/Responded Invites */}
+      {pastInvites.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center gap-2"><History className="h-5 w-5"/>Past Invites</CardTitle>
+             <CardDescription>History of your challenge invitations.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pastInvites.map((invite) => (
+              <div key={invite.challengeCode + invite.status + invite.createdAt} className="flex items-center justify-between p-3 border rounded-md bg-muted/20">
+                <div>
+                  <p className="text-sm font-medium">
+                    Challenge from {invite.creatorName || 'A friend'}
+                     <span className="text-xs text-muted-foreground ml-2">({invite.testName})</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(invite.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {getInviteStatusBadge(invite)}
+                   {invite.status === 'accepted' && (
+                     <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
+                        <Link href={`/challenge/lobby/${invite.challengeCode}`}>View Lobby</Link>
+                     </Button>
+                   )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   );
 }
+

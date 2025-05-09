@@ -150,7 +150,7 @@ export async function createChallenge(
 
     const challengeCode = generateChallengeCode();
     const now = Date.now();
-    const expiresAt = now + 3 * 60 * 60 * 1000; // 3 hours from now
+    const expiresAt = now + 15 * 60 * 1000; // 15 minutes from now
 
     const questionsFromBank = await getQuestionsForLesson({
         subject: testConfig.subject,
@@ -389,3 +389,4 @@ export async function getChallengeResults(challengeCode: string): Promise<Challe
     }
     return challenge;
 }
+
