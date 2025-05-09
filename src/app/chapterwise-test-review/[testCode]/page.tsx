@@ -17,10 +17,10 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
-import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions'; // Import createNotebook
+import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Ensure Label is imported if used within options
 
 // Color mapping for question status badges
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -79,7 +79,7 @@ export default function TestReviewPage() {
                  (window as any).MathJax.typesetPromise(elements)
                     .catch((err: any) => console.error("MathJax typeset error in review page:", err));
             } else {
-                 // Fallback if no specific elements found (might happen during initial load)
+                 // Fallback if no specific elements found
                  (window as any).MathJax.typesetPromise()
                     .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
             }
@@ -175,34 +175,35 @@ export default function TestReviewPage() {
     if (!currentReviewQuestion) return <p className="text-sm text-muted-foreground">Content not available.</p>;
 
     const text = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
-    // Get the relative image URL from the detailed answer object
     const relativeImageUrl = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
-    // Use the helper to ensure it's a valid public path (or null)
     const publicImagePath = constructPublicImagePath(relativeImageUrl);
     const altText = context === 'question' ? `Question ${currentQuestionReviewIndex + 1}` : "Explanation Image";
 
     if (publicImagePath) {
-      // Display Image directly within the card
       return (
-        <div className="relative w-full max-w-xl mx-auto my-4 aspect-video"> {/* Constrained aspect ratio */}
+        <div className="relative w-full max-w-xl mx-auto my-4">
           <Image
             src={publicImagePath}
             alt={altText}
-            layout="fill"
-            objectFit="contain" // Use contain to ensure full image is visible
-            className="rounded-md border bg-white dark:bg-gray-800" // Ensure contrast
+            width={800} // Provide a base width
+            height={600} // Provide a base height
+            layout="intrinsic" // Use intrinsic for aspect ratio, or responsive if you prefer fill
+            objectFit="contain"
+            className="rounded-md border bg-white dark:bg-gray-800"
             data-ai-hint={context === 'question' ? 'question diagram' : 'explanation image'}
-            priority={currentQuestionReviewIndex < 3 && context === 'question'} // Prioritize initial question images
+            priority={currentQuestionReviewIndex < 3 && context === 'question'}
             onError={(e) => {
               console.error(`Error loading ${context} image: ${publicImagePath}`, e);
-              (e.target as HTMLImageElement).closest('.relative')?.remove(); // Remove container on error
+              // Optionally hide the image container or show a placeholder
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              // You could also set a flag to render fallback text here
             }}
-            unoptimized // Good for local/dynamic images
+            unoptimized
           />
         </div>
       );
     } else if (text) {
-      // Fallback to text with MathJax
       return (
         <div
           className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
@@ -211,9 +212,8 @@ export default function TestReviewPage() {
       );
     }
 
-    // Specific fallbacks
     if (context === 'question') return <p className="text-sm text-muted-foreground">Question content not available.</p>;
-    if (context === 'explanation') return null; // Return null if explanation is empty
+    if (context === 'explanation' && (!text && !publicImagePath)) return <p className="text-sm text-muted-foreground">Explanation not available for this question.</p>;
 
     return null;
   }, [currentReviewQuestion, currentQuestionReviewIndex]);
@@ -277,14 +277,14 @@ export default function TestReviewPage() {
     }
 
      const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
-         if (!user?.id || !currentReviewQuestion?.questionId || !testReport || !testReport.test_subject || !testReport.lesson) {
+         if (!user?.id || !currentReviewQuestion?.questionId || !testReport ) { // Removed subject/lesson check as it might be in report object
             toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
             return;
          }
 
-          // Determine subject and lesson from report data
-          const subject = testReport.test_subject?.[0] || "Unknown Subject";
-          const lesson = testReport.lesson || testReport.testName || "Unknown Lesson";
+          // Determine subject and lesson from report data OR currentReviewQuestion if available
+          const subject = currentReviewQuestion.subject || testReport.test_subject?.[0] || "Unknown Subject";
+          const lesson = currentReviewQuestion.lesson || testReport.lesson || testReport.testName || "Unknown Lesson";
 
 
          const questionData: BookmarkedQuestion = {
@@ -312,11 +312,11 @@ export default function TestReviewPage() {
      }
 
       const handleCreateNotebookCallback = useCallback(async (name: string) => {
-        if (!user?.id) return null; // Ensure user ID exists
+        if (!user?.id) return null;
         const result = await createNotebook(user.id, name);
         if (result.success && result.notebook) {
-          setNotebooks((prev) => [...prev, result.notebook!]); // Update local state
-          return result.notebook; // Return the created notebook
+          setNotebooks((prev) => [...prev, result.notebook!]);
+          return result.notebook;
         } else {
           toast({ variant: "destructive", title: "Failed to Create Notebook", description: result.message });
           return null;
@@ -329,7 +329,7 @@ export default function TestReviewPage() {
   // --- Loading & Error States ---
   if (isLoading || authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl">
+      <div className="container mx-auto py-8 px-4 max-w-4xl"> {/* Adjusted max-width for better desktop view */}
         <Skeleton className="h-8 w-1/4 mb-4" />
         <Skeleton className="h-10 w-full mb-6" />
         <Card>
@@ -347,7 +347,7 @@ export default function TestReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+      <div className="container mx-auto py-8 px-4 max-w-4xl text-center"> {/* Adjusted max-width */}
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
@@ -362,7 +362,7 @@ export default function TestReviewPage() {
 
    if (!testReport || !currentReviewQuestion) {
      return (
-       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
+       <div className="container mx-auto py-8 px-4 max-w-4xl text-center"> {/* Adjusted max-width */}
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
          <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1>
          <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
@@ -379,16 +379,15 @@ export default function TestReviewPage() {
   return (
     <>
       <Script
-        id="mathjax-script-review-page" // More specific ID
+        id="mathjax-script-review-page-2"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-        strategy="lazyOnload" // Load after page becomes interactive
+        strategy="lazyOnload"
         onLoad={() => {
           console.log('MathJax loaded for review page.');
-          // Ensure typesetting runs after initial render and subsequent updates
           typesetMathJax();
         }}
       />
-      <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
+      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6"> {/* Increased max-width */}
         {/* Header with Back Button and Title */}
         <div className="flex items-center justify-between mb-6">
           <Button variant="outline" size="sm" asChild>
@@ -399,7 +398,7 @@ export default function TestReviewPage() {
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-4 truncate" title={testReport.testName || testCode}>
             Test Review: {testReport.testName || testCode}
           </h1>
-          <div className="w-20"></div> {/* Spacer */}
+          <div className="w-20 hidden sm:block"></div> {/* Spacer, hidden on small screens */}
         </div>
 
         {/* Main Question Review Card */}
@@ -417,7 +416,7 @@ export default function TestReviewPage() {
           </CardHeader>
 
           {/* Question Content */}
-          <CardContent>
+          <CardContent className="px-4 sm:px-6"> {/* Responsive padding */}
             <div className="mb-5">
               {renderContent('question')}
             </div>
@@ -429,7 +428,7 @@ export default function TestReviewPage() {
             {renderOptions(currentReviewQuestion)}
 
             {/* Explanation Section */}
-            {renderContent('explanation') && (
+            {(currentReviewQuestion.explanationText || currentReviewQuestion.explanationImageUrl) && (
               <>
                 <Separator className="my-5" />
                 <div className="space-y-2">
@@ -441,24 +440,26 @@ export default function TestReviewPage() {
           </CardContent>
 
           {/* Footer with Navigation and Actions */}
-          <CardFooter className="flex justify-between items-center flex-wrap gap-2 pt-6 border-t">
-            <div className="flex gap-2">
+          <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t px-4 sm:px-6">
+            <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-start">
               <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
                 <Bookmark className="mr-2 h-4 w-4" />
                 {isSavingToNotebook ? <Loader2 className="h-4 w-4 animate-spin" /> : "Bookmark"}
               </Button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end mt-2 sm:mt-0">
               <Button
                 variant="outline"
                 onClick={() => navigateReview('prev')}
                 disabled={currentQuestionReviewIndex === 0}
+                className="flex-1 sm:flex-none"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Previous
               </Button>
               <Button
                 onClick={() => navigateReview('next')}
                 disabled={currentQuestionReviewIndex === totalQuestions - 1}
+                className="flex-1 sm:flex-none"
               >
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -474,9 +475,9 @@ export default function TestReviewPage() {
                 onClose={handleCloseNotebookModal}
                 notebooks={notebooks}
                 onSave={handleSaveToNotebooks}
-                isLoading={isSavingToNotebook} // Pass the specific loading state
+                isLoading={isSavingToNotebook}
                 userId={user.id}
-                onNotebookCreated={handleCreateNotebookCallback} // Pass the callback for creating new notebooks
+                onNotebookCreated={handleCreateNotebookCallback}
             />
         )}
     </>
