@@ -151,6 +151,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             if (currentUser.phone === undefined) { currentUser.phone = null; userModified = true; }
             if (currentUser.referral === undefined) { currentUser.referral = ''; userModified = true; }
              if (currentUser.totalPoints === undefined) { currentUser.totalPoints = 0; userModified = true; }
+             if (currentUser.targetYear === undefined) { currentUser.targetYear = null; userModified = true; } // Initialize targetYear
 
 
             processedUsers.push(currentUser);
@@ -192,7 +193,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             users.push({
                 id: uuidv4(), email: primaryAdminEmail, password: adminPasswordHash, name: 'Admin User (Primary)',
                 phone: '0000000000', class: 'Dropper', model: 'combo', role: 'Admin',
-                expiry_date: '2099-12-31T00:00:00.000Z', createdAt: new Date().toISOString(), avatarUrl: null, referral: '', totalPoints: 0,
+                expiry_date: '2099-12-31T00:00:00.000Z', createdAt: new Date().toISOString(), avatarUrl: null, referral: '', totalPoints: 0, targetYear: null,
             });
             writeNeeded = true;
         }
@@ -321,6 +322,7 @@ export async function addUserToJson(
             avatarUrl: null,
             referral: '',
             totalPoints: 0,
+            targetYear: newUserProfileData.targetYear || null, // Add targetYear
         };
 
         let users = await readAndInitializeUsersInternal();
@@ -418,6 +420,7 @@ export async function updateUserInJson(
             model: finalModel,
             expiry_date: finalExpiryDateString,
             role: currentRole, // Ensure existing role is maintained
+            targetYear: otherUpdates.targetYear !== undefined ? otherUpdates.targetYear : existingUser.targetYear, // Update targetYear
         };
 
         users[userIndex] = userWithUpdatesApplied;
@@ -613,6 +616,7 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
           totalPoints: userData.totalPoints ?? existingUser.totalPoints ?? 0,
           createdAt: userData.createdAt ?? existingUser.createdAt ?? new Date().toISOString(),
           id: userData.id ?? existingUser.id ?? uuidv4(),
+          targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear, // Update targetYear
       };
     } else {
       const assignedRole = userData.role || getRoleFromEmail(userData.email);
@@ -630,6 +634,7 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
         role: assignedRole,
         password: hashedPassword,
         totalPoints: userData.totalPoints ?? 0,
+        targetYear: userData.targetYear !== undefined ? userData.targetYear : null, // Add targetYear with default
       });
     }
     return await writeUsers(users);

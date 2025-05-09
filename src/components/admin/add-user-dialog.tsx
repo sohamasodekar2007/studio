@@ -17,7 +17,7 @@ import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, type UserModel, academicStatuses, type AcademicStatus } from '@/types';
 import { addUserToJson } from '@/actions/user-actions'; // Action to add user to JSON
-import { v4 as uuidv4 } from 'uuid'; // To generate unique IDs
+import { v4 as uuidv4 } from 'uuid';
 
 
 // Define roles for the dropdown
@@ -27,6 +27,10 @@ type UserRole = typeof userRoles[number];
 // Regex to match the allowed admin email pattern
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com'; // Fallback just in case
+
+// Generate year options for target year
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 6 }, (_, i) => (currentYear + i).toString());
 
 // Schema for adding a new user
 const addUserSchema = z.object({
@@ -39,6 +43,7 @@ const addUserSchema = z.object({
   class: z.enum(academicStatuses).nullable().optional(), // Allow null or value
   model: z.enum(userModels),
   expiry_date: z.date().nullable().optional(),
+  targetYear: z.string().optional().nullable(), // Added targetYear, make it optional or required as needed
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -90,6 +95,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
       class: null,
       model: 'free',
       expiry_date: null,
+      targetYear: null, // Default targetYear
     },
   });
 
@@ -107,7 +113,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
 
       // Prepare the UserProfile object for the action
       // Note: addUserToJson handles password hashing
-      const newUserProfileForAction: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral'> & { password: string } = {
+      const newUserProfileForAction: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints'> & { password: string } = {
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -115,7 +121,8 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         class: data.class,
         model: data.role === 'Admin' ? 'combo' : data.model, // Admins always get combo model
         expiry_date: data.role === 'Admin' ? '2099-12-31T00:00:00.000Z' : expiryDateString, // Long expiry for admin
-        // 'role' is not stored directly in users.json in this setup, it's inferred for display
+        role: data.role, // Explicitly pass role
+        targetYear: data.targetYear || null, // Pass targetYear
       };
 
 
@@ -270,7 +277,7 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                       <FormLabel>Academic Status</FormLabel>
                       <Select
                          // Convert null to '_none_' for the Select value, handle change
-                         onValueChange={(value) => field.onChange(value === '_none_' ? null : value)}
+                         onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)}
                          value={field.value === null ? '_none_' : field.value ?? '_none_'} // Use placeholder value
                          disabled={isLoading}
                        >
@@ -292,6 +299,32 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
                     </FormItem>
                   )}
                 />
+                 <FormField
+                  control={form.control}
+                  name="targetYear"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Target Year</FormLabel>
+                       <Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select target year (Optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           <SelectItem value="_none_">-- None --</SelectItem>
+                          {yearOptions.map((year) => (
+                            <SelectItem key={year} value={year}>
+                              {year}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
 
                  <FormField
                   control={form.control}

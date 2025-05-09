@@ -36,7 +36,8 @@ interface AuthContextProps {
     password?: string,
     displayName?: string,
     phoneNumber?: string | null,
-    academicStatus?: UserAcademicStatus | null
+    academicStatus?: UserAcademicStatus | null,
+    targetYear?: string | null // Added targetYear
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
   // Add updateUserData function
@@ -112,14 +113,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Compare local storage user plan/role with the latest backend data
              const profileChanged = storedUser.model !== latestProfile.model ||
                                    storedUser.expiry_date !== latestProfile.expiry_date ||
-                                   storedUser.role !== latestProfile.role; // Check role change
+                                   storedUser.role !== latestProfile.role || // Check role change
+                                   storedUser.targetYear !== latestProfile.targetYear; // Check targetYear change
 
             if (profileChanged) {
-                 console.warn(`AuthProvider: User plan or role mismatch detected for ${storedUser.email}. Logging out.`);
+                 console.warn(`AuthProvider: User plan, role, or target year mismatch detected for ${storedUser.email}. Logging out.`);
                   await logout("Your account details have been updated. Please log in again."); // Logout with specific message
                   setLoading(false);
                   return;
-            }
+             }
 
             // If plan hasn't changed and user exists, set the user state (using latest data)
             console.log(`AuthProvider: Session validated for ${latestProfile.email}.`);
@@ -157,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: userProfile.role, // Map the role
           expiry_date: userProfile.expiry_date,
           createdAt: userProfile.createdAt, // Keep createdAt if needed
+          targetYear: userProfile.targetYear, // Map targetYear
       };
   }
 
@@ -256,7 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password?: string,
     displayName?: string,
     phoneNumber?: string | null,
-    academicStatus?: UserAcademicStatus | null
+    academicStatus?: UserAcademicStatus | null,
+    targetYear?: string | null // Added targetYear
   ) => {
      if (!isMounted) return;
     if (!password) {
@@ -277,7 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Create UserProfile for local JSON storage
       // Pass plain text password to addUserToJson, it will handle hashing
-      const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral'> & { password: string } = { // Adjust type
+      const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints'> & { password: string } = { // Adjust type
         email: email,
         password: password, // Pass plain text
         name: displayName || null,
@@ -286,6 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         model: 'free', // Default to 'free'
         role: 'User', // Default to 'User' role
         expiry_date: null, // Free model has no expiry
+        targetYear: targetYear || null, // Include targetYear
       };
 
 
@@ -338,6 +343,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         '/privacy',
         '/tests', // Allow browsing tests
         '/dpp', // Allow browsing DPP list
+        '/pyq-dpps', // Allow browsing PYQ DPP list
      ];
     // Check if the current path matches any public route or specific pattern
      const isPublicRoute = publicRoutes.some(route => {
@@ -348,6 +354,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          // Handle dynamic routes that should be public (like viewing a specific test)
          if (pathname.startsWith('/tests/') && pathname.split('/').length === 3 && route === '/tests') return true;
          if (pathname.startsWith('/dpp/') && pathname.split('/').length > 2 && route === '/dpp') return true; // Allow /dpp/subject/lesson
+         if (pathname.startsWith('/pyq-dpps/') && pathname.split('/').length > 2 && route === '/pyq-dpps') return true; // Allow /pyq-dpps/exam/subject/lesson
          return pathname === route;
      });
 

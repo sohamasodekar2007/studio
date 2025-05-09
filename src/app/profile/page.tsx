@@ -15,15 +15,6 @@ import { getUserPoints, type UserPoints } from '@/actions/points-actions'; // Ac
 import { getAllTestReportsForUser } from '@/actions/test-report-actions';
 import type { TestResultSummary } from '@/types';
 
-// Helper to derive target year (adjust logic as needed)
-const getTargetYear = (userClass: string | null | undefined): string => {
-    const currentYear = new Date().getFullYear();
-    if (!userClass) return (currentYear + 1).toString();
-    if (userClass === '11th Class') return (currentYear + 2).toString();
-    if (userClass === '12th Class') return (currentYear + 1).toString();
-    if (userClass === 'Dropper') return (currentYear + 1).toString();
-    return (currentYear + 1).toString();
-};
 
 const getDayOfWeek = (dateIndex: number): string => {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -84,7 +75,7 @@ export default function ProfilePage() {
         return null; // Or a loading state while redirecting
     }
 
-    const targetYear = getTargetYear(user.class);
+    const targetYearDisplay = user.targetYear || 'N/A'; // Display user's target year
     const totalPoints = userPoints?.totalPoints ?? 0;
 
     // Placeholder data for weekly activity
@@ -123,7 +114,7 @@ export default function ProfilePage() {
                         <p className="font-semibold text-lg">{user.name || 'User Name'}</p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                         <p className="text-sm text-muted-foreground">Class: {user.class || 'N/A'}</p>
-                        <p className="text-sm text-muted-foreground">Target Year: {targetYear}</p>
+                        <p className="text-sm text-muted-foreground">Target Year: {targetYearDisplay}</p>
                     </div>
                     {/* Points Display */}
                     <div className="text-center">

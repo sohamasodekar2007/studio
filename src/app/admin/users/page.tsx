@@ -1,4 +1,4 @@
-
+// src/app/admin/users/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -80,7 +80,8 @@ export default function AdminUsersPage() {
         (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.phone?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (user.model?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+        (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (user.targetYear?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
   }, [users, searchTerm]);
 
@@ -208,6 +209,7 @@ export default function AdminUsersPage() {
                   <TableHead>Role</TableHead>
                   <TableHead>Model</TableHead>
                   <TableHead>Expiry</TableHead>
+                  <TableHead>Target Year</TableHead>
                   <TableHead>Created At</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -223,6 +225,7 @@ export default function AdminUsersPage() {
                       <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                     </TableRow>
@@ -257,6 +260,7 @@ export default function AdminUsersPage() {
                       </TableCell>
                         <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
                         <TableCell>{formatDate(user.expiry_date)}</TableCell>
+                        <TableCell>{user.targetYear || 'N/A'}</TableCell>
                       <TableCell>{formatDate(user.createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -285,7 +289,7 @@ export default function AdminUsersPage() {
                                   ) : (
                                       <DropdownMenuItem onClick={() => handleRoleChange(user.id, 'User')} disabled={isChangingRole === user.id}>
                                           {isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <User className="mr-2 h-4 w-4" />} Demote to User
-                                      </DropdownMenuItem>
+                                      DropdownMenuItem>
                                   )}
                                   </>
                               )}
@@ -323,7 +327,7 @@ export default function AdminUsersPage() {
                   )})
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center">
+                    <TableCell colSpan={10} className="h-24 text-center"> {/* Adjusted colSpan */}
                       No users found matching your criteria.
                     </TableCell>
                   </TableRow>
@@ -365,5 +369,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-
-    

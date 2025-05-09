@@ -17,12 +17,18 @@ import { useAuth } from '@/context/auth-context';
 import { sendWelcomeEmail } from '@/actions/otp-actions'; // Still needed for welcome email
 import Image from 'next/image';
 
-// Updated schema without OTP
+// Generate year options for target year
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 6 }, (_, i) => (currentYear + i).toString());
+
+
+// Updated schema without OTP, includes targetYear
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(10, { message: "Phone number must be 10 digits." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
+  targetYear: z.string().min(4, { message: "Please select your target exam year." }), // Added targetYear
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -45,6 +51,7 @@ export default function SignupPage() {
       email: "",
       phoneNumber: "",
       academicStatus: undefined,
+      targetYear: "", // Default to empty string for placeholder
       password: "",
       confirmPassword: "",
     },
@@ -66,14 +73,13 @@ export default function SignupPage() {
         data.password,
         data.name,
         data.phoneNumber,
-        data.academicStatus
+        data.academicStatus,
+        data.targetYear // Pass targetYear
       );
       // Success toast and redirection handled by AuthContext
     } catch (error: any) {
       // Error toast handled by AuthContext or thrown error
       console.error("Signup page submission error:", error.message);
-       // Removed duplicate toast as error is handled in AuthContext
-       // toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
     } finally {
       setIsLoading(false);
     }
@@ -169,7 +175,7 @@ export default function SignupPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Current Academic Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={combinedLoading}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={combinedLoading}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select your status" />
@@ -179,6 +185,31 @@ export default function SignupPage() {
                         {academicStatuses.map((status) => (
                           <SelectItem key={status} value={status}>
                             {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* Target Year */}
+              <FormField
+                control={form.control}
+                name="targetYear"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target Exam Year</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={combinedLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target year" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {yearOptions.map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
                           </SelectItem>
                         ))}
                       </SelectContent>

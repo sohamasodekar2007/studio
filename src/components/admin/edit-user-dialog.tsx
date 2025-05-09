@@ -24,11 +24,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; //
 // Define the allowed admin email pattern and primary admin email
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 
-// Helper function to determine role based on email - NO LONGER USED FOR ROLE ASSIGNMENT in this component
-// const getUserRole = (email: string | null): 'Admin' | 'User' => {
-//     if (!email) return 'User';
-//     return email === primaryAdminEmail || adminEmailPattern.test(email) ? 'Admin' : 'User';
-// };
+// Generate year options for target year
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 6 }, (_, i) => (currentYear + i).toString());
+
 
 // Schema for editing user profile, including email
 // Validation for email format related to role is handled in the server action (`updateUserInJson`)
@@ -42,6 +41,7 @@ const editUserSchema = z.object({
   class: z.enum(academicStatuses).nullable().optional(), // Allow null or value
   model: z.enum(userModels, { required_error: "Please select a user model." }),
   expiry_date: z.date().nullable().optional(),
+  targetYear: z.string().optional().nullable(), // Added targetYear
 }).refine(data => data.model === 'free' || (data.model !== 'free' && data.expiry_date), {
   message: "Expiry date is required for paid models.",
   path: ["expiry_date"],
@@ -76,6 +76,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
       class: user.class || null, // Add class
       model: currentUserRole === 'Admin' ? 'combo' : (user.model || 'free'), // Admins have combo
       expiry_date: currentUserRole === 'Admin' ? new Date('2099-12-31T00:00:00.000Z') : (user.expiry_date && isValid(parseISO(user.expiry_date)) ? parseISO(user.expiry_date) : null),
+      targetYear: user.targetYear || null, // Set targetYear
     },
   });
 
@@ -93,6 +94,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
              class: user.class || null,
              model: effectiveRole === 'Admin' ? 'combo' : (user.model || 'free'), // Enforce combo for admins
              expiry_date: effectiveRole === 'Admin' ? new Date('2099-12-31T00:00:00.000Z') : (user.expiry_date && isValid(parseISO(user.expiry_date)) ? parseISO(user.expiry_date) : null),
+             targetYear: user.targetYear || null,
           });
       }
   }, [user, form]);
@@ -147,6 +149,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
          class: data.class,
          model: finalModel, // Pass the validated model
          expiry_date: expiryDateString, // Pass the validated expiry
+         targetYear: data.targetYear || null, // Pass targetYear
        };
 
        // Save the updated UserProfile data via Server Action
@@ -212,7 +215,34 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
             <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Full Name *</FormLabel><FormControl><Input {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
             <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email Address *</FormLabel><FormControl><Input type="email" {...field} disabled={isLoading || isPrimaryAdminAccount} /></FormControl><FormMessage /> {isPrimaryAdminAccount && <p className="text-xs text-muted-foreground pt-1">Primary admin email cannot be changed.</p>} </FormItem> )} />
             <FormField control={form.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number *</FormLabel><FormControl><Input type="tel" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select status (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{academicStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+            <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select status (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{academicStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+            
+            <FormField
+              control={form.control}
+              name="targetYear"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Target Year</FormLabel>
+                  <Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select target year (Optional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                       <SelectItem value="_none_">-- None --</SelectItem>
+                      {yearOptions.map((year) => (
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
 
             {/* User Model Select - Disabled for Admins */}
             <FormField control={form.control} name="model" render={({ field }) => ( <FormItem><FormLabel>Subscription Model *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading || currentUserRole === 'Admin'}><FormControl><SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger></FormControl><SelectContent>{userModels.map((model) => (<SelectItem key={model} value={model} className="capitalize">{model.replace('_', ' ')}</SelectItem>))}</SelectContent></Select><FormMessage /> {currentUserRole === 'Admin' && <p className="text-xs text-muted-foreground pt-1">Admin accounts automatically have 'Combo' plan.</p>}</FormItem>)}/>

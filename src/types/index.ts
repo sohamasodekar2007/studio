@@ -35,6 +35,7 @@ export interface UserProfile {
   expiry_date: string | null; 
   createdAt?: string; 
   totalPoints?: number; 
+  targetYear?: string | null; // Added targetYear
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
