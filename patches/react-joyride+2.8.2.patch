@@ -1,0 +1,57 @@
+diff --git a/node_modules/react-joyride/dist/index.mjs b/node_modules/react-joyride/dist/index.mjs
+index fd88590..981d614 100644
+--- a/node_modules/react-joyride/dist/index.mjs
++++ b/node_modules/react-joyride/dist/index.mjs
+@@ -1,6 +1,6 @@
+ import e, { PureComponent as m, Component as v, createContext as _, createRef as w, forwardRef as S } from "react";
+-import R from "react-dom";
+-import { createPortal as I } from "react-dom";
++import * as R from "react-dom"; // Changed from default import to namespace import
++import { createPortal as I } from "react-dom"; // createPortal is a named export
+ import b from "deepmerge";
+ import x from "react-floater";
+ import { computePosition as O, flip as N, shift as C, offset as M, arrow as A } from "@floating-ui/dom";
+@@ -285,7 +285,7 @@
+   }
+   componentWillUnmount() {
+     const { target: t } = this.props;
+-    R.unmountComponentAtNode(t);
++    if (typeof R.unmountComponentAtNode === 'function') R.unmountComponentAtNode(t); // Conditional check
+   }
+   render() {
+     const { beaconComponent: t, onClickOrHover: n, onRef: r, open: o } = this.props;
+@@ -1322,7 +1322,7 @@
+     this.portal = document.createElement("div"), this.portal.className = y.PORTAL, document.body.appendChild(this.portal), this.renderTooltip();
+   }
+   componentWillUnmount() {
+-    R.unmountComponentAtNode(this.portal), document.body.removeChild(this.portal);
++    if (typeof R.unmountComponentAtNode === 'function') R.unmountComponentAtNode(this.portal); document.body.removeChild(this.portal); // Conditional check
+   }
+   renderTooltip() {
+     const { children: t, floaterProps: n, styles: r } = this.props, o = k(this.props, ["children", "floaterProps", "styles"]), s = /* @__PURE__ */ e.createElement(x, f({}, o, {
+@@ -1394,4 +1394,4 @@
+   return e.createElement(L.Consumer, null, (n) => /* @__PURE__ */ e.createElement(t, f({}, r, n)));
+ }
+ export {
+-  T as ACTIONS,
+-  E as EVENTS,
+-  L as JoyrideContext,
+-  g as LIFECYCLE,
+-  D as Origin,
+-  O asPlacement,
+-  P as STATUS,
+-  B as StoreContext,
+-  y as TOUR_ACTIONS,
+-  v as TourProvider,
+-  S as default,
+-  j as floaterOptions,
+-  H as hoc,
+-  z as locales,
+-  F as stepValidator,
+-  K as styles,
+-  N as Beacon,
+-  ee as Step,
+-  te as Tooltip
++  T as ACTIONS, E as EVENTS, L as JoyrideContext, g as LIFECYCLE, D as Origin, O as Placement, P as STATUS, B as StoreContext, y as TOUR_ACTIONS, v as TourProvider, S as default, j as floaterOptions, H as hoc, z as locales, F as stepValidator, K as styles, N as Beacon, ee as Step, te as Tooltip
+ };
+\ No newline at end of file

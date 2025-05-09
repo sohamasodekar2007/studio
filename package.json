@@ -1,3 +1,5 @@
+
+
 {
   "name": "edunexus",
   "version": "0.1.0",
@@ -13,8 +15,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "patch-package"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.6.2",
@@ -40,13 +41,13 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.1.2",
-    "@tanstack-query-firebase/react": "^1.0.5",
+    "@tanstack-query-firebase/react": "^1.0.7",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
-    "firebase": "^11.3.0",
+    "firebase": "^11.6.0",
     "geist": "^1.4.1",
     "genkit": "^1.6.2",
     "lucide-react": "^0.417.0",
@@ -77,3 +78,5 @@
     "typescript": "^5"
   }
 }
+
+    
