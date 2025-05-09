@@ -11,7 +11,16 @@
     "a1b2c3d4-e5f6-7890-1234-567890abcdef": {
       "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
       "name": null,
-      "status": "accepted"
+      "status": "completed",
+      "score": 1,
+      "timeTaken": 5,
+      "answers": [
+        {
+          "questionId": "Q_1746702889078",
+          "selectedOption": "B",
+          "status": "answered"
+        }
+      ]
     }
   },
   "testConfig": {

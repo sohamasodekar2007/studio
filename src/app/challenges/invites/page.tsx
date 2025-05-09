@@ -94,15 +94,17 @@ export default function ChallengeInvitesPage() {
   const getInviteStatusBadge = (invite: ChallengeInvite) => {
     const now = Date.now();
     if (invite.status === 'pending' && invite.expiresAt <= now) {
-      return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600">Expired</Badge>;
+      return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">Expired</Badge>;
     }
     switch (invite.status) {
       case 'accepted':
-        return <Badge variant="default" className="text-xs bg-green-100 text-green-700">Accepted</Badge>;
+        return <Badge variant="default" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Accepted</Badge>;
       case 'rejected':
         return <Badge variant="destructive" className="text-xs">Rejected</Badge>;
       case 'pending':
-        return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700">Pending</Badge>;
+        return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">Pending</Badge>;
+      case 'expired': // Explicitly handle 'expired' status if set by backend
+        return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">Expired</Badge>;
       default:
         return <Badge variant="outline" className="text-xs">{invite.status}</Badge>;
     }
@@ -141,6 +143,7 @@ export default function ChallengeInvitesPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Pending Invites</CardTitle>
+             <CardDescription>These challenges are waiting for your response.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {pendingActiveInvites.map((invite) => (
@@ -200,7 +203,7 @@ export default function ChallengeInvitesPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {pastInvites.map((invite) => (
-              <div key={invite.challengeCode + invite.status + invite.createdAt} className="flex items-center justify-between p-3 border rounded-md bg-muted/20">
+              <div key={invite.challengeCode + invite.status + invite.createdAt} className="flex items-center justify-between p-3 border rounded-md bg-muted/20 hover:bg-muted/30 transition-colors">
                 <div>
                   <p className="text-sm font-medium">
                     Challenge from {invite.creatorName || 'A friend'}
@@ -212,9 +215,10 @@ export default function ChallengeInvitesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {getInviteStatusBadge(invite)}
-                   {invite.status === 'accepted' && (
+                   {invite.status === 'accepted' && ( // If invite was accepted
                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
-                        <Link href={`/challenge/lobby/${invite.challengeCode}`}>View Lobby</Link>
+                        {/* Always link to results page if it's a past accepted invite */}
+                        <Link href={`/challenge-test-result/${invite.challengeCode}`}>View Result</Link>
                      </Button>
                    )}
                 </div>
