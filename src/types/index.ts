@@ -389,3 +389,15 @@ export interface UserChallengeHistory {
         completedAt: number;
     }>;
 }
+
+// ---- Notification Types (Basic for now) ----
+export interface AppNotification {
+    id: string; // Unique ID for the notification
+    type: 'challenge_invite' | 'general_update' | 'test_result';
+    title: string;
+    message: string;
+    link?: string; // Optional link for navigation
+    isRead: boolean;
+    createdAt: number; // Timestamp
+    icon?: React.ElementType; // Optional Lucide icon
+}

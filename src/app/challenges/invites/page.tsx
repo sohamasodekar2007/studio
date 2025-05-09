@@ -32,8 +32,13 @@ export default function ChallengeInvitesPage() {
     setError(null);
     try {
       const data = await getUserChallengeInvites(user.id);
-      // Filter for only pending invites and sort by creation date (newest first)
-      setInvites(data.invites.filter(inv => inv.status === 'pending' && inv.expiresAt > Date.now()).sort((a, b) => b.createdAt - a.createdAt));
+      const pending = data.invites.filter(inv => inv.status === 'pending' && inv.expiresAt > Date.now()).sort((a, b) => b.createdAt - a.createdAt);
+      setInvites(pending);
+
+      // Update local storage for notification simulation
+      localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites)); // Store all invites
+      localStorage.setItem(`lastSeenInvitesCount_${user.id}`, pending.length.toString()); // Update count of currently pending
+
     } catch (err: any) {
       setError(err.message || "Failed to load challenge invites.");
     } finally {
@@ -61,7 +66,7 @@ export default function ChallengeInvitesPage() {
 
       if (result.success) {
         toast({ title: `Challenge ${action === 'accept' ? 'Accepted' : 'Rejected'}!` });
-        fetchInvites(); // Refresh invites list
+        fetchInvites(); // Refresh invites list (which also updates local storage)
         if (action === 'accept' && result.challenge) {
           router.push(`/challenge/lobby/${result.challenge.challengeCode}`);
         }
