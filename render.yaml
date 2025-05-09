@@ -17,6 +17,12 @@ services:
         sync: false
       - key: PORT # Render will set this, but good to have a default if needed
         value: 9002
+      - key: NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: NEXT_PUBLIC_TELEGRAM_REDIRECT_URI
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
     # Optional: Add a persistent disk if attempting to make users.json work,
     # but this is generally not recommended for production due to potential data loss.
     # A proper database is better for user data.
