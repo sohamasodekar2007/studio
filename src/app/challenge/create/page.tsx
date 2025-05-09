@@ -25,12 +25,12 @@ import { createChallenge } from '@/actions/challenge-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
-import { readUsers } from '@/actions/user-actions'; // Corrected import path
+import { readUsers } from '@/actions/user-actions';
 
 const challengeCreationSchema = z.object({
   subject: z.string().min(1, "Subject is required."),
   lesson: z.string().min(1, "Lesson is required."),
-  numQuestions: z.number().min(5, "Minimum 5 questions.").max(50, "Maximum 50 questions."),
+  numQuestions: z.number().min(1, "Minimum 1 question.").max(50, "Maximum 50 questions."), // Changed min from 5 to 1
   difficulty: z.enum([...difficultyLevels, "all"], { required_error: "Difficulty is required."}).default("all"),
   examFilter: z.enum([...exams, "all"], { required_error: "Exam filter is required."}).default("all"),
   challengedUserIds: z.array(z.string()).min(1, "Challenge at least one friend.").max(10, "Cannot challenge more than 10 friends."),
@@ -53,7 +53,7 @@ export default function CreateChallengePage() {
     defaultValues: {
       subject: '',
       lesson: '',
-      numQuestions: 10,
+      numQuestions: 10, // Default can remain 10 or change to 1
       difficulty: 'all',
       examFilter: 'all',
       challengedUserIds: [],
@@ -75,9 +75,7 @@ export default function CreateChallengePage() {
       ]).then(async ([subs, followingIds]) => {
         setSubjects(subs);
         if (followingIds.length > 0) {
-          // Fetch profiles for following IDs
-          // This is a simplified approach; in a real app, you might have a dedicated action
-          const allUsers = await readUsers(); // Assuming readUsers is available
+          const allUsers = await readUsers();
           const followedProfiles = allUsers.filter(u => followingIds.includes(u.id) && u.role !== 'Admin');
           setFollowing(followedProfiles);
         }
@@ -92,7 +90,7 @@ export default function CreateChallengePage() {
   useEffect(() => {
     if (selectedSubject) {
       getLessonsForSubject(selectedSubject).then(setLessons).catch(() => setLessons([]));
-      form.setValue('lesson', ''); // Reset lesson when subject changes
+      form.setValue('lesson', '');
     } else {
       setLessons([]);
     }
@@ -154,7 +152,32 @@ export default function CreateChallengePage() {
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField control={form.control} name="subject" render={({ field }) => (<FormItem><FormLabel>Subject *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Subject" /></SelectTrigger></FormControl><SelectContent>{subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="lesson" render={({ field }) => (<FormItem><FormLabel>Lesson *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!selectedSubject || lessons.length === 0}><FormControl><SelectTrigger><SelectValue placeholder={!selectedSubject ? "Select Subject First" : "Select Lesson"} /></SelectTrigger></FormControl><SelectContent>{lessons.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-              <FormField control={form.control} name="numQuestions" render={({ field }) => (<FormItem><FormLabel>Number of Questions (5-50) *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10))} min="5" max="50" /></FormControl><FormMessage /></FormItem>)} />
+              <FormField
+                control={form.control}
+                name="numQuestions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of Questions (1-50) *</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(parseInt(value, 10))}
+                      value={field.value?.toString()}
+                      disabled={isLoading}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select count (1-50)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
+                          <SelectItem key={num} value={num.toString()}>{num}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField control={form.control} name="difficulty" render={({ field }) => (<FormItem><FormLabel>Difficulty *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Difficulty" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">All Difficulties</SelectItem>{difficultyLevels.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
               <FormField control={form.control} name="examFilter" render={({ field }) => (<FormItem className="sm:col-span-2"><FormLabel>Exam Specific Questions (Optional)</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Any Exam or Specific" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">Any Exam</SelectItem>{exams.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
             </CardContent>
@@ -206,7 +229,7 @@ export default function CreateChallengePage() {
             <CardFooter>
               <Button type="submit" disabled={isLoading || (following.length === 0 && (form.getValues().challengedUserIds?.length ?? 0) === 0)}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                Create & Send Challenge
+                Create &amp; Send Challenge
               </Button>
             </CardFooter>
           </Card>
@@ -215,3 +238,4 @@ export default function CreateChallengePage() {
     </div>
   );
 }
+
