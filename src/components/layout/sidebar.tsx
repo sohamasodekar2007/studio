@@ -42,7 +42,8 @@ import {
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import ThemeToggle from '@/components/theme-toggle'; // Keep import if still used directly, or useTheme hook
+// ThemeToggle is now part of the dropdown, direct import might not be needed here if not used elsewhere in this file.
+// import ThemeToggle from '@/components/theme-toggle';
 import Image from 'next/image';
 import TutorialGuide from './tutorial-guide';
 import { useState, useEffect, useCallback } from 'react';
@@ -159,10 +160,13 @@ export function AppSidebar() {
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    if (['/tests', '/admin', '/dpp'].includes(href)) {
-        return pathname === href || pathname.startsWith(href + '/');
+    // For routes like /tests, /dpp, etc., check if pathname starts with href
+    // and also handle potential dynamic child routes correctly.
+    if (href.endsWith('/')) { // if href is a base path like /tests/
+        return pathname.startsWith(href);
     }
-    return false;
+    // For exact match or start match for non-index routes
+    return pathname === href || pathname.startsWith(href + '/');
   };
 
   const handleJoyrideCallback = useCallback((data: CallBackProps) => {
@@ -175,15 +179,18 @@ export function AppSidebar() {
     } else if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
        const nextStepIndex = index + (action === ACTIONS.PREV ? -1 : 1);
        const nextStep = tutorialSteps[nextStepIndex];
+       // If sidebar is collapsed and the next step is a sidebar item, expand sidebar
        if (nextStep && typeof nextStep.target === 'string' && nextStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
            setSidebarOpen(true);
+           // Delay setting step index to allow sidebar to open
            setTimeout(() => {
                setStepIndex(nextStepIndex);
-           }, 300);
+           }, 300); // Adjust delay as needed for sidebar transition
        } else {
            setStepIndex(index + (action === ACTIONS.PREV ? -1 : 1));
        }
     } else if (type === EVENTS.TOUR_START) {
+        // Ensure sidebar is open if the first step targets a sidebar item and sidebar is collapsed
         const firstStep = tutorialSteps[0];
          if (firstStep && typeof firstStep.target === 'string' && firstStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
             setSidebarOpen(true);
@@ -193,12 +200,14 @@ export function AppSidebar() {
 
 
   const startTutorial = useCallback(() => {
+    // If sidebar is collapsed and first step is in sidebar, open it first
     if (tutorialSteps[0]?.target && typeof tutorialSteps[0].target === 'string' && tutorialSteps[0].target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
        setSidebarOpen(true);
+       // Wait for sidebar to open, then start tutorial
        setTimeout(() => {
           setStepIndex(0);
           setRunTutorial(true);
-       }, 350);
+       }, 350); // Adjust delay based on sidebar animation
     } else {
        setStepIndex(0);
        setRunTutorial(true);
@@ -208,7 +217,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
-        <SidebarHeader className="flex items-center justify-between p-4">
+        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
           <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
               <Image
                   src="/EduNexus-logo-black.jpg"
@@ -394,7 +403,12 @@ export function AppSidebar() {
                         <span className="group-data-[state=collapsed]:hidden">More</span>
                     </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="right" align="start" sideOffset={sidebarState === 'collapsed' ? 10 : 15 } className="w-56 mb-2">
+                <DropdownMenuContent 
+                    side="top" // Change side to top
+                    align="center" // Align to center
+                    sideOffset={10} // Adjust offset as needed
+                    className="w-56 mb-2"
+                >
                     <DropdownMenuLabel>Options</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
