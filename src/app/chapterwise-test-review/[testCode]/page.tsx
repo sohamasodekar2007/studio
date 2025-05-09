@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'; // Added CardFooter
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
@@ -15,12 +15,12 @@ import { getTestReport } from '@/actions/test-report-actions';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import Script from 'next/script';
+// Removed Script import as MathJax is loaded in layout.tsx
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label'; // Added import for Label
+import { Label } from '@/components/ui/label';
 
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
@@ -39,24 +39,16 @@ const OPTION_STYLES = {
 
 // Helper to construct correct image paths relative to the public folder
 const constructPublicImagePath = (relativePath: string | null | undefined): string | null => {
-    // Ensure the path starts with a slash and is correctly formed
     if (!relativePath) return null;
-    // If already starts with /question_bank_images, use as is.
     if (relativePath.startsWith('/question_bank_images/')) {
         return relativePath;
     }
-    // If it's just a filename, prepend the assumed base path (this case should be less common now)
-    if (!relativePath.includes('/')) {
-        // This might need adjustment based on how `questionImageUrl` is stored in `DetailedAnswer`
-        // For now, assume it's already a full relative path from public or null.
-        console.warn(`constructPublicImagePath: Encountered a filename without path: ${relativePath}. It might not load correctly.`);
-        return `/question_bank_images/unknown_subject/unknown_lesson/images/${relativePath}`; // Fallback
-    }
-    // If it's a relative path but doesn't start with /question_bank_images, it might be an old format.
-    // It's safer to return null or log an error if paths are not consistently structured.
-    return null;
-};
+    // This case should ideally not happen if paths are stored correctly
+    console.warn(`constructPublicImagePath: Encountered an unexpected image path format: ${relativePath}. It might not load correctly.`);
+    return null; // Or attempt to build a path if a pattern is known, but safer to return null
 
+
+};
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -80,18 +72,18 @@ export default function TestReviewPage() {
   const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
 
    const typesetMathJax = useCallback(() => {
-       if (typeof window !== 'undefined' && (window as any).MathJax) {
+       if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
            console.log("Attempting MathJax typesetting on review page...");
             const elements = document.querySelectorAll('.mathjax-content');
             if (elements.length > 0) {
-                 (window as any).MathJax.typesetPromise(elements)
-                    .catch((err: any) => console.error("MathJax typeset error in review page:", err));
+                 (window as any).MathJax.typesetPromise(Array.from(elements)) // Pass NodeList as Array
+                    .catch((err: any) => console.error("MathJax typeset error in review page (elements):", err));
             } else {
-                 (window as any).MathJax.typesetPromise()
-                    .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+                 (window as any).MathJax.typesetPromise() // Fallback for full page
+                    .catch((err: any) => console.error("MathJax typeset error in review page (fallback):", err));
             }
        } else {
-           console.warn("MathJax not available yet for typesetting.");
+           console.warn("MathJax or typesetPromise not available yet for typesetting on review page.");
        }
    }, []);
 
@@ -163,7 +155,7 @@ export default function TestReviewPage() {
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const correctOptionKey = currentReviewQuestion?.correctAnswer; // Assuming correctAnswer is just "A", "B", etc.
+  const correctOptionKey = currentReviewQuestion?.correctAnswer;
   const userSelectedOptionKey = currentReviewQuestion?.userAnswer;
   const isUserCorrect = !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey;
   const questionStatus = currentReviewQuestion?.status || QuestionStatusEnum.NotVisited;
@@ -173,8 +165,6 @@ export default function TestReviewPage() {
 
     const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
     const relativeImageUrl = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
-
-    // Use the helper to construct the full public path
     const publicImagePath = constructPublicImagePath(relativeImageUrl);
 
     if (publicImagePath) {
@@ -183,12 +173,12 @@ export default function TestReviewPage() {
           <Image
             src={publicImagePath}
             alt={context === 'question' ? "Question Image" : "Explanation Image"}
-            width={800} // Provide a sensible default width
-            height={600} // Provide a sensible default height
-            className="rounded-md border bg-card object-contain" // Ensure object-contain
+            width={800}
+            height={600}
+            className="rounded-md border bg-card object-contain"
             data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
-            priority={currentQuestionReviewIndex < 3 && context === 'question'} // Prioritize initial images
-            unoptimized // Good for local dev to avoid Vercel optimization issues with local files
+            priority={currentQuestionReviewIndex < 3 && context === 'question'}
+            unoptimized
             onError={(e) => { console.error(`Error loading image: ${publicImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
           />
         </div>
@@ -260,7 +250,6 @@ export default function TestReviewPage() {
         toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
         return;
      }
-     // Attempt to derive subject and lesson from currentReviewQuestion, fallback to testReport
      const subject = currentReviewQuestion.questionText ? (currentReviewQuestion as any).subject : (testReport as ChapterwiseTestJson).test_subject?.[0] || 'Unknown Subject';
      const lesson = currentReviewQuestion.questionText ? (currentReviewQuestion as any).lesson : (testReport as ChapterwiseTestJson).lesson || testReport.testName || 'Unknown Lesson';
 
@@ -301,13 +290,13 @@ export default function TestReviewPage() {
 
   if (isLoading || authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl"> {/* Adjusted max-width */}
-        <Skeleton className="h-8 w-1/3 mb-4" /> {/* Adjusted width */}
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
+        <Skeleton className="h-8 w-1/3 mb-4" />
         <Skeleton className="h-10 w-full mb-6" />
         <Card>
-          <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader> {/* Adjusted width */}
+          <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
           <CardContent>
-            <Skeleton className="h-48 w-full mb-4" /> {/* Adjusted height */}
+            <Skeleton className="h-48 w-full mb-4" />
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
@@ -319,7 +308,7 @@ export default function TestReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl text-center"> {/* Adjusted max-width */}
+      <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
@@ -334,7 +323,7 @@ export default function TestReviewPage() {
 
    if (!testReport || !currentReviewQuestion) {
      return (
-       <div className="container mx-auto py-8 px-4 max-w-3xl text-center"> {/* Adjusted max-width */}
+       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
          <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1>
          <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
@@ -349,15 +338,8 @@ export default function TestReviewPage() {
 
   return (
     <>
-      <Script
-        id="mathjax-script-review"
-        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-        strategy="lazyOnload"
-        onLoad={() => {
-            if (!isLoading) typesetMathJax();
-        }}
-      />
-      <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6"> {/* Adjusted max-width */}
+      {/* MathJax script is loaded globally in layout.tsx, no need to load it here again */}
+      <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
