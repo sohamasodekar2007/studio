@@ -1,3 +1,4 @@
+// src/components/layout/sidebar.tsx
 'use client';
 
 import {
@@ -12,21 +13,52 @@ import {
   SidebarGroup,
   SidebarSeparator,
   SidebarGroupLabel,
-  useSidebar, // Import useSidebar hook
+  useSidebar,
 } from '@/components/ui/sidebar';
-import { Home, ListChecks, GraduationCap, Settings, HelpCircle, Wand2, ShieldCheck, MessageSquare, Activity, ClipboardCheck, Notebook, Trophy, UserPlus, Users, UserCheck as UserCheckIcon, BarChartHorizontal, FileClock, Target, Info, BookUser } from 'lucide-react'; // Added BookUser
+import {
+  Home,
+  ListChecks,
+  Settings,
+  HelpCircle,
+  Wand2,
+  ShieldCheck,
+  MessageSquare,
+  Activity,
+  ClipboardCheck,
+  Notebook,
+  Trophy,
+  UserPlus,
+  Users,
+  UserCheck as UserCheckIcon,
+  BarChartHorizontal,
+  FileClock,
+  Target,
+  Info,
+  BookUser,
+  MoreVertical, // Icon for the dropdown trigger
+  Sun, // For Theme Toggle inside dropdown
+  Moon, // For Theme Toggle inside dropdown
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/context/auth-context'; // Import useAuth
-import ThemeToggle from '@/components/theme-toggle';
-import Image from 'next/image'; // Import Image
-import TutorialGuide from './tutorial-guide'; // Import the new guide component
-import { useState, useEffect, useCallback } from 'react'; // Import useState, useEffect, useCallback
+import { useAuth } from '@/context/auth-context';
+import ThemeToggle from '@/components/theme-toggle'; // Keep import if still used directly, or useTheme hook
+import Image from 'next/image';
+import TutorialGuide from './tutorial-guide';
+import { useState, useEffect, useCallback } from 'react';
 import type { Step } from 'react-joyride';
 import { CallBackProps, STATUS, ACTIONS, EVENTS } from 'react-joyride';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useTheme } from 'next-themes'; // Import useTheme for dropdown theme toggle
 
 // Define Tutorial Steps Configuration
-// Ensure IDs match the elements in the JSX below
 const tutorialSteps: Step[] = [
   {
     target: '#tutorial-target-dashboard',
@@ -89,20 +121,8 @@ const tutorialSteps: Step[] = [
     disableBeacon: true,
   },
   {
-    target: '#tutorial-target-settings',
-    content: 'Manage your profile details and password.',
-    placement: 'right',
-    disableBeacon: true,
-  },
-   {
-    target: '#tutorial-target-help',
-    content: 'Find answers to common questions or contact support.',
-    placement: 'right',
-    disableBeacon: true,
-  },
-   {
-    target: '#tutorial-target-theme-toggle',
-    content: 'Switch between light and dark themes.',
+    target: '#tutorial-target-more-dropdown', // Target the dropdown trigger
+    content: 'Access Settings, Help, Tutorial and Theme options here.',
     placement: 'right',
     disableBeacon: true,
   },
@@ -114,10 +134,10 @@ export function AppSidebar() {
   const { user } = useAuth();
   const [runTutorial, setRunTutorial] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const { setOpen: setSidebarOpen, state: sidebarState } = useSidebar(); // Get sidebar control and state
+  const { setOpen: setSidebarOpen, state: sidebarState } = useSidebar();
+  const { theme, setTheme } = useTheme(); // For theme toggle in dropdown
 
-
-  const isAdmin = user?.role === 'Admin'; // Check user role
+  const isAdmin = user?.role === 'Admin';
 
   const isActive = (href: string) => {
     const exactMatchRoutes = [
@@ -139,47 +159,31 @@ export function AppSidebar() {
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    // Improved handling for parent routes
     if (['/tests', '/admin', '/dpp'].includes(href)) {
-        // Check if pathname is exactly the href or starts with href followed by '/'
         return pathname === href || pathname.startsWith(href + '/');
     }
-    // Specific check for dynamic routes under /tests or /dpp if needed, though startsWith might cover it
-    // Example: if (href === '/tests' && pathname.startsWith('/tests/')) return true;
-
     return false;
   };
 
-  // Centralized callback handler in the parent component
   const handleJoyrideCallback = useCallback((data: CallBackProps) => {
-    const { status, index, type, step, action } = data;
+    const { status, index, type, action } = data;
     const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
-
-    // console.log("Joyride Callback:", data); // Debugging
 
     if (finishedStatuses.includes(status)) {
       setRunTutorial(false);
       setStepIndex(0);
-      // Optionally ensure sidebar returns to default state if modified
-      // setSidebarOpen(true); // Or based on your default preference
     } else if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
-       // Ensure sidebar is open if the *next* step's target is likely inside the sidebar
-       // This is a heuristic, might need refinement based on your exact targets
        const nextStepIndex = index + (action === ACTIONS.PREV ? -1 : 1);
        const nextStep = tutorialSteps[nextStepIndex];
        if (nextStep && typeof nextStep.target === 'string' && nextStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
-           console.log("Opening sidebar for next step target:", nextStep.target);
            setSidebarOpen(true);
-           // Delay setting the step index slightly to allow sidebar animation
            setTimeout(() => {
                setStepIndex(nextStepIndex);
            }, 300);
        } else {
-           // Set the step index for the next step
            setStepIndex(index + (action === ACTIONS.PREV ? -1 : 1));
        }
     } else if (type === EVENTS.TOUR_START) {
-        // Ensure sidebar is open when the tour starts if the first target needs it
         const firstStep = tutorialSteps[0];
          if (firstStep && typeof firstStep.target === 'string' && firstStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
             setSidebarOpen(true);
@@ -189,14 +193,12 @@ export function AppSidebar() {
 
 
   const startTutorial = useCallback(() => {
-    // Ensure sidebar is open before starting if the first step targets it
     if (tutorialSteps[0]?.target && typeof tutorialSteps[0].target === 'string' && tutorialSteps[0].target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
        setSidebarOpen(true);
-       // Delay starting the tutorial slightly to ensure sidebar is open
        setTimeout(() => {
           setStepIndex(0);
           setRunTutorial(true);
-       }, 350); // Adjust delay as needed
+       }, 350);
     } else {
        setStepIndex(0);
        setRunTutorial(true);
@@ -205,27 +207,25 @@ export function AppSidebar() {
 
   return (
     <>
-      <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer"> {/* Added peer */}
-        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
+      <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
+        <SidebarHeader className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
-             {/* EduNexus Logo */}
               <Image
-                  src="/EduNexus-logo-black.jpg" // Prioritize black for light mode visibility
+                  src="/EduNexus-logo-black.jpg"
                   alt="EduNexus Logo"
-                  width={30} // Adjust size as needed
+                  width={30}
                   height={30}
-                  className="h-8 w-8 dark:hidden" // Hide on dark mode
-                  unoptimized // Good for local images
+                  className="h-8 w-8 dark:hidden"
+                  unoptimized
               />
               <Image
-                  src="/EduNexus-logo-white.jpg" // White logo for dark mode
+                  src="/EduNexus-logo-white.jpg"
                   alt="EduNexus Logo"
-                  width={30} // Adjust size as needed
+                  width={30}
                   height={30}
-                  className="h-8 w-8 hidden dark:block" // Show on dark mode
-                  unoptimized // Good for local images
+                  className="h-8 w-8 hidden dark:block"
+                  unoptimized
               />
-            {/* Updated Name */}
             <h1 className="text-lg font-semibold">EduNexus</h1>
           </div>
           <SidebarTrigger className="hidden sm:flex" />
@@ -237,7 +237,6 @@ export function AppSidebar() {
             <SidebarGroup>
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Main Navigation</SidebarGroupLabel>
               <SidebarMenuItem>
-                {/* Ensure the Link has passHref and legacyBehavior for compatibility with SidebarMenuButton as 'a' */}
                 <Link href="/" passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive('/')} tooltip="Dashboard" id="tutorial-target-dashboard">
                     <Home />
@@ -261,7 +260,7 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                   </Link>
               </SidebarMenuItem>
-              <SidebarMenuItem> {/* New PYQ DPPs */}
+              <SidebarMenuItem>
                   <Link href="/pyq-dpps" passHref legacyBehavior>
                       <SidebarMenuButton as="a" isActive={isActive('/pyq-dpps')} tooltip="PYQ DPPs" id="tutorial-target-pyq-dpps">
                           <Target />
@@ -269,7 +268,7 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                   </Link>
               </SidebarMenuItem>
-              <SidebarMenuItem> {/* New PYQ Mock Tests */}
+              <SidebarMenuItem>
                   <Link href="/pyq-mock-tests" passHref legacyBehavior>
                       <SidebarMenuButton as="a" isActive={isActive('/pyq-mock-tests')} tooltip="PYQ Mock Tests" id="tutorial-target-pyq-mock-tests">
                           <FileClock />
@@ -305,7 +304,6 @@ export function AppSidebar() {
 
             <SidebarSeparator className="my-3" />
 
-            {/* Friends Section */}
             <SidebarGroup id="tutorial-target-friends-group">
                   <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Friends</SidebarGroupLabel>
                   <SidebarMenuItem>
@@ -344,7 +342,6 @@ export function AppSidebar() {
 
             <SidebarSeparator className="my-3" />
 
-            {/* AI Tools Section */}
             <SidebarGroup id="tutorial-target-ai-tools-group">
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">AI Tools</SidebarGroupLabel>
               <SidebarMenuItem>
@@ -365,7 +362,6 @@ export function AppSidebar() {
               </SidebarMenuItem>
             </SidebarGroup>
 
-            {/* Admin Panel Link (Conditional) */}
             {isAdmin && (
               <>
                 <SidebarSeparator className="my-3" />
@@ -385,42 +381,47 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarContent>
 
-        <SidebarFooter className="mt-auto flex flex-col items-center gap-2 group-data-[state=collapsed]:gap-0">
-          {/* Theme Toggle */}
-          <div className="w-full flex justify-center group-data-[state=collapsed]:my-2" id="tutorial-target-theme-toggle">
-            <ThemeToggle />
-          </div>
-          <SidebarSeparator className="my-1 group-data-[state=collapsed]:hidden"/>
-          {/* Other Footer Items */}
-          <SidebarMenu>
-             <SidebarMenuItem>
-                {/* Tutorial Button */}
-                <SidebarMenuButton onClick={startTutorial} tooltip="Start Tutorial" id="tutorial-target-start-tutorial">
-                    <BookUser />
-                    <span className="group-data-[state=collapsed]:hidden">Tutorial</span>
-                </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <Link href="/settings" passHref legacyBehavior>
-                <SidebarMenuButton as="a" isActive={isActive('/settings')} tooltip="Settings" id="tutorial-target-settings">
-                  <Settings />
-                  <span className="group-data-[state=collapsed]:hidden">Settings</span>
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <Link href="/help" passHref legacyBehavior>
-                <SidebarMenuButton as="a" isActive={isActive('/help')} tooltip="Help & Support" id="tutorial-target-help">
-                  <HelpCircle />
-                  <span className="group-data-[state=collapsed]:hidden">Help & Support</span>
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
-          </SidebarMenu>
+        <SidebarFooter className="mt-auto flex flex-col items-center gap-1 group-data-[state=collapsed]:gap-1">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton
+                        variant="ghost"
+                        className="w-full group-data-[state=collapsed]:w-8 group-data-[state=collapsed]:h-8"
+                        tooltip="More Options"
+                        id="tutorial-target-more-dropdown"
+                    >
+                        <MoreVertical />
+                        <span className="group-data-[state=collapsed]:hidden">More</span>
+                    </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="right" align="start" sideOffset={sidebarState === 'collapsed' ? 10 : 15 } className="w-56 mb-2">
+                    <DropdownMenuLabel>Options</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+                        {theme === 'light' ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
+                        <span>Toggle Theme</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/settings">
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>Settings</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                        <Link href="/help">
+                            <HelpCircle className="mr-2 h-4 w-4" />
+                            <span>Help & Support</span>
+                        </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={startTutorial}>
+                         <BookUser className="mr-2 h-4 w-4" />
+                        <span>Start Tutorial</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </SidebarFooter>
       </Sidebar>
 
-      {/* Tutorial Guide Component */}
       <TutorialGuide
         run={runTutorial}
         steps={tutorialSteps}
