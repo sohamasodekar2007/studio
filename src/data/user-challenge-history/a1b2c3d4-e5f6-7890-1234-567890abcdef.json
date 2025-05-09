@@ -1,0 +1,17 @@
+{
+  "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "completedChallenges": [
+    {
+      "challengeCode": "CHL-8949-5401-TVMT",
+      "testName": "Chemistry - Chemical KInetics",
+      "creatorName": "Soham Asodekar",
+      "opponentNames": [
+        "Godwin"
+      ],
+      "userScore": 0,
+      "totalPossibleScore": 1,
+      "totalParticipants": 2,
+      "completedAt": 1746774371204
+    }
+  ]
+}

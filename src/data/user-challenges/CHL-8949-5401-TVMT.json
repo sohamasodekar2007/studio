@@ -1,0 +1,66 @@
+{
+  "challengeCode": "CHL-8949-5401-TVMT",
+  "creatorId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "creatorName": "Soham Asodekar",
+  "participants": {
+    "a1b2c3d4-e5f6-7890-1234-567890abcdef": {
+      "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "name": "Soham Asodekar",
+      "status": "completed",
+      "avatarUrl": "avatar-a1b2c3d4-e5f6-7890-1234-567890abcdef-1746767996055-251086369.jpg",
+      "score": 0,
+      "timeTaken": 10,
+      "answers": [
+        {
+          "questionId": "Q_1746702889078",
+          "selectedOption": "A",
+          "status": "answered"
+        }
+      ]
+    },
+    "2d4574fb-c2a8-477f-8807-f01d15555cdd": {
+      "userId": "2d4574fb-c2a8-477f-8807-f01d15555cdd",
+      "name": "Godwin",
+      "status": "completed",
+      "avatarUrl": null,
+      "score": 1,
+      "timeTaken": 5,
+      "answers": [
+        {
+          "questionId": "Q_1746702889078",
+          "selectedOption": "B",
+          "status": "answered"
+        }
+      ]
+    }
+  },
+  "testConfig": {
+    "subject": "Chemistry",
+    "lesson": "Chemical KInetics",
+    "numQuestions": 1,
+    "difficulty": "all",
+    "examFilter": "all"
+  },
+  "testStatus": "completed",
+  "questions": [
+    {
+      "id": "Q_1746702889078",
+      "type": "text",
+      "question_text": "The geometry of \\(\\text{[Ni(CN)_4]}^{2-}\\) is:\r\n",
+      "question_image_url": null,
+      "options": [
+        "Tetrahedral",
+        "Square planar",
+        "Octahedral",
+        "Linear"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "\\(\\text{Ni}^{2+}\\) in \\(\\text{[Ni(CN)_4]}^{2-}\\) undergoes \\(dsp^2\\) hybridization, giving square planar geometry.",
+      "explanation_image_url": null
+    }
+  ],
+  "createdAt": 1746774303814,
+  "expiresAt": 1746785103814,
+  "startedAt": 1746774352970
+}

@@ -13,6 +13,7 @@ import type { Challenge, ChallengeParticipant } from '@/types';
 import { getChallengeResults } from '@/actions/challenge-actions';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge'; // Import Badge component
 
 export default function ChallengeTestResultPage() {
   const params = useParams();
