@@ -65,10 +65,7 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">Rank</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead className="text-center">Score</TableHead>
-                  <TableHead className="text-center">Percentage</TableHead>
+                  <TableHead className="w-[50px]">Rank</TableHead><TableHead>User</TableHead><TableHead className="text-center">Score</TableHead><TableHead className="text-center">Percentage</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -79,11 +76,9 @@ export default function TestRankingDialog({ isOpen, onClose, test, fetchTestAtte
                       {attempt.rank === 2 && <Award className="h-4 w-4 inline text-gray-400 mr-1" />}
                       {attempt.rank === 3 && <Award className="h-4 w-4 inline text-orange-400 mr-1" />}
                       {attempt.rank}
-                    </TableCell>
-                    <TableCell>{attempt.user?.name || 'N/A'} ({attempt.user?.email || 'N/A'})</TableCell>
+                    </TableCell><TableCell>{attempt.user?.name || 'N/A'} ({attempt.user?.email || 'N/A'})</TableCell>
                      {/* Display total marks if available */}
-                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell>
-                    <TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
+                     <TableCell className="text-center">{attempt.score ?? 'N/A'} / {attempt.totalMarks ?? attempt.totalQuestions ?? 'N/A'}</TableCell><TableCell className="text-center">{attempt.percentage?.toFixed(2) ?? 'N/A'}%</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

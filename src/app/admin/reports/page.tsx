@@ -146,35 +146,20 @@ export default function AdminReportsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Test Code</TableHead>
-                <TableHead>Test Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead># Qs</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Test Code</TableHead><TableHead>Test Name</TableHead><TableHead>Type</TableHead><TableHead># Qs</TableHead><TableHead>Duration</TableHead><TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoadingTests ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <TableRow key={`skel-${index}`}>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-10" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20" /></TableCell><TableCell><Skeleton className="h-5 w-48" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell><Skeleton className="h-5 w-10" /></TableCell><TableCell><Skeleton className="h-5 w-16" /></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredTests.length > 0 ? (
                 filteredTests.map((test) => (
                   <TableRow key={test.test_code}>
-                    <TableCell className="font-mono text-xs">{test.test_code}</TableCell>
-                    <TableCell className="font-medium">{test.name}</TableCell>
-                    <TableCell className="capitalize">{test.testType.replace('_', ' ')}</TableCell>
-                    <TableCell>{test.total_questions}</TableCell>
-                    <TableCell>{test.duration} min</TableCell>
-                    <TableCell className="text-right space-x-2">
+                    <TableCell className="font-mono text-xs">{test.test_code}</TableCell><TableCell className="font-medium">{test.name}</TableCell><TableCell className="capitalize">{test.testType.replace('_', ' ')}</TableCell><TableCell>{test.total_questions}</TableCell><TableCell>{test.duration} min</TableCell><TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => handleViewHistory(test)}>
                         <Users className="mr-1.5 h-3.5 w-3.5" /> History
                       </Button>
