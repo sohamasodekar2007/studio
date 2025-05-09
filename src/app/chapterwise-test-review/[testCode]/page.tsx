@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
@@ -20,9 +20,8 @@ import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label'; // Ensure Label is imported if used within options
+import { Label } from '@/components/ui/label';
 
-// Color mapping for question status badges
 const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "secondary" | "destructive" | "outline"> = {
     [QuestionStatusEnum.Answered]: "default",
     [QuestionStatusEnum.Unanswered]: "destructive",
@@ -31,7 +30,6 @@ const QUESTION_STATUS_BADGE_VARIANTS: Record<QuestionStatus, "default" | "second
     [QuestionStatusEnum.NotVisited]: "outline",
 };
 
-// Class names for option styling based on correctness and selection
 const OPTION_STYLES = {
   base: "border-border hover:bg-muted/30 dark:hover:bg-muted/20",
   selectedCorrect: "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300 font-medium",
@@ -39,13 +37,10 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
-// Helper function to construct public image paths
-// Assumes URLs in detailedAnswers are already relative paths starting with '/'
 const constructPublicImagePath = (relativePath: string | null | undefined): string | null => {
-    if (!relativePath || !relativePath.startsWith('/')) return null; // Validate it's a relative path
+    if (!relativePath || !relativePath.startsWith('/')) return null;
     return relativePath;
 };
-
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -63,14 +58,11 @@ export default function TestReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentQuestionReviewIndex, setCurrentQuestionReviewIndex] = useState(0);
 
-  // --- Notebook/Bookmark State ---
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
   const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
-  // --- End Notebook/Bookmark State ---
 
-  // MathJax Typesetting Hook
    const typesetMathJax = useCallback(() => {
        if (typeof window !== 'undefined' && (window as any).MathJax) {
            console.log("Attempting MathJax typesetting on review page...");
@@ -79,7 +71,6 @@ export default function TestReviewPage() {
                  (window as any).MathJax.typesetPromise(elements)
                     .catch((err: any) => console.error("MathJax typeset error in review page:", err));
             } else {
-                 // Fallback if no specific elements found
                  (window as any).MathJax.typesetPromise()
                     .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
             }
@@ -88,8 +79,6 @@ export default function TestReviewPage() {
        }
    }, []);
 
-
-  // Fetch Test Report Data
   const fetchReviewData = useCallback(async () => {
     if (!testCode || !userId || !attemptTimestampStr) {
       setError("Missing information to load test review.");
@@ -102,10 +91,8 @@ export default function TestReviewPage() {
         setIsLoading(false);
         return;
     }
-
     setIsLoading(true);
     setError(null);
-
     try {
         const reportData = await getTestReport(userId, testCode, attemptTimestamp);
         if (!reportData) {
@@ -124,7 +111,6 @@ export default function TestReviewPage() {
     }
   }, [testCode, userId, attemptTimestampStr]);
 
-  // Fetch User Notebooks
   useEffect(() => {
     if (user?.id) {
          setIsLoadingNotebooks(true);
@@ -137,7 +123,6 @@ export default function TestReviewPage() {
     }
   }, [user?.id]);
 
-  // Authentication and Initial Data Fetch
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
@@ -151,93 +136,73 @@ export default function TestReviewPage() {
     }
   }, [user, authLoading, router, testCode, userId, attemptTimestampStr, fetchReviewData]);
 
-  // Typeset MathJax on data load or question change
   useEffect(() => {
     if (!isLoading && testReport) {
         typesetMathJax();
     }
   }, [isLoading, testReport, currentQuestionReviewIndex, typesetMathJax]);
 
-  // --- Memoized Data ---
   const allAnswersFromReport = useMemo(() => testReport?.detailedAnswers || [], [testReport]);
   const currentReviewQuestion: DetailedAnswer | undefined = useMemo(() => allAnswersFromReport?.[currentQuestionReviewIndex], [allAnswersFromReport, currentQuestionReviewIndex]);
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  // --- Derived State ---
-  const correctOptionKey = useMemo(() => currentReviewQuestion?.correctAnswer, [currentReviewQuestion]);
-  const userSelectedOptionKey = useMemo(() => currentReviewQuestion?.userAnswer, [currentReviewQuestion]);
-  const isUserCorrect = useMemo(() => !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey, [userSelectedOptionKey, correctOptionKey]);
-  const questionStatus = useMemo(() => currentReviewQuestion?.status || QuestionStatusEnum.NotVisited, [currentReviewQuestion]);
+  const correctOptionKey = currentReviewQuestion?.correctAnswer?.replace('Option ', '').trim() || currentReviewQuestion?.correctAnswer;
+  const userSelectedOptionKey = currentReviewQuestion?.userAnswer;
+  const isUserCorrect = !!userSelectedOptionKey && userSelectedOptionKey === correctOptionKey;
+  const questionStatus = currentReviewQuestion?.status || QuestionStatusEnum.NotVisited;
 
-  // --- Rendering Functions ---
   const renderContent = useCallback((context: 'question' | 'explanation') => {
     if (!currentReviewQuestion) return <p className="text-sm text-muted-foreground">Content not available.</p>;
 
-    const text = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
+    const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
     const relativeImageUrl = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
     const publicImagePath = constructPublicImagePath(relativeImageUrl);
-    const altText = context === 'question' ? `Question ${currentQuestionReviewIndex + 1}` : "Explanation Image";
 
     if (publicImagePath) {
       return (
-        <div className="relative w-full max-w-xl mx-auto my-4">
+        <div className="relative w-full max-w-xl h-auto mx-auto my-4">
           <Image
             src={publicImagePath}
-            alt={altText}
-            width={800} // Provide a base width
-            height={600} // Provide a base height
-            layout="intrinsic" // Use intrinsic for aspect ratio, or responsive if you prefer fill
-            objectFit="contain"
-            className="rounded-md border bg-white dark:bg-gray-800"
-            data-ai-hint={context === 'question' ? 'question diagram' : 'explanation image'}
+            alt={context === 'question' ? "Question Image" : "Explanation Image"}
+            width={800}
+            height={600}
+            className="rounded-md border bg-card object-contain"
+            data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
             priority={currentQuestionReviewIndex < 3 && context === 'question'}
-            onError={(e) => {
-              console.error(`Error loading ${context} image: ${publicImagePath}`, e);
-              // Optionally hide the image container or show a placeholder
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              // You could also set a flag to render fallback text here
-            }}
             unoptimized
           />
         </div>
       );
-    } else if (text) {
+    } else if (textContent) {
       return (
-        <div
-          className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
-          dangerouslySetInnerHTML={{ __html: text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
-        />
+         <div
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+            dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+         ></div>
       );
     }
-
-    if (context === 'question') return <p className="text-sm text-muted-foreground">Question content not available.</p>;
-    if (context === 'explanation' && (!text && !publicImagePath)) return <p className="text-sm text-muted-foreground">Explanation not available for this question.</p>;
-
-    return null;
+    return <p className="text-sm text-muted-foreground">{context === 'question' ? 'Question content not available.' : 'Explanation not available.'}</p>;
   }, [currentReviewQuestion, currentQuestionReviewIndex]);
 
-  const renderOptions = useCallback((question: DetailedAnswer | undefined) => {
-    if (!question || !question.options) return null;
-
-    const questionId = question.questionId || `q-${question.questionIndex}`;
+  const renderOptions = useCallback(() => {
+    if (!currentReviewQuestion || !currentReviewQuestion.options) return null;
     const selectedOption = userSelectedOptionKey;
-    const correctOption = correctOptionKey;
+    const correctOpt = correctOptionKey;
 
     return (
       <div className="space-y-3 mt-4">
-        {question.options.map((optionText, idx) => {
+        {currentReviewQuestion.options.map((optionText, idx) => {
           const optionKey = optionKeys[idx];
           const isSelected = selectedOption === optionKey;
-          const isCorrectOption = optionKey === correctOption;
+          const isCorrectOption = optionKey === correctOpt;
           let optionStyle = OPTION_STYLES.base;
 
           if (isSelected && isCorrectOption) optionStyle = OPTION_STYLES.selectedCorrect;
           else if (isSelected && !isCorrectOption) optionStyle = OPTION_STYLES.selectedIncorrect;
           else if (!isSelected && isCorrectOption) optionStyle = OPTION_STYLES.correctButNotSelected;
 
-          const displayValue = typeof optionText === 'string' ? optionText : '[Option Text Missing]';
+          const displayValue = typeof optionText === 'string' ? optionText : `Option ${optionKey}`;
 
           return (
             <div key={optionKey} className={cn("flex items-start space-x-3 p-4 border rounded-lg transition-all", optionStyle)}>
@@ -251,10 +216,8 @@ export default function TestReviewPage() {
         })}
       </div>
     );
-  }, [optionKeys, userSelectedOptionKey, correctOptionKey]);
+  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]);
 
-
-  // --- Navigation ---
   const navigateReview = (direction: 'prev' | 'next') => {
     setCurrentQuestionReviewIndex(prev => {
       const newIndex = direction === 'prev' ? prev - 1 : prev + 1;
@@ -262,74 +225,62 @@ export default function TestReviewPage() {
     });
   };
 
-  // --- Notebook/Bookmark Handlers ---
-    const handleOpenNotebookModal = () => {
-        if (isLoadingNotebooks) {
-             toast({ variant: "default", title: "Loading notebooks..." });
-             return;
-        }
-        if (!currentReviewQuestion) return;
-        setIsNotebookModalOpen(true);
+  const handleOpenNotebookModal = () => {
+    if (isLoadingNotebooks) {
+         toast({ variant: "default", title: "Loading notebooks..." });
+         return;
     }
+    if (!currentReviewQuestion) return;
+    setIsNotebookModalOpen(true);
+  };
 
-    const handleCloseNotebookModal = () => {
-         setIsNotebookModalOpen(false);
-    }
+  const handleCloseNotebookModal = () => setIsNotebookModalOpen(false);
 
-     const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
-         if (!user?.id || !currentReviewQuestion?.questionId || !testReport ) { // Removed subject/lesson check as it might be in report object
-            toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
-            return;
-         }
-
-          // Determine subject and lesson from report data OR currentReviewQuestion if available
-          const subject = currentReviewQuestion.subject || testReport.test_subject?.[0] || "Unknown Subject";
-          const lesson = currentReviewQuestion.lesson || testReport.lesson || testReport.testName || "Unknown Lesson";
-
-
-         const questionData: BookmarkedQuestion = {
-             questionId: currentReviewQuestion.questionId,
-             subject: subject,
-             lesson: lesson,
-             addedAt: Date.now(),
-             tags: tags,
-         };
-
-         setIsSavingToNotebook(true);
-         try {
-             const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
-             if (result.success) {
-                 toast({ title: "Saved!", description: "Question added to selected notebooks." });
-                 handleCloseNotebookModal();
-             } else {
-                  throw new Error(result.message || "Failed to save to notebooks.");
-             }
-         } catch (error: any) {
-              toast({ variant: "destructive", title: "Save Failed", description: error.message });
-         } finally {
-              setIsSavingToNotebook(false);
-         }
+  const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
+     if (!user?.id || !currentReviewQuestion?.questionId || !testReport ) {
+        toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
+        return;
      }
+     const subject = currentReviewQuestion.subject || (testReport.test_subject && testReport.test_subject[0]) || "Unknown Subject";
+     const lesson = currentReviewQuestion.lesson || testReport.lesson || testReport.testName || "Unknown Lesson";
+     const questionData: BookmarkedQuestion = {
+         questionId: currentReviewQuestion.questionId,
+         subject: subject,
+         lesson: lesson,
+         addedAt: Date.now(),
+         tags: tags,
+     };
+     setIsSavingToNotebook(true);
+     try {
+         const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
+         if (result.success) {
+             toast({ title: "Saved!", description: "Question added to selected notebooks." });
+             handleCloseNotebookModal();
+         } else {
+              throw new Error(result.message || "Failed to save to notebooks.");
+         }
+     } catch (error: any) {
+          toast({ variant: "destructive", title: "Save Failed", description: error.message });
+     } finally {
+          setIsSavingToNotebook(false);
+     }
+  };
 
-      const handleCreateNotebookCallback = useCallback(async (name: string) => {
-        if (!user?.id) return null;
-        const result = await createNotebook(user.id, name);
-        if (result.success && result.notebook) {
-          setNotebooks((prev) => [...prev, result.notebook!]);
-          return result.notebook;
-        } else {
-          toast({ variant: "destructive", title: "Failed to Create Notebook", description: result.message });
-          return null;
-        }
-      }, [user?.id, toast]);
+  const handleCreateNotebookCallback = useCallback(async (name: string) => {
+    if (!user?.id) return null;
+    const result = await createNotebook(user.id, name);
+    if (result.success && result.notebook) {
+      setNotebooks((prev) => [...prev, result.notebook!]);
+      return result.notebook;
+    } else {
+      toast({ variant: "destructive", title: "Failed to Create Notebook", description: result.message });
+      return null;
+    }
+  }, [user?.id, toast]);
 
-     // --- End Notebook/Bookmark Handlers ---
-
-
-  // --- Loading & Error States ---
   if (isLoading || authLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl"> {/* Adjusted max-width for better desktop view */}
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
         <Skeleton className="h-8 w-1/4 mb-4" />
         <Skeleton className="h-10 w-full mb-6" />
         <Card>
@@ -339,7 +290,7 @@ export default function TestReviewPage() {
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
-           <CardFooter className="flex justify-between"><Skeleton className="h-10 w-24" /><Skeleton className="h-10 w-24" /></CardFooter>
+          <CardFooter className="flex justify-between"><Skeleton className="h-10 w-24" /><Skeleton className="h-10 w-24" /></CardFooter>
         </Card>
       </div>
     );
@@ -347,7 +298,7 @@ export default function TestReviewPage() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl text-center"> {/* Adjusted max-width */}
+      <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
@@ -362,7 +313,7 @@ export default function TestReviewPage() {
 
    if (!testReport || !currentReviewQuestion) {
      return (
-       <div className="container mx-auto py-8 px-4 max-w-4xl text-center"> {/* Adjusted max-width */}
+       <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
          <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1>
          <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
@@ -375,35 +326,31 @@ export default function TestReviewPage() {
      );
    }
 
-
   return (
     <>
       <Script
-        id="mathjax-script-review-page-2"
+        id="mathjax-script-review"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-          console.log('MathJax loaded for review page.');
-          typesetMathJax();
+            if (!isLoading) typesetMathJax();
         }}
       />
-      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6"> {/* Increased max-width */}
-        {/* Header with Back Button and Title */}
-        <div className="flex items-center justify-between mb-6">
+      <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestampStr}`}>
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Results
             </Link>
           </Button>
-          <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-4 truncate" title={testReport.testName || testCode}>
+          <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={testReport.testName || testCode}>
             Test Review: {testReport.testName || testCode}
           </h1>
-          <div className="w-20 hidden sm:block"></div> {/* Spacer, hidden on small screens */}
+          <div className="w-20 hidden sm:block"></div>
         </div>
 
-        {/* Main Question Review Card */}
         <Card className="shadow-lg border-border">
-          <CardHeader>
+          <CardHeader className="p-4 sm:p-6">
             <div className="flex justify-between items-center flex-wrap gap-2">
               <CardTitle>Question {currentQuestionReviewIndex + 1} <span className="font-normal text-muted-foreground">of {totalQuestions}</span></CardTitle>
               <Badge variant={QUESTION_STATUS_BADGE_VARIANTS[questionStatus]} className="capitalize">
@@ -415,19 +362,13 @@ export default function TestReviewPage() {
             </CardDescription>
           </CardHeader>
 
-          {/* Question Content */}
-          <CardContent className="px-4 sm:px-6"> {/* Responsive padding */}
+          <CardContent className="px-4 sm:px-6">
             <div className="mb-5">
               {renderContent('question')}
             </div>
-
             <Separator className="my-5" />
-
-            {/* Options Section */}
             <h4 className="font-semibold mb-3 text-base">Your Answer & Options:</h4>
-            {renderOptions(currentReviewQuestion)}
-
-            {/* Explanation Section */}
+            {renderOptions()}
             {(currentReviewQuestion.explanationText || currentReviewQuestion.explanationImageUrl) && (
               <>
                 <Separator className="my-5" />
@@ -439,7 +380,6 @@ export default function TestReviewPage() {
             )}
           </CardContent>
 
-          {/* Footer with Navigation and Actions */}
           <CardFooter className="flex flex-col sm:flex-row justify-between items-center gap-2 pt-6 border-t px-4 sm:px-6">
             <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-start">
               <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={isLoadingNotebooks || isSavingToNotebook}>
@@ -468,7 +408,6 @@ export default function TestReviewPage() {
         </Card>
       </div>
 
-      {/* Add to Notebook Dialog */}
        {currentReviewQuestion && user && testReport && (
             <AddToNotebookDialog
                 isOpen={isNotebookModalOpen}
