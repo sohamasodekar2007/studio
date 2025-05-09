@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -8,20 +9,20 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
-import { getPlatformSettings, updatePlatformSettings } from '@/actions/settings-actions'; // Import new actions
+import { getPlatformSettings, updatePlatformSettings } from '@/actions/settings-actions';
 import type { PlatformSettings } from '@/types';
+import { Skeleton } from "@/components/ui/skeleton"; // Added import for Skeleton
 
 export default function AdminSettingsPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const [isLoadingSettings, setIsLoadingSettings] = useState(true); // For loading initial settings
+    const [isLoadingSettings, setIsLoadingSettings] = useState(true);
     const [newRegistrationsOpen, setNewRegistrationsOpen] = useState(true);
     const [defaultTestAccess, setDefaultTestAccess] = useState<'free' | 'paid'>('free');
     const [enableEmailNotifications, setEnableEmailNotifications] = useState(true);
     const [enableInAppNotifications, setEnableInAppNotifications] = useState(true);
-    const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false); // New state for maintenance mode
+    const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
 
-    // Load settings on component mount
     useEffect(() => {
         setIsLoadingSettings(true);
         getPlatformSettings()
@@ -115,7 +116,7 @@ export default function AdminSettingsPage() {
                         <Label htmlFor="maintenance-switch" className="flex flex-col space-y-1">
                             <span>Maintenance Mode</span>
                             <span className="font-normal leading-snug text-muted-foreground">
-                                Temporarily restrict access for non-admin users.
+                                Temporarily restrict access for non-admin users. Admins can still access the site.
                             </span>
                         </Label>
                         <Switch
