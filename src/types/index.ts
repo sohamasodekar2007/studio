@@ -434,12 +434,13 @@ export interface PlatformSettings {
 
 // ---- Telegram Auth Types ----
 export interface TelegramAuthData {
-    id: number;
+    id: number; // Telegram user ID
     first_name?: string;
     last_name?: string;
     username?: string;
     photo_url?: string;
-    auth_date: string;
-    hash: string;
-    phone?: string; // If requested and granted by user
+    auth_date: string; // Unix timestamp string
+    hash: string; // Verification hash
+    phone?: string; // If requested and granted
 }
+

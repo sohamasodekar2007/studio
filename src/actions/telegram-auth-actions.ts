@@ -4,27 +4,14 @@
 import crypto from 'crypto';
 import { 
     readUsersWithPasswordsInternal, 
-    writeUsersToFile,
     findUserByTelegramIdInternal,
-    // addUserToJson, // This might need adjustment if we use it.
     saveUserToJson // Prefer this for direct UserProfile object saving
 } from './user-actions';
-import type { UserProfile } from '@/types';
+import type { UserProfile, TelegramAuthData } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
-interface TelegramAuthData {
-    id: number;
-    first_name?: string;
-    last_name?: string;
-    username?: string;
-    photo_url?: string;
-    auth_date: string;
-    hash: string;
-    phone?: string; 
-}
 
 function verifyTelegramData(authData: Record<string, string>): boolean {
     if (!TELEGRAM_BOT_TOKEN) {
@@ -83,11 +70,9 @@ export async function processTelegramLogin(
             if (tgUser.last_name) nameParts.push(tgUser.last_name);
             const name = nameParts.join(' ') || tgUser.username || `User ${tgUser.id}`;
             
-            // Generate a unique, placeholder email. User should be prompted to change this.
             const email = `tg_${tgUser.id}@edunexus.com`; 
             
-            // Telegram users don't have a password initially. Generate a secure random one.
-            const randomPassword = uuidv4(); // Generate a random string
+            const randomPassword = uuidv4(); 
             const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
             const newUserProfile: UserProfile = {
@@ -95,21 +80,20 @@ export async function processTelegramLogin(
                 telegramId: tgUser.id.toString(),
                 telegramUsername: tgUser.username || null,
                 email: email,
-                password: hashedPassword, // Store the HASHED random password
+                password: hashedPassword, 
                 name: name,
-                phone: tgUser.phone || null, // Use phone if Telegram provided it
+                phone: tgUser.phone || null,
                 avatarUrl: tgUser.photo_url || null,
-                class: null, // Will need to be completed by user
-                model: 'free', // Default to free plan
+                class: null, 
+                model: 'free', 
                 role: 'User',
                 expiry_date: null,
                 createdAt: new Date().toISOString(),
-                targetYear: null, // Will need to be completed by user
+                targetYear: null, 
                 referral: '',
                 totalPoints: 0,
             };
 
-            // Use saveUserToJson which is designed to take a complete UserProfile object
             const saveSuccess = await saveUserToJson(newUserProfile);
 
             if (saveSuccess) {
@@ -126,3 +110,4 @@ export async function processTelegramLogin(
         return { success: false, message: `Server error during Telegram login: ${error.message}` };
     }
 }
+

@@ -20,12 +20,19 @@ const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234';
 async function ensureDirExists(dirPath: string): Promise<boolean> {
   try {
     await fs.mkdir(dirPath, { recursive: true });
+    console.log(`Directory ensured: ${dirPath}`);
     return true;
   } catch (error: any) {
     if (error.code !== 'EEXIST') {
         console.error(`Error creating directory ${dirPath}:`, error);
-        return false;
+        // It's crucial to know if this fails, especially for the base data path.
+        // For publicAvatarsPath, this might fail in serverless but be acceptable for local dev focus.
+        if (dirPath === dataBasePath || dirPath === path.dirname(usersFilePath)) {
+             throw new Error(`Failed to create critical data directory: ${dirPath}. Reason: ${error.message}`);
+        }
+        return false; // For non-critical paths like avatars in serverless, we might proceed.
     }
+    console.log(`Directory already exists: ${dirPath}`);
     return true; 
   }
 }
@@ -33,9 +40,11 @@ async function ensureDirExists(dirPath: string): Promise<boolean> {
 // Renamed to writeUsersToFile to avoid conflict with the internal user-actions.ts writeUsers
 async function writeUsersToFile(users: UserProfile[]): Promise<boolean> {
   try {
+    // Ensure the 'src/data' directory exists before trying to write users.json
     if (!await ensureDirExists(path.dirname(usersFilePath))) {
         console.error('Failed to ensure users directory exists for users.json');
-        return false;
+        // This is a critical failure if users.json cannot be written.
+        throw new Error('Fatal: Cannot create directory for users.json.');
     }
     await fs.writeFile(usersFilePath, JSON.stringify(users, null, 2), 'utf-8');
     return true;
@@ -62,12 +71,11 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
     let writeNeeded = false;
 
     try { 
-        if (!await ensureDirExists(dataBasePath)) {
-             throw new Error(`Failed to create base data directory: ${dataBasePath}`);
-        }
-        if (!await ensureDirExists(publicAvatarsPath)) { 
-            throw new Error(`Failed to create public avatars directory: ${publicAvatarsPath}`);
-        }
+        // Ensure base data directory and public avatars directory exist (for local dev)
+        // These calls might fail in a read-only serverless environment for 'publicAvatarsPath'
+        // but should succeed for 'dataBasePath' locally.
+        await ensureDirExists(dataBasePath);
+        await ensureDirExists(publicAvatarsPath); // This might be the source of /var/task/public error in serverless
 
         try {
             await fs.access(usersFilePath);
@@ -118,6 +126,7 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
                 try {
                     const randomPassword = Math.random().toString(36).slice(-8);
                     currentUser.password = await bcrypt.hash(randomPassword, SALT_ROUNDS); userModified = true;
+                    console.log(`Generated and hashed new random password for user ${currentUser.email || currentUser.id}`);
                 } catch (hashError) { console.error(`CRITICAL: Failed to hash temporary password for ${currentUser.email || currentUser.id}`, hashError); }
             }
             if (currentUser.expiry_date && !(typeof currentUser.expiry_date === 'string' && !isNaN(Date.parse(currentUser.expiry_date)))) {
@@ -235,7 +244,6 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
   }
 }
 
-
 export async function findUserByTelegramIdInternal(telegramId: string): Promise<UserProfile | null> {
     if (!telegramId) return null;
     try {
@@ -247,11 +255,12 @@ export async function findUserByTelegramIdInternal(telegramId: string): Promise<
     }
 }
 
-
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
         if (!await ensureDirExists(publicAvatarsPath)) {
-             console.error(`Failed to ensure public avatars directory exists: ${publicAvatarsPath}`);
+             console.error(`Failed to ensure public avatars directory exists: ${publicAvatarsPath}. Avatar for ${userId} will not be saved.`);
+             // In a serverless context, this might often fail. We shouldn't throw a hard error here
+             // if avatar saving is optional or if the primary goal is user data persistence.
              return null;
         }
         const fileBuffer = Buffer.from(await avatarFile.arrayBuffer());
@@ -347,20 +356,22 @@ export async function addUserToJson(
             const { password, ...userWithoutPassword } = userToAdd;
             return { success: true, user: userWithoutPassword };
         } else {
+            // This means writeUsersToFile failed, which should now throw if critical.
             return { success: false, message: 'Failed to write users file.' };
         }
     } catch (error: any) {
         console.error('Error in addUserToJson:', error);
+        // The error from ensureDirExists or writeUsersToFile will be caught here if they throw.
         return { success: false, message: `Server error: ${error.message || 'Could not add user.'}` };
     }
 }
 
+// Modified to accept FormData for avatar updates
 export async function updateUserInJson(
-    // Changed to accept an object for easier formData handling
-    userId: string,
-    updateData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'>> & { avatarFile?: File | null, removeAvatar?: boolean }
+    formData: FormData // Changed to accept FormData
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
+        const userId = formData.get('userId') as string;
         if (!userId || typeof userId !== 'string') {
             return { success: false, message: "Invalid user ID provided for update." };
         }
@@ -374,27 +385,50 @@ export async function updateUserInJson(
 
         const existingUser = users[userIndex];
         let newAvatarFilename = existingUser.avatarUrl || null;
+        const avatarFile = formData.get('avatarFile') as File | null;
+        const removeAvatar = formData.get('removeAvatar') === 'true';
 
-        if (updateData.avatarFile instanceof File) {
+
+        if (avatarFile instanceof File) {
             if (existingUser.avatarUrl) { await deleteAvatarLocally(existingUser.avatarUrl); }
-            newAvatarFilename = await saveAvatarLocally(userId, updateData.avatarFile);
-            if (!newAvatarFilename) console.warn("Failed to save new avatar, keeping old one if any.");
-        } else if (updateData.removeAvatar && existingUser.avatarUrl) {
+            newAvatarFilename = await saveAvatarLocally(userId, avatarFile);
+            // If saving new avatar fails, we might keep the old one or set to null.
+            // For now, if saveAvatarLocally returns null, newAvatarFilename becomes null.
+            if (!newAvatarFilename && existingUser.avatarUrl) {
+                 console.warn("Failed to save new avatar, old avatar was removed. Setting avatar to null.");
+                 newAvatarFilename = null; // Explicitly null if save failed and old existed
+            } else if (!newAvatarFilename) {
+                 console.warn("Failed to save new avatar. Setting avatar to null.");
+                 newAvatarFilename = null;
+            }
+        } else if (removeAvatar && existingUser.avatarUrl) {
             await deleteAvatarLocally(existingUser.avatarUrl);
             newAvatarFilename = null;
         }
         
+        // Extract other updatable fields from FormData
+        const name = formData.get('name') as string | null;
+        // Phone is typically not updated by user from settings, but admin might. For this action, assume it's from admin.
+        const phone = formData.get('phone') as string | null;
+        const email = formData.get('email') as string | null; // Email might be updated by admin
+        const academicClass = formData.get('class') as AcademicStatus | null;
+        const targetYear = formData.get('targetYear') as string | null;
+        const model = formData.get('model') as UserModel | null; // Admin can change model
+        const expiry_date_str = formData.get('expiry_date') as string | null; // Admin can change expiry
+
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
-            name: updateData.name !== undefined ? updateData.name : existingUser.name,
-            phone: updateData.phone !== undefined ? updateData.phone : existingUser.phone, // Now updatable by admin
-            email: updateData.email !== undefined ? updateData.email : existingUser.email, // Email updatable by admin
-            class: updateData.class !== undefined ? updateData.class : existingUser.class,
-            targetYear: updateData.targetYear !== undefined ? updateData.targetYear : existingUser.targetYear,
+            name: name !== null ? name : existingUser.name,
+            // Phone is not directly updated by user in their settings page normally. This action is likely admin-triggered.
+            phone: phone !== null ? phone : existingUser.phone,
+            // Email is not directly updated by user in their settings page normally. This action is likely admin-triggered.
+            email: email !== null ? email : existingUser.email,
+            class: academicClass !== null ? academicClass : existingUser.class,
+            targetYear: targetYear !== null ? targetYear : existingUser.targetYear,
             avatarUrl: newAvatarFilename,
-            model: updateData.model !== undefined ? updateData.model : existingUser.model,
-            expiry_date: updateData.expiry_date !== undefined ? updateData.expiry_date : existingUser.expiry_date,
-            // Role should be updated via updateUserRole
+            model: model !== null ? model : existingUser.model,
+            expiry_date: expiry_date_str !== null ? expiry_date_str : existingUser.expiry_date,
+            // Role, password, createdAt, referral, totalPoints, telegramId, telegramUsername are not updated here
         };
         
         users[userIndex] = userWithUpdatesApplied;
@@ -434,10 +468,10 @@ export async function updateUserRole(
 
         const emailLower = userToUpdate.email?.toLowerCase() || '';
         if (newRole === 'Admin' && emailLower !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(emailLower)) {
-            return { success: false, message: `Cannot promote to Admin. Email '${userToUpdate.email}' does not follow admin pattern ('username-admin@edunexus.com' or primary admin). Change email first or use an appropriate email.` };
+            return { success: false, message: `Cannot promote to Admin. Email '${userToUpdate.email}' does not follow admin pattern ('username-admin@edunexus.com' or primary admin).` };
         }
         if (newRole === 'User' && (emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower))) {
-            return { success: false, message: `Cannot demote to User. Email format '${userToUpdate.email}' is reserved for Admins. Change email first.` };
+            return { success: false, message: `Cannot demote to User. Email format '${userToUpdate.email}' is reserved for Admins.` };
         }
 
         if (userToUpdate.role === newRole) {
@@ -576,7 +610,7 @@ export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanVa
 export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
   try {
     let users = await readUsersWithPasswordsInternal();
-    const userIndex = users.findIndex(u => u.id === userData.id || (userData.email && u.email === userData.email));
+    const userIndex = users.findIndex(u => u.id === userData.id || (userData.email && u.email?.toLowerCase() === userData.email?.toLowerCase()));
 
     if (userIndex !== -1) {
       const existingUser = users[userIndex];
@@ -629,3 +663,4 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
     return false;
   }
 }
+
