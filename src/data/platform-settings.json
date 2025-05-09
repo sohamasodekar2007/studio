@@ -1,0 +1,7 @@
+{
+  "maintenanceModeEnabled": false,
+  "newRegistrationsOpen": true,
+  "defaultTestAccess": "free",
+  "enableEmailNotifications": true,
+  "enableInAppNotifications": true
+}

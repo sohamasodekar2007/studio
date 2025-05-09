@@ -395,3 +395,13 @@ export interface AppNotification {
     createdAt: number; 
     icon?: React.ElementType; 
 }
+
+// ---- Platform Settings Type ----
+export interface PlatformSettings {
+  maintenanceModeEnabled: boolean;
+  newRegistrationsOpen: boolean;
+  defaultTestAccess: 'free' | 'paid'; // Example, can be expanded
+  enableEmailNotifications: boolean;
+  enableInAppNotifications: boolean;
+  // Add other platform-wide settings here
+}
