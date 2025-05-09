@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowLeft, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowLeft, ArrowRight, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -23,20 +23,23 @@ import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/acti
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress'; // For DPP progress bar
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    const basePath = '/question_bank_images'; 
+    const basePath = '/question_bank_images';
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
 
 const difficultyButtonVariants: Record<DifficultyFilter, string> = {
-    'All': 'bg-primary text-primary-foreground hover:bg-primary/90',
-    'Easy': 'bg-green-500 text-white hover:bg-green-600',
-    'Medium': 'bg-yellow-500 text-white hover:bg-yellow-600',
-    'Hard': 'bg-red-500 text-white hover:bg-red-600',
+    'All': 'bg-primary text-primary-foreground hover:bg-primary/90 ring-primary/50',
+    'Easy': 'bg-green-500 text-white hover:bg-green-600 ring-green-500/50',
+    'Medium': 'bg-yellow-500 text-white hover:bg-yellow-600 ring-yellow-500/50',
+    'Hard': 'bg-red-500 text-white hover:bg-red-600 ring-red-500/50',
 };
 
 
@@ -65,6 +68,7 @@ export default function DppLessonPage() {
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  const [animateCard, setAnimateCard] = useState(false);
 
   const typesetMathJax = useCallback(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
@@ -90,12 +94,13 @@ export default function DppLessonPage() {
     return filteredQuestions[currentQuestionIndex];
   }, [filteredQuestions, currentQuestionIndex]);
 
-
   useEffect(() => {
     if (!isLoading && currentQuestion) {
+        setAnimateCard(true); // Trigger animation
         const timerId = setTimeout(() => {
             typesetMathJax();
-        }, 50);
+            setAnimateCard(false); // Reset animation state after a short delay
+        }, 50); // Adjust delay if needed
         return () => clearTimeout(timerId);
     }
   }, [isLoading, currentQuestion, showSolution, typesetMathJax]);
@@ -154,9 +159,13 @@ export default function DppLessonPage() {
        }
    }, [user, subject, lesson]);
 
-
   const previousAttempts = currentQuestion ? dppProgress?.questionAttempts[currentQuestion.id] : [];
   const lastAttempt = previousAttempts?.[0];
+  const dppCompletionPercentage = useMemo(() => {
+    if (!dppProgress || allQuestions.length === 0) return 0;
+    const attemptedQuestions = Object.keys(dppProgress.questionAttempts).length;
+    return (attemptedQuestions / allQuestions.length) * 100;
+  }, [dppProgress, allQuestions]);
 
 
   const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
@@ -184,7 +193,19 @@ export default function DppLessonPage() {
 
        const correct = selected === currentQuestion.correct;
        setIsCorrect(correct);
-       setShowSolution(true);
+       setShowSolution(true); // Show solution immediately
+
+       // Animate feedback
+       const feedbackElement = document.getElementById('answer-feedback');
+        if (feedbackElement) {
+            feedbackElement.classList.remove('animate-pulse', 'animate-bounce'); // Reset previous animations
+            if (correct) {
+                feedbackElement.classList.add('animate-bounce'); // Example: bounce for correct
+            } else {
+                feedbackElement.classList.add('animate-pulse'); // Example: pulse for incorrect
+            }
+        }
+
 
        setIsSaving(true);
        try {
@@ -215,12 +236,13 @@ export default function DppLessonPage() {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
+           setAnimateCard(true); // Trigger animation for next card
            const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
            if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
                setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
            }
        } else {
-           toast({ title: "DPP Set Completed!", description: "You've reached the end of this set."});
+           toast({ title: "DPP Set Completed!", description: "You've reached the end of this set. Great job!", duration: 5000 });
            router.push('/dpp');
        }
    };
@@ -230,13 +252,13 @@ export default function DppLessonPage() {
 
        if (q.type === 'image' && imagePath) {
            return (
-                <div className="relative w-full max-w-md h-56 md:h-64 mx-auto my-4">
+                <div className="relative w-full max-w-md h-56 md:h-64 mx-auto my-4 group transition-all duration-300 hover:scale-105">
                     <Image
                        src={imagePath}
                        alt={`Question Image: ${q.id}`}
                        layout="fill"
                        objectFit="contain"
-                       className="rounded border bg-muted"
+                       className="rounded-lg border-2 border-border group-hover:border-primary shadow-md"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2}
                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; console.error(`Error loading image: ${imagePath}`);}}
@@ -252,7 +274,7 @@ export default function DppLessonPage() {
                 />
            );
        }
-       return <p className="text-muted-foreground">Question content not available.</p>;
+       return <p className="text-muted-foreground text-center py-4">Question content not available for this question.</p>;
    };
 
     const renderOptions = (q: QuestionBankItem) => {
@@ -271,18 +293,18 @@ export default function DppLessonPage() {
                 {Object.entries(q.options).map(([key, value]) => {
                     const isSelected = selectedOption === key;
                     const isCorrectOption = key === correctOption;
-                    let optionStyle = "border-border hover:border-primary bg-card hover:scale-[1.01] hover:border-primary/50 transition-all duration-150";
+                    let optionStyle = "border-border hover:border-primary bg-card hover:shadow-lg transition-all duration-200 ease-in-out transform hover:scale-[1.02]";
 
                     if (isAnswerChecked) {
                         if (isSelected && isCorrectOption) {
-                             optionStyle = "border-green-500 bg-green-100 dark:bg-green-900/30 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300";
+                             optionStyle = "border-green-500 bg-green-100 dark:bg-green-900/40 ring-2 ring-green-500 dark:ring-green-400 text-green-700 dark:text-green-300 font-semibold shadow-green-200/50 dark:shadow-green-800/40 shadow-md";
                         } else if (isSelected && !isCorrectOption) {
-                             optionStyle = "border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300";
+                             optionStyle = "border-red-500 bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300 font-semibold shadow-red-200/50 dark:shadow-red-800/40 shadow-md";
                         } else if (!isSelected && isCorrectOption) {
-                             optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
+                             optionStyle = "border-green-500 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
                         }
                     } else if (isSelected) {
-                         optionStyle = "border-primary ring-2 ring-primary bg-primary/10 scale-[1.01]";
+                         optionStyle = "border-primary ring-2 ring-primary bg-primary/10 scale-[1.02] shadow-md";
                     }
 
                     return (
@@ -290,16 +312,16 @@ export default function DppLessonPage() {
                             key={key}
                             htmlFor={`${questionId}-${key}`}
                             className={cn(
-                                "flex items-start space-x-3 p-4 border rounded-lg transition-all shadow-sm",
+                                "flex items-start space-x-3 p-4 border rounded-lg transition-all",
                                 optionStyle,
                                 (showSolution || isSaving) ? "cursor-default opacity-80" : "cursor-pointer"
                             )}
                         >
-                            <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1 border-muted-foreground data-[state=checked]:border-primary" />
+                            <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1 border-muted-foreground data-[state=checked]:border-primary focus:ring-primary focus:ring-offset-2" />
                             <span className="font-semibold text-sm">{key}.</span>
                             <div className="flex-1 mathjax-content text-sm" dangerouslySetInnerHTML={{ __html: value.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
-                              {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-500 ml-auto flex-shrink-0" />}
-                              {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-500 ml-auto flex-shrink-0" />}
+                              {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
+                              {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                           </Label>
                     );
                 })}
@@ -315,18 +337,18 @@ export default function DppLessonPage() {
          if (!hasText && !hasImage) return null;
 
          return (
-              <Card className="mt-8 bg-muted/40 dark:bg-muted/20 border-border shadow-inner">
-                  <CardHeader className="pb-3">
+              <Card className="mt-8 bg-muted/40 dark:bg-background border-border shadow-inner transform transition-all duration-500 ease-out animate-in fade-in slide-in-from-bottom-5">
+                  <CardHeader className="pb-3 pt-4">
                     <CardTitle className="text-md font-semibold flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-primary"/>
-                        Explanation
+                        <Sparkles className="h-5 w-5 text-primary"/>
+                        Detailed Explanation
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pb-4">
                       {hasText && (
-                          <div className="prose dark:prose-invert max-w-none mathjax-content text-sm" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                          <div className="prose dark:prose-invert max-w-none mathjax-content text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                       )}
-                      {hasImage && <div className="relative w-full max-w-md h-56 mx-auto mt-4"><Image src={explanationImagePath!}  alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded border" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
+                      {hasImage && <div className="relative w-full max-w-md h-56 mx-auto mt-4 group hover:scale-105 transition-transform duration-300"><Image src={explanationImagePath!}  alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded-md border shadow-sm group-hover:shadow-lg" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
                   </CardContent>
               </Card>
          );
@@ -335,7 +357,7 @@ export default function DppLessonPage() {
       const renderPyqInfo = (q: QuestionBankItem) => {
          if (!q.isPyq || !q.pyqDetails) return null;
          const { exam, date, shift } = q.pyqDetails;
-         return <Badge variant="outline" className="text-xs text-muted-foreground"><Tag className="h-3 w-3 mr-1"/>PYQ: {exam} ({new Date(date).getFullYear()} Shift {shift})</Badge>;
+         return <Badge variant="outline" className="text-xs text-muted-foreground bg-amber-100/50 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700"><Tag className="h-3 w-3 mr-1 text-amber-600 dark:text-amber-400"/>PYQ: {exam} ({new Date(date).getFullYear()} S{shift.replace('S','')})</Badge>;
       };
 
       const renderPreviousAttemptStatus = () => {
@@ -348,7 +370,7 @@ export default function DppLessonPage() {
          }
          return <Badge variant="outline" className="text-xs font-normal h-6"><HelpCircle className="h-3 w-3 mr-1"/>Not Attempted Yet</Badge>;
      };
-
+   
    const handleOpenNotebookModal = () => {
        if (isLoadingNotebooks) {
             toast({ variant: "default", title: "Loading notebooks..." });
@@ -400,26 +422,26 @@ export default function DppLessonPage() {
     }, [user?.id, toast]);
 
 
-  if (isLoading || authLoading) {
-    return (
-        <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
+  if (isLoading || authLoading) { 
+    return ( 
+        <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6 animate-pulse">
             <Skeleton className="h-6 w-1/4 mb-4" />
             <Skeleton className="h-10 w-3/4 mb-2" />
             <Skeleton className="h-6 w-1/2 mb-6" />
-            <div className="flex gap-2 mb-4"> <Skeleton className="h-10 w-24" /> <Skeleton className="h-10 w-24" /> <Skeleton className="h-10 w-24" /> </div>
+            <div className="flex gap-2 mb-4"> <Skeleton className="h-10 w-24 rounded-full" /> <Skeleton className="h-10 w-24 rounded-full" /> <Skeleton className="h-10 w-24 rounded-full" /> </div>
             <Card className="shadow-lg">
             <CardHeader className="p-6"><Skeleton className="h-7 w-1/3 mb-2" /><Skeleton className="h-4 w-2/3" /></CardHeader>
-            <CardContent className="p-6"><Skeleton className="h-48 w-full mb-4" /><Skeleton className="h-12 w-full mb-3" /><Skeleton className="h-12 w-full" /></CardContent>
+            <CardContent className="p-6"><Skeleton className="h-48 w-full mb-4 rounded-lg" /><Skeleton className="h-12 w-full mb-3 rounded-lg" /><Skeleton className="h-12 w-full rounded-lg" /></CardContent>
             <CardFooter className="p-6 flex justify-between items-center">
-                 <Button variant="outline" className="transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95"><Skeleton className="h-full w-full" /></Button>
-                 <Button className="transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95"><Skeleton className="h-full w-full" /></Button>
+                 <Skeleton className="h-10 w-32 rounded-md" />
+                 <Skeleton className="h-10 w-32 rounded-md" />
             </CardFooter>
             </Card>
         </div>
      );
    }
-    if (!user) { router.push('/auth/login?redirect=/dpp'); return null; }
-    if (error) { return (
+    if (!user) { router.push('/auth/login?redirect=/dpp'); return null; } 
+    if (error) { return ( 
          <div className="container mx-auto py-8 px-4 max-w-2xl text-center space-y-4">
            <AlertTriangle className="h-16 w-16 text-destructive mx-auto" />
            <h1 className="text-2xl font-bold text-destructive">Error Loading DPP</h1>
@@ -427,7 +449,7 @@ export default function DppLessonPage() {
            <Button asChild variant="outline"><Link href="/dpp">Back to DPP List</Link></Button>
          </div>
     ); }
-    if (filteredQuestions.length === 0) { return (
+    if (filteredQuestions.length === 0) { return ( 
          <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
              <div className="mb-4"><Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to DPP List</Link></div>
              <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
@@ -439,8 +461,8 @@ export default function DppLessonPage() {
                         variant="ghost" 
                         size="sm" 
                         onClick={() => handleDifficultyFilter(diff)} 
-                        className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md", 
-                        selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-1 ring-current` : 'text-muted-foreground hover:bg-accent/80')}
+                        className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md rounded-full", 
+                        selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-background ring-offset-2` : 'text-muted-foreground hover:bg-accent/80')}
                     >
                         {diff}
                     </Button>
@@ -456,20 +478,31 @@ export default function DppLessonPage() {
        <Script id="mathjax-script-dpp" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={() => { typesetMathJax(); }} />
        <div className="container mx-auto py-6 px-4 md:py-8 md:px-6 max-w-3xl space-y-8">
         <div className="flex justify-between items-center">
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="hover:bg-muted/50 transition-colors">
                 <Link href="/dpp" className="inline-flex items-center gap-1.5">
                     <ArrowLeft className="h-4 w-4" /> Back to DPP List
                 </Link>
             </Button>
-            <span className="text-sm text-muted-foreground">Question {currentQuestionIndex + 1} of {filteredQuestions.length}</span>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary h-8 w-8">
+                           <Repeat className="h-4 w-4"/>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom"><p>Reset Filters & Progress</p></TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         </div>
 
          <div className="text-center">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{lesson}</h1>
             <p className="text-muted-foreground text-sm md:text-base">Subject: {subject}</p>
          </div>
+         
+         <Progress value={dppCompletionPercentage} className="w-full h-2 bg-muted/50" />
 
-         <div className="flex flex-wrap items-center justify-center gap-2 mb-6 rounded-lg bg-muted/50 p-3">
+         <div className="flex flex-wrap items-center justify-center gap-2 mb-6 rounded-lg bg-muted/20 dark:bg-card p-3 shadow-inner">
             <Filter className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium mr-2 text-sm">Difficulty:</span>
             {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
@@ -478,8 +511,8 @@ export default function DppLessonPage() {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => handleDifficultyFilter(diff)} 
-                    className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md", 
-                    selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-1 ring-current` : 'text-muted-foreground hover:bg-accent/80')}
+                    className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md rounded-full", 
+                    selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-background ring-offset-2` : 'text-muted-foreground hover:bg-accent/80')}
                 >
                     {diff}
                 </Button>
@@ -487,53 +520,48 @@ export default function DppLessonPage() {
          </div>
 
          {currentQuestion ? (
-             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-border overflow-hidden">
-             <CardHeader className="p-4 md:p-6 bg-card">
+             <Card className={cn("shadow-xl hover:shadow-2xl transition-shadow duration-300 border-border overflow-hidden", animateCard && "animate-in fade-in-0 slide-in-from-bottom-5 duration-500")}>
+             <CardHeader className="p-4 md:p-6 bg-card border-b">
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                    <div className="flex items-center gap-2">
-                         <Badge variant="secondary" className="text-xs h-6">{currentQuestion.difficulty}</Badge>
-                         {renderPyqInfo(currentQuestion)}
-                    </div>
-                    <div className="text-xs sm:text-sm">
-                        {renderPreviousAttemptStatus()}
-                    </div>
+                    <CardTitle className="text-lg font-semibold">Question {currentQuestionIndex + 1} <span className="text-muted-foreground font-normal text-sm">of {filteredQuestions.length}</span></CardTitle>
+                    <div className="flex items-center gap-2 flex-wrap"> {renderPyqInfo(currentQuestion)} <Badge variant="secondary" className="text-xs h-6">{currentQuestion.difficulty}</Badge> {renderPreviousAttemptStatus()} </div>
                  </div>
              </CardHeader>
-             <CardContent className="p-4 md:p-6">
+             <CardContent className="p-4 md:p-6 min-h-[200px]"> 
                 {renderQuestionContent(currentQuestion)}
                 {renderOptions(currentQuestion)}
                 
-                <div className={cn(
-                    "transition-all duration-300 ease-in-out mt-6",
+                <div id="answer-feedback" className={cn(
+                    "transition-all duration-500 ease-out mt-6",
                     showSolution && isCorrect !== null ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
                 )}>
                     {showSolution && isCorrect !== null && (
-                        <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm", isCorrect ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700" : "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700")}>
-                            {isCorrect ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                            <AlertTitle className={cn(isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
+                        <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm shadow-md", isCorrect ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : "bg-red-50 border-red-300 dark:bg-red-900/30 dark:border-red-700")}>
+                            {isCorrect ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                            <AlertTitle className={cn("font-semibold",isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
                             {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
                         </Alert>
                     )}
                 </div>
 
                 <div className={cn(
-                    "transition-all duration-500 ease-in-out delay-100",
+                    "transition-all duration-700 ease-out delay-200",
                     showSolution && (currentQuestion.explanation.text || currentQuestion.explanation.image) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
                 )}>
                     {showSolution && renderExplanation(currentQuestion)}
                 </div>
              </CardContent>
              <CardFooter className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-3 bg-muted/30 border-t">
-                 <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
-                    <Bookmark className="mr-2 h-4 w-4" />{isSaving && notebooks.length === 0 ? "Saving..." : "Bookmark"}
+                 <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-sm hover:shadow-md border-input">
+                    <Bookmark className="mr-2 h-4 w-4 text-primary" />{isSaving && notebooks.length === 0 ? "Saving..." : "Bookmark"}
                  </Button>
                  <div className="flex gap-2 w-full sm:w-auto">
                     {!showSolution ? (
-                        <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                        <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer
                         </Button>
                     ) : (
-                         <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
+                         <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
                             {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'} <ChevronRight className="ml-1 h-4 w-4"/>
                          </Button>
                     )}
