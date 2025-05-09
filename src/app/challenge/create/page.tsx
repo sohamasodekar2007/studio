@@ -25,7 +25,7 @@ import { createChallenge } from '@/actions/challenge-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
-import { readUsers } from '@/lib/user-actions';
+import { readUsers } from '@/actions/user-actions'; // Corrected import path
 
 const challengeCreationSchema = z.object({
   subject: z.string().min(1, "Subject is required."),
