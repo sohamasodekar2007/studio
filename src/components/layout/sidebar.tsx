@@ -14,6 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
   useSidebar,
+  SidebarMenuBadge, // Correctly import SidebarMenuBadge from here
 } from '@/components/ui/sidebar';
 import {
   Home,
@@ -38,6 +39,8 @@ import {
   MoreVertical, // Icon for the dropdown trigger
   Sun, // For Theme Toggle inside dropdown
   Moon, // For Theme Toggle inside dropdown
+  Swords, // For Create Challenge
+  Bell, // For Challenge Invites
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -139,6 +142,18 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme(); // For theme toggle in dropdown
 
   const isAdmin = user?.role === 'Admin';
+  const [pendingInvitesCount, setPendingInvitesCount] = useState(0); // Example state
+
+  // TODO: In a real app, fetch pendingInvitesCount for the user
+  useEffect(() => {
+    if (user) {
+      // Example: fetchUserChallengeInvites(user.id).then(invites => setPendingInvitesCount(invites.filter(i => i.status === 'pending').length));
+      setPendingInvitesCount(0); // Placeholder for demo - set to 0 as challenges are not fully implemented
+    } else {
+      setPendingInvitesCount(0);
+    }
+  }, [user]);
+
 
   const isActive = (href: string) => {
     const exactMatchRoutes = [
@@ -156,6 +171,8 @@ export function AppSidebar() {
         '/friends-compare',
         '/pyq-mock-tests',
         '/pyq-dpps',
+        '/challenge/create', // Added
+        '/challenges/invites', // Added
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
@@ -218,25 +235,30 @@ export function AppSidebar() {
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
         <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
-          <div className="flex items-center gap-2 group-data-[state=collapsed]:hidden">
-              <Image
-                  src="/EduNexus-logo-black.jpg"
-                  alt="EduNexus Logo"
-                  width={30}
-                  height={30}
-                  className="h-8 w-8 dark:hidden"
-                  unoptimized
-              />
-              <Image
-                  src="/EduNexus-logo-white.jpg"
-                  alt="EduNexus Logo"
-                  width={30}
-                  height={30}
-                  className="h-8 w-8 hidden dark:block"
-                  unoptimized
-              />
+          <Link
+            href="/"
+            className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
+            aria-label="EduNexus Home"
+          >
+            {/* EduNexus Logo */}
+            <Image
+                src="/EduNexus-logo-black.jpg" // Use black for light theme
+                alt="EduNexus Logo"
+                width={30}
+                height={30}
+                className="h-8 w-8 dark:hidden" // Hide on dark mode
+                unoptimized
+            />
+             <Image
+                src="/EduNexus-logo-white.jpg" // Use white for dark theme
+                alt="EduNexus Logo"
+                width={30}
+                height={30}
+                className="h-8 w-8 hidden dark:block" // Show on dark mode
+                unoptimized
+            />
             <h1 className="text-lg font-semibold">EduNexus</h1>
-          </div>
+          </Link>
           <SidebarTrigger className="hidden sm:flex" />
         </SidebarHeader>
 
@@ -313,8 +335,28 @@ export function AppSidebar() {
 
             <SidebarSeparator className="my-3" />
 
+            {/* Friends & Challenges Group */}
             <SidebarGroup id="tutorial-target-friends-group">
-                  <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Friends</SidebarGroupLabel>
+                  <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Connect & Compete</SidebarGroupLabel>
+                  <SidebarMenuItem>
+                        <Link href="/challenge/create" passHref legacyBehavior>
+                            <SidebarMenuButton as="a" isActive={isActive('/challenge/create')} tooltip="Create Challenge" id="tutorial-target-create-challenge">
+                                <Swords />
+                                <span className="group-data-[state=collapsed]:hidden">Create Challenge</span>
+                            </SidebarMenuButton>
+                        </Link>
+                  </SidebarMenuItem>
+                   <SidebarMenuItem>
+                        <Link href="/challenges/invites" passHref legacyBehavior>
+                            <SidebarMenuButton as="a" isActive={isActive('/challenges/invites')} tooltip="Challenge Invites" id="tutorial-target-challenge-invites">
+                                <Bell />
+                                <span className="group-data-[state=collapsed]:hidden">Challenge Invites</span>
+                                {pendingInvitesCount > 0 && (
+                                    <SidebarMenuBadge>{pendingInvitesCount}</SidebarMenuBadge>
+                                )}
+                            </SidebarMenuButton>
+                        </Link>
+                  </SidebarMenuItem>
                   <SidebarMenuItem>
                       <Link href="/find-friends" passHref legacyBehavior>
                           <SidebarMenuButton as="a" isActive={isActive('/find-friends')} tooltip="Find Friends" id="tutorial-target-find-friends">
@@ -403,7 +445,7 @@ export function AppSidebar() {
                         <span className="group-data-[state=collapsed]:hidden">More</span>
                     </SidebarMenuButton>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent 
+                <DropdownMenuContent
                     side="top" // Change side to top
                     align="center" // Align to center
                     sideOffset={10} // Adjust offset as needed

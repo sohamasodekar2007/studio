@@ -320,3 +320,72 @@ export interface UserFollows {
   following: string[]; // Array of user IDs this user is following
   followers: string[]; // Array of user IDs following this user
 }
+
+// ---- Challenge Test Types ----
+export type ChallengeStatus = "pending" | "accepted" | "rejected" | "completed" | "expired";
+
+export interface ChallengeParticipant {
+  userId: string;
+  name: string | null; // Name of the participant
+  avatarUrl?: string | null;
+  status: ChallengeStatus;
+  score?: number;
+  timeTaken?: number; // in seconds
+  rank?: number;
+  answers?: UserAnswer[]; // Store their answers for this challenge
+}
+
+export interface ChallengeTestConfig {
+  subject: string;
+  lesson: string;
+  numQuestions: number;
+  difficulty?: DifficultyLevel | 'all';
+  examFilter?: ExamOption | 'all';
+}
+
+export interface Challenge {
+  challengeCode: string; // Unique CHL-XXXX-XXXX-XX code
+  creatorId: string;
+  creatorName: string | null; // Name of the creator
+  participants: Record<string, ChallengeParticipant>; // Keyed by userId
+  testConfig: ChallengeTestConfig;
+  testStatus: "waiting" | "started" | "completed" | "expired";
+  questions: TestQuestion[]; // Array of questions for this challenge instance
+  createdAt: number; // Timestamp
+  expiresAt: number; // Timestamp (createdAt + 3 hours)
+  startedAt?: number; // Timestamp when creator starts the test
+  // Potentially add winnerId or other summary fields after completion
+}
+
+// For notifications/invites
+export interface ChallengeInvite {
+  challengeCode: string;
+  creatorId: string;
+  creatorName: string | null;
+  testName: string; // e.g., "Physics - Kinematics Challenge"
+  numQuestions: number;
+  status: "pending" | "accepted" | "rejected" | "expired"; // Status of the invite for the recipient
+  createdAt: number;
+  expiresAt: number;
+}
+
+// Structure for storing challenge invites for a user
+// src/data/user-challenge-invites/{userId}.json
+export interface UserChallengeInvites {
+    userId: string;
+    invites: ChallengeInvite[];
+}
+
+// Structure for storing a user's completed challenge attempts (for their history)
+// src/data/user-challenge-history/{userId}.json
+export interface UserChallengeHistory {
+    userId: string;
+    completedChallenges: Array<{
+        challengeCode: string;
+        testName: string; // Or creatorName + config details
+        userScore: number;
+        totalScore: number;
+        rank?: number; // Rank within that specific challenge
+        completedAt: number;
+    }>;
+}
