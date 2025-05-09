@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"; // Added FormDescription
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
@@ -184,7 +184,6 @@ export default function AdminQuestionBankPage() {
     setIsLoadingSubjects(true);
     getSubjects()
       .then(fetchedSubjects => {
-        // Add other core subjects if not present
         const coreSubjects = ["Physics", "Chemistry", "Maths", "Biology"];
         const allSubjectsSet = new Set([...fetchedSubjects, ...coreSubjects]);
         setSubjects(Array.from(allSubjectsSet).sort());
