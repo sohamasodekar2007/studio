@@ -36,23 +36,6 @@ const OPTION_STYLES = {
   correctButNotSelected: "border-green-600 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300",
 };
 
-const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
-    if (!imagePath) return null;
-    if (imagePath.startsWith('/question_bank_images/')) return imagePath;
-    if (imagePath.startsWith('Q_') || imagePath.startsWith('E_')) {
-        // This case implies the path might be missing subject/lesson context from the report
-        // This function should ideally receive subject/lesson if paths in reports are relative to lesson
-        console.warn(`Constructing image path for potentially relative filename: ${imagePath}. This might fail if subject/lesson context is missing.`);
-        // Attempt a generic path, but this is fragile. The report should provide full relative paths.
-        return `/question_bank_images/unknown_subject/unknown_lesson/images/${imagePath}`;
-    }
-    // If it's already a seemingly valid public path or full URL
-    if (imagePath.startsWith('/') || imagePath.startsWith('http')) return imagePath;
-    
-    console.warn(`constructPublicImagePath received an unexpected path format: ${imagePath}. Attempting to use as is, but may fail.`);
-    return imagePath;
-};
-
 
 export default function TestReviewPage() {
   const params = useParams();
@@ -73,21 +56,15 @@ export default function TestReviewPage() {
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
-  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false);
+  const [isSavingToNotebook, setIsSavingToNotebook] = useState<boolean>(false); 
 
  const typesetMathJax = useCallback(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
         const elements = document.querySelectorAll('.mathjax-content');
         if (elements.length > 0) {
             (window as any).MathJax.typesetPromise(Array.from(elements))
-                .catch((err: any) => console.error("MathJax typeset error (elements):", err));
-        } else {
-            // Fallback for cases where '.mathjax-content' might not be immediately available or if global typesetting is preferred initially
-            (window as any).MathJax.typesetPromise()
-                .catch((err: any) => console.error("MathJax typeset error (fallback):", err));
+                .catch((err: any) => console.error("MathJax typeset error in review page:", err));
         }
-    } else {
-        // console.warn("MathJax or typesetPromise not available yet for typesetting on review page.");
     }
   }, []);
 
@@ -151,10 +128,7 @@ export default function TestReviewPage() {
 
   useEffect(() => {
     if (!isLoading && testReport) {
-        const timerId = setTimeout(() => {
-            typesetMathJax();
-        }, 50); // Small delay to ensure DOM is ready
-        return () => clearTimeout(timerId);
+        typesetMathJax();
     }
   }, [isLoading, testReport, currentQuestionReviewIndex, typesetMathJax]);
 
@@ -164,10 +138,9 @@ export default function TestReviewPage() {
   const totalQuestions = useMemo(() => allAnswersFromReport.length || 0, [allAnswersFromReport]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  const correctOptionKey = currentReviewQuestion?.correctAnswer?.replace('Option ', '').trim() ?? currentReviewQuestion?.correctAnswer;
+  const correctOptionKey = currentReviewQuestion?.correctAnswer;
   const userSelectedOptionKey = currentReviewQuestion?.userAnswer;
   const questionStatus = currentReviewQuestion?.status || QuestionStatusEnum.NotVisited;
-
 
   const renderContent = useCallback((context: 'question' | 'explanation') => {
     if (!currentReviewQuestion) return <p className="text-sm text-muted-foreground">Content not available.</p>;
@@ -175,14 +148,11 @@ export default function TestReviewPage() {
     const textContent = context === 'question' ? currentReviewQuestion.questionText : currentReviewQuestion.explanationText;
     const imagePathFromReport = context === 'question' ? currentReviewQuestion.questionImageUrl : currentReviewQuestion.explanationImageUrl;
     
-    // The imagePathFromReport should already be the correct public path if test report generation is correct
-    const publicImagePath = imagePathFromReport;
-
-    if (publicImagePath && (publicImagePath.startsWith('/') || publicImagePath.startsWith('http'))) {
+    if (imagePathFromReport && (imagePathFromReport.startsWith('/') || imagePathFromReport.startsWith('http'))) {
       return (
          <div className="relative w-full max-w-xl h-auto mx-auto my-4">
             <Image
-                src={publicImagePath}
+                src={imagePathFromReport} 
                 alt={context === 'question' ? "Question Image" : "Explanation Image"}
                 width={800}
                 height={600}
@@ -190,11 +160,11 @@ export default function TestReviewPage() {
                 data-ai-hint={context === 'question' ? "question diagram" : "explanation image"}
                 priority={currentQuestionReviewIndex < 3 && context === 'question'}
                 unoptimized
-                onError={(e) => { console.error(`Error loading image: ${publicImagePath}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
+                onError={(e) => { console.error(`Error loading image: ${imagePathFromReport}`, e); (e.target as HTMLImageElement).style.display = 'none';}}
             />
         </div>
       );
-    }
+    } 
     
     if (textContent) {
       return (
@@ -205,10 +175,10 @@ export default function TestReviewPage() {
       );
     }
     return <p className="text-sm text-muted-foreground">{context === 'question' ? 'Question content not available.' : 'Explanation not available.'}</p>;
-  }, [currentReviewQuestion, currentQuestionReviewIndex]);
+  }, [currentReviewQuestion, currentQuestionReviewIndex]); // Removed typesetMathJax from here
 
 
-  const renderOptions = useCallback(() => {
+  const renderOptions = useCallback(() => { 
     if (!currentReviewQuestion || !currentReviewQuestion.options) return null;
     const selectedOption = userSelectedOptionKey;
     const correctOpt = correctOptionKey;
@@ -225,7 +195,7 @@ export default function TestReviewPage() {
           else if (isSelected && !isCorrectOption) optionStyle = OPTION_STYLES.selectedIncorrect;
           else if (!isSelected && isCorrectOption) optionStyle = OPTION_STYLES.correctButNotSelected;
 
-          const displayValue = typeof optionText === 'string' ? optionText : `Option ${optionKey}`; // Fallback if optionText is null
+          const displayValue = typeof optionText === 'string' ? optionText : `Option ${optionKey}`; 
 
           return (
             <div key={optionKey} className={cn("flex items-start space-x-3 p-4 border rounded-lg transition-all", optionStyle)}>
@@ -239,32 +209,32 @@ export default function TestReviewPage() {
         })}
       </div>
     );
-  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]);
+  }, [optionKeys, userSelectedOptionKey, correctOptionKey, currentReviewQuestion]); 
 
-  const navigateReview = (direction: 'prev' | 'next') => {
-    setCurrentQuestionReviewIndex(prev => {
+  const navigateReview = (direction: 'prev' | 'next') => { 
+      setCurrentQuestionReviewIndex(prev => {
       const newIndex = direction === 'prev' ? prev - 1 : prev + 1;
       return Math.max(0, Math.min(totalQuestions - 1, newIndex));
     });
   };
 
-  const handleOpenNotebookModal = () => {
-    if (isLoadingNotebooks) {
+  const handleOpenNotebookModal = () => { 
+     if (isLoadingNotebooks) {
          toast({ variant: "default", title: "Loading notebooks..." });
          return;
-    }
+     }
     if (!currentReviewQuestion) return;
     setIsNotebookModalOpen(true);
   };
 
   const handleCloseNotebookModal = () => setIsNotebookModalOpen(false);
 
-  const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => {
+  const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => { 
      if (!user?.id || !currentReviewQuestion?.questionId || !testReport ) {
         toast({ variant: "destructive", title: "Error", description: "Missing required data to save bookmark." });
         return;
      }
-     // Extract subject and lesson from the testReport or currentReviewQuestion if available
+     
      const subject = (testReport as ChapterwiseTestJson)?.test_subject?.[0] || 'Unknown Subject';
      const lesson = (testReport as ChapterwiseTestJson)?.lesson || testReport.testName || 'Unknown Lesson';
 
@@ -291,7 +261,7 @@ export default function TestReviewPage() {
           setIsSavingToNotebook(false);
      }
   };
-
+    
   const handleCreateNotebookCallback = useCallback(async (name: string) => {
     if (!user?.id) return null;
     const result = await createNotebook(user.id, name);
@@ -304,7 +274,7 @@ export default function TestReviewPage() {
     }
   }, [user?.id, toast]);
 
-  if (isLoading || authLoading) {
+  if (isLoading || authLoading) { 
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl">
         <Skeleton className="h-8 w-1/4 mb-4" />
@@ -312,7 +282,7 @@ export default function TestReviewPage() {
         <Card>
           <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
           <CardContent className="space-y-4">
-            <Skeleton className="h-48 w-full mb-4" /> {/* Skeleton for image area */}
+            <Skeleton className="h-48 w-full mb-4" /> 
             <Skeleton className="h-12 w-full mb-2" />
             <Skeleton className="h-12 w-full mb-2" />
           </CardContent>
@@ -322,7 +292,7 @@ export default function TestReviewPage() {
     );
   }
 
-  if (error) {
+  if (error) { 
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" /> <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1> <p className="text-muted-foreground mb-6">{error}</p>
@@ -331,7 +301,7 @@ export default function TestReviewPage() {
     );
   }
 
-   if (!testReport || !currentReviewQuestion) {
+   if (!testReport || !currentReviewQuestion) { 
      return (
        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" /> <h1 className="text-2xl font-bold mb-2">Review Data Not Found</h1> <p className="text-muted-foreground mb-6">Could not load the details for this test attempt review.</p>
@@ -347,7 +317,7 @@ export default function TestReviewPage() {
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
         onLoad={() => {
-             typesetMathJax(); // Ensure typesetting happens after script load
+             if (!isLoading && testReport) typesetMathJax(); 
         }}
       />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
@@ -356,7 +326,7 @@ export default function TestReviewPage() {
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={testReport.testName || testCode}>
             Test Review: {testReport.testName || testCode}
           </h1>
-          <div className="w-20 hidden sm:block"></div> {/* Spacer for alignment */}
+          <div className="w-20 hidden sm:block"></div> 
         </div>
 
         <Card className="shadow-lg border-border">
@@ -371,7 +341,7 @@ export default function TestReviewPage() {
           </CardHeader>
 
           <CardContent className="px-4 sm:px-6">
-            <div className="mb-5 min-h-[100px]">{renderContent('question')}</div> {/* Min height for question area */}
+            <div className="mb-5 min-h-[100px]">{renderContent('question')}</div> 
             <Separator className="my-5" />
             <h4 className="font-semibold mb-3 text-base">Your Answer & Options:</h4>
             {renderOptions()}
@@ -402,4 +372,3 @@ export default function TestReviewPage() {
     </>
   );
 }
-

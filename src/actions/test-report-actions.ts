@@ -122,25 +122,47 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
             unansweredCount++;
         }
         
-        // Robust image URL extraction
-        const qImageUrl = questionDef.question_image_url || (questionDef as any).image_url || null;
+        const qImageUrl = questionDef.question_image_url || null;
         let explImageUrl = questionDef.explanation_image_url || null;
         if (!explImageUrl && questionDef.explanation && typeof questionDef.explanation === 'string' && (questionDef.explanation.startsWith('/') || questionDef.explanation.startsWith('http'))) {
-            explImageUrl = questionDef.explanation; // Assume 'explanation' field might hold the path
+            explImageUrl = questionDef.explanation; 
+        }
+
+        let questionTextForDetailedAnswer: string | null = null;
+        if (questionDef.type === 'text') {
+            // For text questions, use question_text. Fallback to legacy 'question' if question_text is empty.
+            questionTextForDetailedAnswer = questionDef.question_text || questionDef.question || null;
+        } else if (questionDef.type === 'image') {
+            // For image questions, questionText should explicitly be null as the image is primary.
+            questionTextForDetailedAnswer = null;
+        } else {
+            // Fallback for older TestQuestion formats that might not have 'type'
+            // or if type is somehow different. Prioritize text if image is also present.
+            questionTextForDetailedAnswer = questionDef.question_text || questionDef.question || null;
+        }
+        
+        let explanationTextForDetailedAnswer: string | null = null;
+        // If explanation_image_url exists, text explanation might be less critical or a caption.
+        // If no image, text is primary.
+        if (questionDef.explanation_text) {
+            explanationTextForDetailedAnswer = questionDef.explanation_text;
+        } else if (typeof questionDef.explanation === 'string' && !explImageUrl) {
+            // If explanation is a string and there's no explainer image, use it as text.
+             explanationTextForDetailedAnswer = questionDef.explanation;
         }
 
 
         return {
             questionId: questionDef.id || `q-${index}`,
             questionIndex: index,
-            questionText: questionDef.question_text || questionDef.question || null,
+            questionText: questionTextForDetailedAnswer,
             questionImageUrl: qImageUrl,
             options: questionDef.options || [],
             userAnswer: userAns.selectedOption,
             correctAnswer: correctAnswerKey,
             isCorrect,
             status: status,
-            explanationText: (questionDef.explanation_text || (typeof questionDef.explanation === 'string' && !questionDef.explanation.includes('/') ? questionDef.explanation : null)) || null,
+            explanationText: explanationTextForDetailedAnswer,
             explanationImageUrl: explImageUrl,
             marks: currentMarks,
         };
@@ -245,20 +267,21 @@ export async function saveTestReport(
 export async function getTestReport(
     userId: string,
     testCode: string,
-    attemptTimestamp: number | string
+    attemptTimestamp: number | string // Can be number or string from URL
 ): Promise<TestResultSummary | null> {
     if (!userId || !testCode || !attemptTimestamp) {
         console.error("Missing parameters for getTestReport");
         return null;
     }
 
+    // Ensure attemptTimestamp is a string for filename construction
     const timestampStr = typeof attemptTimestamp === 'number' ? attemptTimestamp.toString() : attemptTimestamp;
 
     const filename = `${testCode}-${userId}-${timestampStr}.json`;
     const filePath = path.join(reportsBasePath, userId, filename);
 
     try {
-        await fs.access(filePath);
+        await fs.access(filePath); // Check if file exists first
         const fileContent = await fs.readFile(filePath, 'utf-8');
         const reportData: TestResultSummary = JSON.parse(fileContent);
         return reportData;
@@ -287,17 +310,19 @@ export async function getAllTestReportsForUser(userId: string): Promise<Array<Pa
     try {
         await ensureDirExists(userReportDir);
         const files = await fs.readdir(userReportDir);
+        // Filter JSON files that match the expected naming pattern
         const jsonFiles = files.filter(file => file.endsWith('.json') && file.includes(`-${userId}-`));
 
         for (const file of jsonFiles) {
             const filePath = path.join(userReportDir, file);
+            // Extract timestamp robustly from filename
             const parts = file.replace('.json', '').split('-');
-            const timestampStr = parts[parts.length - 1];
+            const timestampStr = parts[parts.length - 1]; // Timestamp is the last part
             const timestamp = parseInt(timestampStr, 10);
 
             if (isNaN(timestamp)) {
                 console.warn(`Could not parse timestamp from filename: ${file}. Skipping.`);
-                continue;
+                continue; // Skip if timestamp is not a valid number
             }
 
             try {
@@ -306,21 +331,24 @@ export async function getAllTestReportsForUser(userId: string): Promise<Array<Pa
                 reports.push({ ...reportData, attemptTimestamp: timestamp });
             } catch (parseError) {
                 console.error(`Error parsing report file ${filePath}:`, parseError);
-                const parts = file.replace('.json','').split('-');
-                reports.push({ testCode: parts[0], userId, attemptTimestamp: timestamp });
+                // Push partial data if parsing fails, to still show something in the list
+                const testCodeFromFile = parts[0]; // First part is usually testCode
+                reports.push({ testCode: testCodeFromFile, userId, attemptTimestamp: timestamp });
             }
         }
 
+        // Sort by attemptTimestamp, newest first
         reports.sort((a, b) => (b.attemptTimestamp ?? 0) - (a.attemptTimestamp ?? 0));
         return reports;
 
     } catch (error: any) {
         if (error.code === 'ENOENT') {
+            // This is normal if the user has no reports yet.
             console.warn(`No report directory found for user ${userId}.`);
         } else {
             console.error(`Error reading reports for user ${userId}:`, error);
         }
-        return [];
+        return []; // Return empty on error or if directory doesn't exist
     }
 }
 
@@ -347,6 +375,7 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
                 const userReportDir = path.join(reportsBasePath, userId);
                 try {
                     const files = await fs.readdir(userReportDir);
+                    // Filter files that start with the testCode and contain the userId
                     const relevantFiles = files.filter(file => file.startsWith(`${testCode}-${userId}-`) && file.endsWith('.json'));
 
                     for (const file of relevantFiles) {
@@ -354,13 +383,14 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
                         try {
                             const fileContent = await fs.readFile(filePath, 'utf-8');
                             const reportData: TestResultSummary = JSON.parse(fileContent);
-                            const userProfile = await getUserById(userId);
+                            const userProfile = await getUserById(userId); // Fetch user profile
                             allReports.push({ ...reportData, user: userProfile });
                         } catch (parseError) {
                             console.error(`Error parsing report file ${filePath}:`, parseError);
                         }
                     }
                 } catch (readDirError: any) {
+                    // If a specific user's report directory doesn't exist, skip it.
                     if (readDirError.code !== 'ENOENT') {
                          console.error(`Error reading directory ${userReportDir}:`, readDirError);
                     }
@@ -370,7 +400,12 @@ export async function getAllReportsForTest(testCode: string): Promise<Array<Test
         return allReports;
 
     } catch (error: any) {
+        // If the base reports directory doesn't exist, return empty.
+        if (error.code === 'ENOENT') {
+            console.warn(`Base report directory not found: ${reportsBasePath}. Returning empty array.`);
+            return [];
+        }
         console.error(`Error scanning report directories for test ${testCode}:`, error);
-        return [];
+        return []; // Return empty on other errors
     }
 }
