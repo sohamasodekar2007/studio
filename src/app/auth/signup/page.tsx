@@ -1,6 +1,7 @@
+// src/app/auth/signup/page.tsx
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,13 +10,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Phone } from "lucide-react"; // Removed GraduationCap
+import { Loader2, Phone, Bot } from "lucide-react"; 
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
 import { useAuth } from '@/context/auth-context';
-import { sendWelcomeEmail } from '@/actions/otp-actions'; // Still needed for welcome email
+import { sendWelcomeEmail } from '@/actions/otp-actions'; 
 import Image from 'next/image';
+import Script from 'next/script'; // For Telegram Widget
 
 // Generate year options for target year
 const currentYear = new Date().getFullYear();
@@ -88,12 +90,26 @@ export default function SignupPage() {
   // Update combinedLoading
   const combinedLoading = isLoading || authLoading; 
 
+  useEffect(() => {
+    // This function will be called by the Telegram widget after successful authentication
+    (window as any).onTelegramAuth = (user: any) => {
+        // The user object from Telegram contains:
+        // id, first_name, last_name (optional), username (optional), photo_url (optional), auth_date, hash
+        // We need to redirect to our backend callback or send this data via a server action
+        // For simplicity, we'll redirect to a callback page which will handle server-side verification
+        const queryParams = new URLSearchParams(user).toString();
+        window.location.href = `/auth/telegram/callback?${queryParams}`;
+    };
+  }, []);
+
+
   return (
+    <>
+    <Script src="https://telegram.org/js/telegram-widget.js?22" strategy="lazyOnload" />
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-             {/* EduNexus Logo */}
               <Image
                   src="/EduNexus-logo-black.jpg" 
                   alt="EduNexus Logo"
@@ -254,6 +270,36 @@ export default function SignupPage() {
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign Up
               </Button>
+              
+              {/* Telegram Login Button */}
+              <div className="relative w-full my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+              
+              <div id="telegram-login-widget-container" className="w-full flex justify-center">
+                  <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                      data-telegram-login={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "YOUR_TELEGRAM_BOT_USERNAME_HERE"} // Replace with your bot's username
+                      data-size="large" // or medium, small
+                      data-radius="6" // Example border radius
+                      data-auth-url={process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI || "YOUR_WEBSITE_DOMAIN/auth/telegram/callback"} // Your callback URL
+                      data-request-access="write" // To request phone number
+                  ></script>
+                  {/* Fallback if script fails to load button */}
+                  {!process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME && (
+                      <Button variant="outline" className="w-full" disabled>
+                          <Bot className="mr-2 h-4 w-4" /> Telegram Login (Not Configured)
+                      </Button>
+                  )}
+              </div>
+
+
               <p className="px-8 text-center text-sm text-muted-foreground">
                 By clicking continue, you agree to our{" "}
                 <Link
@@ -282,5 +328,6 @@ export default function SignupPage() {
         </Form>
       </Card>
     </div>
+    </>
   );
 }

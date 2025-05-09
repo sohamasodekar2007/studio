@@ -36,6 +36,8 @@ export interface UserProfile {
   createdAt?: string; 
   totalPoints?: number; 
   targetYear?: string | null; 
+  telegramId?: string | null; // Added for Telegram integration
+  telegramUsername?: string | null; // Added for Telegram integration
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
@@ -423,9 +425,21 @@ export interface PlatformSettings {
   enableEmailNotifications: boolean;
   enableInAppNotifications: boolean;
   // Payment Gateway Settings
-  paymentGatewayEnabled: boolean;
+  paymentGatewayEnabled?: boolean; // Made optional as it might not always be present
   stripeApiKey?: string | null;
   razorpayApiKey?: string | null;
   instamojoApiKey?: string | null;
   // Add other platform-wide settings here
+}
+
+// ---- Telegram Auth Types ----
+export interface TelegramAuthData {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: string;
+    hash: string;
+    phone?: string; // If requested and granted by user
 }

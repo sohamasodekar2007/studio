@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805021_1a6286",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Plant Physiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which fungus produces gibberellins?",
+    "image": null
+  },
+  "options": {
+    "A": "Gibberella fujikuroi",
+    "B": "Penicillium notatum",
+    "C": "Aspergillus flavus",
+    "D": "Saccharomyces"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Gibberella fujikuroi** (now *Fusarium*) was the original source of gibberellic acid (plant hormone).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.021Z",
+  "modified": "2025-05-09T16:40:05.021Z"
+}

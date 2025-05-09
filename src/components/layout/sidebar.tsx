@@ -35,11 +35,11 @@ import {
   Target,
   Info,
   BookUser,
-  MoreVertical, 
-  Sun, 
-  Moon, 
-  Swords, 
-  Bell, 
+  MoreVertical,
+  Sun,
+  Moon,
+  Swords,
+  Bell,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -123,7 +123,7 @@ const tutorialSteps: Step[] = [
     disableBeacon: true,
   },
   {
-    target: '#tutorial-target-more-dropdown', 
+    target: '#tutorial-target-more-dropdown',
     content: 'Access Settings, Help, Tutorial and Theme options here.',
     placement: 'right',
     disableBeacon: true,
@@ -137,10 +137,10 @@ export function AppSidebar() {
   const [runTutorial, setRunTutorial] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const { setOpen: setSidebarOpen, state: sidebarState } = useSidebar();
-  const { theme, setTheme } = useTheme(); 
+  const { theme, setTheme } = useTheme();
 
   const isAdmin = user?.role === 'Admin';
-  const [actualPendingInvitesCount, setActualPendingInvitesCount] = useState(0); 
+  const [actualPendingInvitesCount, setActualPendingInvitesCount] = useState(0);
 
   const fetchPendingInvitesCount = useCallback(() => {
     if (user?.id && typeof window !== 'undefined') {
@@ -187,13 +187,13 @@ export function AppSidebar() {
         '/friends-compare',
         '/pyq-mock-tests',
         '/pyq-dpps',
-        '/challenge/create', 
-        '/challenges/invites', 
+        '/challenge/create',
+        '/challenges/invites',
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    if (href.endsWith('/')) { 
+    if (href.endsWith('/')) {
         return pathname.startsWith(href);
     }
     return pathname === href || pathname.startsWith(href + '/');
@@ -213,7 +213,7 @@ export function AppSidebar() {
            setSidebarOpen(true);
            setTimeout(() => {
                setStepIndex(nextStepIndex);
-           }, 300); 
+           }, 300);
        } else {
            setStepIndex(index + (action === ACTIONS.PREV ? -1 : 1));
        }
@@ -232,7 +232,7 @@ export function AppSidebar() {
        setTimeout(() => {
           setStepIndex(0);
           setRunTutorial(true);
-       }, 350); 
+       }, 350);
     } else {
        setStepIndex(0);
        setRunTutorial(true);
@@ -242,26 +242,26 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
-        <SidebarHeader className="flex items-center justify-between p-4"> 
+        <SidebarHeader className="flex items-center justify-between p-4">
           <Link
             href="/"
             className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
             aria-label="EduNexus Home"
           >
             <Image
-                src="/EduNexus-logo-black.jpg" 
+                src="/EduNexus-logo-black.jpg"
                 alt="EduNexus Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 dark:hidden" 
+                className="h-8 w-8 dark:hidden"
                 unoptimized
             />
              <Image
-                src="/EduNexus-logo-white.jpg" 
+                src="/EduNexus-logo-white.jpg"
                 alt="EduNexus Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 hidden dark:block" 
+                className="h-8 w-8 hidden dark:block"
                 unoptimized
             />
             <h1 className="text-lg font-semibold">EduNexus</h1>
@@ -445,9 +445,9 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                    side="top" 
-                    align="center" 
-                    sideOffset={10} 
+                    side="top"
+                    align="center"
+                    sideOffset={10}
                     className="w-56 mb-2"
                 >
                     <DropdownMenuLabel>Options</DropdownMenuLabel>

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805087_b0c754",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which bacterial species is used to produce 'glutamic acid' (monosodium glutamate)?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus bulgaricus",
+    "B": "Corynebacterium glutamicum",
+    "C": "Bacillus cereus",
+    "D": "Streptomyces griseus"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Corynebacterium glutamicum** is the primary industrial source of MSG production.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.087Z",
+  "modified": "2025-05-09T16:40:05.087Z"
+}

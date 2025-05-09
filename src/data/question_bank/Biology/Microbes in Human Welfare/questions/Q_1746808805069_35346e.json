@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805069_35346e",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Biochemistry"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'biological nitrogen fixation' process requires the enzyme:",
+    "image": null
+  },
+  "options": {
+    "A": "Nitrogenase",
+    "B": "Nitrate reductase",
+    "C": "Nitrite reductase",
+    "D": "Amylase"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Nitrogenase** (in Rhizobium/Azotobacter) converts atmospheric N<sub>2</sub> to NH<sub>3</sub> (O<sub>2</sub>-sensitive process).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.069Z",
+  "modified": "2025-05-09T16:40:05.069Z"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805064_52ed1a",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which cyanobacterium is used as a food supplement due to its high protein content?",
+    "image": null
+  },
+  "options": {
+    "A": "Anabaena",
+    "B": "Spirulina",
+    "C": "Nostoc",
+    "D": "Oscillatoria"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Spirulina** contains 60-70% protein and is marketed as a 'superfood' supplement.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.065Z",
+  "modified": "2025-05-09T16:40:05.065Z"
+}

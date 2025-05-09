@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804976_5bd015",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'Biogas' primarily contains:",
+    "image": null
+  },
+  "options": {
+    "A": "Methane + CO<sub>2</sub>",
+    "B": "Ethane + H<sub>2</sub>S",
+    "C": "Propane + N<sub>2</sub>",
+    "D": "Butane + O<sub>2</sub>"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Biogas** is 50-70% methane (CH<sub>4</sub>) and 30-50% CO<sub>2</sub>, produced by methanogens like *Methanobacterium*.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.976Z",
+  "modified": "2025-05-09T16:40:04.976Z"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805092_6f58d2",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Plant Physiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'root nodules' of leguminous plants contain which oxygen-binding protein?",
+    "image": null
+  },
+  "options": {
+    "A": "Hemoglobin",
+    "B": "Leghemoglobin",
+    "C": "Myoglobin",
+    "D": "Cytochrome"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Leghemoglobin** protects nitrogenase from O<sub>2</sub> in root nodules by maintaining low oxygen tension.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.092Z",
+  "modified": "2025-05-09T16:40:05.092Z"
+}

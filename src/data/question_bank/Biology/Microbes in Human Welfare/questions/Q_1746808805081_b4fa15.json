@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805081_b4fa15",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which fungus is used to produce 'ergot alkaloids' for medicinal purposes?",
+    "image": null
+  },
+  "options": {
+    "A": "Penicillium chrysogenum",
+    "B": "Claviceps purpurea",
+    "C": "Aspergillus flavus",
+    "D": "Mucor"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Claviceps purpurea** produces ergot alkaloids used to treat migraines and postpartum hemorrhage.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.081Z",
+  "modified": "2025-05-09T16:40:05.081Z"
+}

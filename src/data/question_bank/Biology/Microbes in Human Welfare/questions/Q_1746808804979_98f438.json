@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804979_98f438",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which bacteria fix nitrogen in non-leguminous plants?",
+    "image": null
+  },
+  "options": {
+    "A": "Rhizobium",
+    "B": "Azotobacter",
+    "C": "Frankia",
+    "D": "Nostoc"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Frankia** (actinobacterium) fixes N<sub>2</sub> in non-legumes like Casuarina and Alnus.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.979Z",
+  "modified": "2025-05-09T16:40:04.979Z"
+}

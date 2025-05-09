@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805092_3c34a8",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Clinical Diagnostics"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'IMViC' test is used to identify:",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacilli",
+    "B": "Coliform bacteria",
+    "C": "Methanogens",
+    "D": "Cyanobacteria"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**IMViC** (Indole, Methyl Red, Voges-Proskauer, Citrate) tests differentiate *E. coli* from other coliforms.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.092Z",
+  "modified": "2025-05-09T16:40:05.092Z"
+}

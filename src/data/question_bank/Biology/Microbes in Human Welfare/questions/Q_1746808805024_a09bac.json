@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805024_a09bac",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'toddy' is a traditional drink produced by fermenting:",
+    "image": null
+  },
+  "options": {
+    "A": "Grapes",
+    "B": "Palm sap",
+    "C": "Barley",
+    "D": "Rice"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Toddy** is made by fermenting palm sap (coconut/date palm) using natural yeast.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.025Z",
+  "modified": "2025-05-09T16:40:05.025Z"
+}

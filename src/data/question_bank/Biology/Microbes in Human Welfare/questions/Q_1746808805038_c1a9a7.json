@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805038_c1a9a7",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Biotechnology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which bacterium is used to produce 'insulin' via genetic engineering?",
+    "image": null
+  },
+  "options": {
+    "A": "Escherichia coli",
+    "B": "Bacillus thuringiensis",
+    "C": "Agrobacterium tumefaciens",
+    "D": "Rhizobium"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**E. coli** was the first GM organism used for human insulin production.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.038Z",
+  "modified": "2025-05-09T16:40:05.038Z"
+}

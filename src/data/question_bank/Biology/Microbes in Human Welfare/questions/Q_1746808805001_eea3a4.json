@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805001_eea3a4",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which cyanobacterium is used as a biofertilizer in rice fields?",
+    "image": null
+  },
+  "options": {
+    "A": "Anabaena",
+    "B": "Escherichia",
+    "C": "Clostridium",
+    "D": "Nitrosomonas"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Anabaena azollae** (in *Azolla* fern) fixes nitrogen in paddy fields.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.001Z",
+  "modified": "2025-05-09T16:40:05.001Z"
+}

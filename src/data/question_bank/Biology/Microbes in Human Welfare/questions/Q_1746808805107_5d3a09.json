@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805107_5d3a09",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which fungal species produces 'griseofulvin', an antifungal antibiotic?",
+    "image": null
+  },
+  "options": {
+    "A": "Penicillium griseofulvum",
+    "B": "Aspergillus niger",
+    "C": "Candida albicans",
+    "D": "Trichoderma viride"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Penicillium griseofulvum** produces griseofulvin, used to treat dermatophytic infections.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.107Z",
+  "modified": "2025-05-09T16:40:05.107Z"
+}

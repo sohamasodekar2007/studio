@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805035_e53de0",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'antibiotic penicillin' is produced by:",
+    "image": null
+  },
+  "options": {
+    "A": "Penicillium chrysogenum",
+    "B": "Aspergillus niger",
+    "C": "Streptomyces griseus",
+    "D": "Bacillus subtilis"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Penicillium chrysogenum** (earlier *P. notatum*) is the industrial source of penicillin.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.035Z",
+  "modified": "2025-05-09T16:40:05.035Z"
+}

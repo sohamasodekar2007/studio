@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805104_431adb",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'bioremediation' of oil spills often utilizes:",
+    "image": null
+  },
+  "options": {
+    "A": "Nitrosomonas",
+    "B": "Pseudomonas putida",
+    "C": "Rhizobium",
+    "D": "Lactobacillus"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Pseudomonas putida** degrades petroleum hydrocarbons via specialized enzymes.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.104Z",
+  "modified": "2025-05-09T16:40:05.104Z"
+}

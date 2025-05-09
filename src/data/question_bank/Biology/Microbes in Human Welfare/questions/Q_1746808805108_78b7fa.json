@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805108_78b7fa",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'koji' fermentation in soy sauce production uses:",
+    "image": null
+  },
+  "options": {
+    "A": "Aspergillus oryzae",
+    "B": "Saccharomyces cerevisiae",
+    "C": "Lactobacillus brevis",
+    "D": "Acetobacter pasteurianus"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Aspergillus oryzae** in koji breaks down soy/wheat starches into sugars during initial fermentation.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.108Z",
+  "modified": "2025-05-09T16:40:05.108Z"
+}

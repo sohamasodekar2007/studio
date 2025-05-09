@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805112_d7496c",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Plant Physiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'symbiotic nitrogen fixation' requires the plant to provide bacteria with:",
+    "image": null
+  },
+  "options": {
+    "A": "Oxygen",
+    "B": "Carbohydrates",
+    "C": "Nitrates",
+    "D": "Phosphates"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "Plants supply **photosynthates (sucrose)** to rhizobia in exchange for fixed nitrogen (NH<sub>3</sub>).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.112Z",
+  "modified": "2025-05-09T16:40:05.112Z"
+}

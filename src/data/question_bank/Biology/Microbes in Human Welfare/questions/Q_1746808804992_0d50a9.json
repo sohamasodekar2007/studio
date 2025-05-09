@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804992_0d50a9",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used to produce vitamin B12 commercially?",
+    "image": null
+  },
+  "options": {
+    "A": "Pseudomonas",
+    "B": "Propionibacterium",
+    "C": "Bacillus",
+    "D": "Streptococcus"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Propionibacterium shermanii** and *Pseudomonas denitrificans* are used for vitamin B<sub>12</sub> production.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.992Z",
+  "modified": "2025-05-09T16:40:04.992Z"
+}

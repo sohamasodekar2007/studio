@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804969_07ada1",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Industrial Applications"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microorganism produces citric acid commercially?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus",
+    "B": "Aspergillus niger",
+    "C": "Acetobacter aceti",
+    "D": "Clostridium"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Aspergillus niger** is used in industrial citric acid production via fermentation.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.969Z",
+  "modified": "2025-05-09T16:40:04.969Z"
+}

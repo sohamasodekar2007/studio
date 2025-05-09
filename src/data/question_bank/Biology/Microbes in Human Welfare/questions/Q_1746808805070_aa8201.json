@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805070_aa8201",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used to produce 'vinegar' from alcohol?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus",
+    "B": "Acetobacter aceti",
+    "C": "Clostridium",
+    "D": "Saccharomyces"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Acetobacter aceti** oxidizes ethanol to acetic acid (vinegar) in aerobic conditions.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.070Z",
+  "modified": "2025-05-09T16:40:05.070Z"
+}

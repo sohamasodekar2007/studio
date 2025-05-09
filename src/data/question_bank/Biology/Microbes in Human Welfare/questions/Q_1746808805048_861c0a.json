@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805048_861c0a",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Industrial Applications"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used in the production of 'butanol' through fermentation?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus",
+    "B": "Clostridium acetobutylicum",
+    "C": "Saccharomyces cerevisiae",
+    "D": "Aspergillus niger"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Clostridium acetobutylicum** produces acetone-butanol-ethanol (ABE) through anaerobic fermentation.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.048Z",
+  "modified": "2025-05-09T16:40:05.048Z"
+}

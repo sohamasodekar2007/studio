@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805060_626c87",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'Streptokinase' enzyme used to dissolve blood clots is produced by:",
+    "image": null
+  },
+  "options": {
+    "A": "Streptococcus pneumoniae",
+    "B": "Streptococcus pyogenes",
+    "C": "Streptococcus mutans",
+    "D": "Streptococcus lactis"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Streptokinase** (thrombolytic drug) is derived from β-hemolytic *Streptococcus pyogenes*.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.061Z",
+  "modified": "2025-05-09T16:40:05.061Z"
+}

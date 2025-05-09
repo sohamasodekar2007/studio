@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805097_d17d76",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microorganism is used to produce 'xanthan gum', a food thickener?",
+    "image": null
+  },
+  "options": {
+    "A": "Xanthomonas campestris",
+    "B": "Bacillus subtilis",
+    "C": "Aspergillus oryzae",
+    "D": "Saccharomyces"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Xanthomonas campestris** produces xanthan gum from glucose/sucrose fermentation.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.097Z",
+  "modified": "2025-05-09T16:40:05.097Z"
+}

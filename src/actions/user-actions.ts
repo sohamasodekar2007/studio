@@ -30,7 +30,8 @@ async function ensureDirExists(dirPath: string): Promise<boolean> {
   }
 }
 
-async function writeUsers(users: UserProfile[]): Promise<boolean> {
+// Renamed to writeUsersToFile to avoid conflict with the internal user-actions.ts writeUsers
+async function writeUsersToFile(users: UserProfile[]): Promise<boolean> {
   try {
     if (!await ensureDirExists(path.dirname(usersFilePath))) {
         console.error('Failed to ensure users directory exists for users.json');
@@ -43,6 +44,9 @@ async function writeUsers(users: UserProfile[]): Promise<boolean> {
     return false;
   }
 }
+// Export for potential direct use if absolutely necessary, but prefer specific actions
+export { writeUsersToFile as internalWriteUsers };
+
 
 const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
     if (!email) return 'User';
@@ -51,7 +55,8 @@ const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
 };
 
 
-async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
+// Renamed to avoid conflict and make it clear this is internal
+async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
     console.log("Reading and initializing users from users.json...");
     let users: UserProfile[] = [];
     let writeNeeded = false;
@@ -142,6 +147,8 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             if (currentUser.referral === undefined) { currentUser.referral = ''; userModified = true; }
             if (currentUser.totalPoints === undefined) { currentUser.totalPoints = 0; userModified = true; }
             if (currentUser.targetYear === undefined) { currentUser.targetYear = null; userModified = true; }
+            if (currentUser.telegramId === undefined) { currentUser.telegramId = null; userModified = true; }
+            if (currentUser.telegramUsername === undefined) { currentUser.telegramUsername = null; userModified = true; }
 
 
             processedUsers.push(currentUser);
@@ -184,12 +191,13 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
                 id: uuidv4(), email: primaryAdminEmail, password: adminPasswordHash, name: 'Admin User (Primary)',
                 phone: '0000000000', class: 'Dropper', model: 'combo', role: 'Admin',
                 expiry_date: '2099-12-31T00:00:00.000Z', createdAt: new Date().toISOString(), avatarUrl: null, referral: '', totalPoints: 0, targetYear: null,
+                telegramId: null, telegramUsername: null,
             });
             writeNeeded = true;
         }
 
         if (writeNeeded) {
-            const writeSuccess = await writeUsers(users);
+            const writeSuccess = await writeUsersToFile(users);
             if (!writeSuccess) {
                 console.error("CRITICAL: Failed to write updated users.json file during initialization.");
                 throw new Error("Failed to save initial user data state.");
@@ -201,12 +209,13 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
         throw new Error(`User data system initialization failed: ${initError.message}`);
     }
 }
-export { readAndInitializeUsersInternal };
+// Export readUsersWithPasswordsInternal for internal use by AuthContext and other server actions
+export { readUsersWithPasswordsInternal };
 
 
 export async function readUsers(): Promise<Array<Omit<UserProfile, 'password'>>> {
   try {
-    const usersWithData = await readAndInitializeUsersInternal();
+    const usersWithData = await readUsersWithPasswordsInternal();
     return usersWithData.map(({ password, ...user }) => user);
   } catch (error: any) {
     console.error("Error in readUsers:", error.message);
@@ -217,7 +226,7 @@ export async function readUsers(): Promise<Array<Omit<UserProfile, 'password'>>>
 export async function findUserByEmailInternal(email: string | null): Promise<UserProfile | null> {
   if (!email) return null;
   try {
-    const users = await readAndInitializeUsersInternal();
+    const users = await readUsersWithPasswordsInternal();
     const foundUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
     return foundUser || null;
   } catch (error: any) {
@@ -225,6 +234,19 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
     return null;
   }
 }
+
+
+export async function findUserByTelegramIdInternal(telegramId: string): Promise<UserProfile | null> {
+    if (!telegramId) return null;
+    try {
+        const users = await readUsersWithPasswordsInternal();
+        return users.find(u => u.telegramId === telegramId) || null;
+    } catch (error: any) {
+        console.error(`Error finding user by Telegram ID ${telegramId}:`, error.message);
+        return null;
+    }
+}
+
 
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
@@ -265,7 +287,7 @@ async function deleteAvatarLocally(filename: string): Promise<boolean> {
 }
 
 export async function addUserToJson(
-    newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints'> & { password: string }
+    newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string }
 ): Promise<{ success: boolean; message?: string; user?: Omit<UserProfile, 'password'> }> {
     try {
         if (!newUserProfileData.email || !newUserProfileData.password) {
@@ -309,15 +331,17 @@ export async function addUserToJson(
             referral: '',
             totalPoints: 0,
             targetYear: newUserProfileData.targetYear || null,
+            telegramId: null, // New users via form won't have this initially
+            telegramUsername: null,
         };
 
-        let users = await readAndInitializeUsersInternal();
+        let users = await readUsersWithPasswordsInternal();
         if (users.some(u => u.email?.toLowerCase() === emailLower)) {
             return { success: false, message: 'User with this email already exists.' };
         }
 
         users.push(userToAdd);
-        const success = await writeUsers(users);
+        const success = await writeUsersToFile(users);
 
         if (success) {
             const { password, ...userWithoutPassword } = userToAdd;
@@ -332,21 +356,16 @@ export async function addUserToJson(
 }
 
 export async function updateUserInJson(
-    formData: FormData
+    // Changed to accept an object for easier formData handling
+    userId: string,
+    updateData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'>> & { avatarFile?: File | null, removeAvatar?: boolean }
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
-        const userId = formData.get('userId') as string;
-        const name = formData.get('name') as string | null;
-        const academicStatus = formData.get('class') as AcademicStatus | null;
-        const targetYear = formData.get('targetYear') as string | null;
-        const avatarFile = formData.get('avatarFile') as File | null;
-        const removeAvatar = formData.get('removeAvatar') === 'true';
-
         if (!userId || typeof userId !== 'string') {
             return { success: false, message: "Invalid user ID provided for update." };
         }
         
-        let users = await readAndInitializeUsersInternal();
+        let users = await readUsersWithPasswordsInternal();
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
@@ -356,32 +375,30 @@ export async function updateUserInJson(
         const existingUser = users[userIndex];
         let newAvatarFilename = existingUser.avatarUrl || null;
 
-        if (avatarFile instanceof File) {
+        if (updateData.avatarFile instanceof File) {
             if (existingUser.avatarUrl) { await deleteAvatarLocally(existingUser.avatarUrl); }
-            newAvatarFilename = await saveAvatarLocally(userId, avatarFile);
+            newAvatarFilename = await saveAvatarLocally(userId, updateData.avatarFile);
             if (!newAvatarFilename) console.warn("Failed to save new avatar, keeping old one if any.");
-        } else if (removeAvatar && existingUser.avatarUrl) {
+        } else if (updateData.removeAvatar && existingUser.avatarUrl) {
             await deleteAvatarLocally(existingUser.avatarUrl);
             newAvatarFilename = null;
         }
         
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
-            name: name !== undefined ? name : existingUser.name,
-            class: academicStatus !== undefined ? academicStatus : existingUser.class,
-            targetYear: targetYear !== undefined ? targetYear : existingUser.targetYear,
+            name: updateData.name !== undefined ? updateData.name : existingUser.name,
+            phone: updateData.phone !== undefined ? updateData.phone : existingUser.phone, // Now updatable by admin
+            email: updateData.email !== undefined ? updateData.email : existingUser.email, // Email updatable by admin
+            class: updateData.class !== undefined ? updateData.class : existingUser.class,
+            targetYear: updateData.targetYear !== undefined ? updateData.targetYear : existingUser.targetYear,
             avatarUrl: newAvatarFilename,
-            // Fields not updated through this specific form action
-            // phone: existingUser.phone,
-            // model: existingUser.model,
-            // expiry_date: existingUser.expiry_date,
-            // email: existingUser.email,
-            // role: existingUser.role,
+            model: updateData.model !== undefined ? updateData.model : existingUser.model,
+            expiry_date: updateData.expiry_date !== undefined ? updateData.expiry_date : existingUser.expiry_date,
+            // Role should be updated via updateUserRole
         };
-        // Note: Model, expiry_date, email, role updates should be handled by separate dedicated admin actions for clarity and security.
-
+        
         users[userIndex] = userWithUpdatesApplied;
-        const success = await writeUsers(users);
+        const success = await writeUsersToFile(users);
         if (success) {
              const { password, ...userWithoutPassword } = userWithUpdatesApplied;
              return { success: true, user: userWithoutPassword };
@@ -403,7 +420,7 @@ export async function updateUserRole(
         if (!userId) return { success: false, message: "User ID is required." };
         if (!['Admin', 'User'].includes(newRole)) return { success: false, message: "Invalid role specified." };
 
-        let users = await readAndInitializeUsersInternal();
+        let users = await readUsersWithPasswordsInternal();
         const userIndex = users.findIndex(u => u.id === userId);
 
         if (userIndex === -1) {
@@ -440,7 +457,7 @@ export async function updateUserRole(
         }
 
         users[userIndex] = userToUpdate;
-        const success = await writeUsers(users);
+        const success = await writeUsersToFile(users);
 
         if (success) {
             const { password, ...userWithoutPassword } = userToUpdate;
@@ -461,7 +478,7 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
            return { success: false, message: "Invalid user ID provided for deletion." };
        }
        
-       let users = await readAndInitializeUsersInternal();
+       let users = await readUsersWithPasswordsInternal();
        const userToDelete = users.find(u => u.id === userId);
 
        if (!userToDelete) {
@@ -476,7 +493,7 @@ export async function deleteUserFromJson(userId: string): Promise<{ success: boo
        }
 
        users = users.filter(u => u.id !== userId);
-       const success = await writeUsers(users);
+       const success = await writeUsersToFile(users);
        return { success, message: success ? undefined : 'Failed to write users file after deletion.' };
     } catch (error: any) {
         console.error(`Error in deleteUserFromJson for ${userId}:`, error);
@@ -493,7 +510,7 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
            return { success: false, message: 'Password must be at least 6 characters long.'};
        }
 
-       let users = await readAndInitializeUsersInternal();
+       let users = await readUsersWithPasswordsInternal();
        const userIndex = users.findIndex(u => u.id === userId);
 
        if (userIndex === -1) {
@@ -501,7 +518,7 @@ export async function updateUserPasswordInJson(userId: string, newPassword: stri
        }
        const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
        users[userIndex].password = hashedPassword;
-       const success = await writeUsers(users);
+       const success = await writeUsersToFile(users);
        return { success, message: success ? undefined : 'Failed to write users file after password update.' };
     } catch (error: any) {
         console.error(`Error in updateUserPasswordInJson for ${userId}:`, error);
@@ -514,7 +531,7 @@ export async function getUserById(userId: string): Promise<Omit<UserProfile, 'pa
     return null;
   }
   try {
-    const usersWithPasswords = await readAndInitializeUsersInternal();
+    const usersWithPasswords = await readUsersWithPasswordsInternal();
     const foundUser = usersWithPasswords.find(u => u.id === userId);
     if (!foundUser) return null;
     const { password, ...userWithoutPassword } = foundUser;
@@ -555,36 +572,44 @@ export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanVa
     }
 }
 
+// Modified to accept UserProfile for easier direct saving, e.g., from Telegram auth
 export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
   try {
-    let users = await readAndInitializeUsersInternal();
+    let users = await readUsersWithPasswordsInternal();
     const userIndex = users.findIndex(u => u.id === userData.id || (userData.email && u.email === userData.email));
 
     if (userIndex !== -1) {
       const existingUser = users[userIndex];
       let newPasswordHash = userData.password ?? existingUser.password;
+      // Only re-hash if a new plain password is provided and it's not already a hash
       if (userData.password && !userData.password.startsWith('$2a$') && !userData.password.startsWith('$2b$')) {
           newPasswordHash = await bcrypt.hash(userData.password, SALT_ROUNDS);
       }
 
       users[userIndex] = {
           ...existingUser,
-          ...userData,
+          ...userData, // This will overwrite existing fields with userData's fields
           password: newPasswordHash, 
           role: userData.role ?? existingUser.role ?? getRoleFromEmail(userData.email),
           totalPoints: userData.totalPoints ?? existingUser.totalPoints ?? 0,
           createdAt: userData.createdAt ?? existingUser.createdAt ?? new Date().toISOString(),
           id: userData.id ?? existingUser.id ?? uuidv4(),
-          targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear, 
+          targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear,
+          telegramId: userData.telegramId !== undefined ? userData.telegramId : existingUser.telegramId,
+          telegramUsername: userData.telegramUsername !== undefined ? userData.telegramUsername : existingUser.telegramUsername,
       };
     } else {
+      // New user, ensure password is hashed
       const assignedRole = userData.role || getRoleFromEmail(userData.email);
       let hashedPassword = userData.password;
        if (hashedPassword && !hashedPassword.startsWith('$2a$') && !hashedPassword.startsWith('$2b$')) {
             hashedPassword = await bcrypt.hash(hashedPassword, SALT_ROUNDS);
        } else if (!hashedPassword) {
-            const randomPassword = Math.random().toString(36).slice(-8);
+            // If creating a new user and no password is provided (e.g., Telegram login),
+            // generate a secure random password and hash it.
+            const randomPassword = uuidv4(); // Or a more robust random string generator
             hashedPassword = await bcrypt.hash(randomPassword, SALT_ROUNDS);
+            console.warn(`No password provided for new user ${userData.email || userData.id}. A random password has been generated.`);
        }
       users.push({
         ...userData,
@@ -594,9 +619,11 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
         password: hashedPassword,
         totalPoints: userData.totalPoints ?? 0,
         targetYear: userData.targetYear !== undefined ? userData.targetYear : null,
+        telegramId: userData.telegramId || null,
+        telegramUsername: userData.telegramUsername || null,
       });
     }
-    return await writeUsers(users);
+    return await writeUsersToFile(users);
   } catch (error: any) {
     console.error('Error in saveUserToJson:', error);
     return false;

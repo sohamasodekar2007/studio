@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805056_e4fda7",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "In sewage treatment, the 'anaerobic sludge digesters' primarily produce:",
+    "image": null
+  },
+  "options": {
+    "A": "Oxygen",
+    "B": "Methane and CO<sub>2</sub>",
+    "C": "Hydrogen sulfide",
+    "D": "Nitrogen gas"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "Anaerobic digestion by methanogens converts organic sludge into **biogas** (CH<sub>4</sub> + CO<sub>2</sub>).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.056Z",
+  "modified": "2025-05-09T16:40:05.056Z"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805048_8d3336",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'biogas plant' utilizes which group of microbes in the final step?",
+    "image": null
+  },
+  "options": {
+    "A": "Methanogens",
+    "B": "Nitrogen-fixing bacteria",
+    "C": "Lactic acid bacteria",
+    "D": "Sulfur-reducing bacteria"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Methanogens** (e.g., Methanobacterium) in the digester convert organic acids into methane (CH<sub>4</sub>).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.048Z",
+  "modified": "2025-05-09T16:40:05.048Z"
+}

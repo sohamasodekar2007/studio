@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805111_5bcd29",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Biotechnology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used to produce 'lactic acid' for biodegradable plastics?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus delbrueckii",
+    "B": "Propionibacterium",
+    "C": "Clostridium",
+    "D": "Bacillus"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Lactobacillus delbrueckii** ferments sugars to lactic acid (PLA plastic precursor).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.111Z",
+  "modified": "2025-05-09T16:40:05.111Z"
+}

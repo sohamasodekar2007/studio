@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805019_362d57",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'Baculoviruses' are used as:",
+    "image": null
+  },
+  "options": {
+    "A": "Antibiotics",
+    "B": "Biocontrol agents",
+    "C": "Biofertilizers",
+    "D": "Probiotics"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Baculoviruses** (e.g., NPV) are species-specific biocontrol agents against insects/pests.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.019Z",
+  "modified": "2025-05-09T16:40:05.019Z"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805006_c4a8e1",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'primary treatment' of sewage removes:",
+    "image": null
+  },
+  "options": {
+    "A": "Dissolved organics",
+    "B": "Suspended solids",
+    "C": "Heavy metals",
+    "D": "Pathogens"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Primary treatment** involves physical removal of floating/settable solids (30-50% BOD reduction).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.006Z",
+  "modified": "2025-05-09T16:40:05.006Z"
+}

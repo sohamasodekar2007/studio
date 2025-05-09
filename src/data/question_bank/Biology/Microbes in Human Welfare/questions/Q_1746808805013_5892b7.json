@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805013_5892b7",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Industrial Applications"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe produces butyric acid?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus",
+    "B": "Clostridium butyricum",
+    "C": "Acetobacter aceti",
+    "D": "Aspergillus"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Clostridium butyricum** ferments sugars to produce butyric acid, used in perfumes and food additives.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.013Z",
+  "modified": "2025-05-09T16:40:05.013Z"
+}

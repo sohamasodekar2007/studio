@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805049_07ea80",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microorganism is used to produce 'riboflavin' (Vitamin B2) commercially?",
+    "image": null
+  },
+  "options": {
+    "A": "Ashbya gossypii",
+    "B": "Propionibacterium",
+    "C": "Bacillus subtilis",
+    "D": "Streptomyces"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "The fungus **Ashbya gossypii** is the primary industrial source of riboflavin production.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.049Z",
+  "modified": "2025-05-09T16:40:05.049Z"
+}

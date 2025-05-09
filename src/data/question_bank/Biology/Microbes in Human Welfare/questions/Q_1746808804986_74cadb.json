@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804986_74cadb",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'secondary treatment' of sewage involves:",
+    "image": null
+  },
+  "options": {
+    "A": "Sedimentation",
+    "B": "Chlorination",
+    "C": "Biological digestion by microbes",
+    "D": "Filtration"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Secondary treatment** uses aerobic microbes (activated sludge) to break down organic matter.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.986Z",
+  "modified": "2025-05-09T16:40:04.986Z"
+}

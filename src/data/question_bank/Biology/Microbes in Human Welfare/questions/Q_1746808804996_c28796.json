@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808804996_c28796",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'mycorrhiza' is a symbiotic association between fungi and:",
+    "image": null
+  },
+  "options": {
+    "A": "Algae",
+    "B": "Bacteria",
+    "C": "Plant roots",
+    "D": "Protozoans"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Mycorrhiza** (e.g., *Glomus*) enhances phosphate uptake by plant roots.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:04.996Z",
+  "modified": "2025-05-09T16:40:04.996Z"
+}

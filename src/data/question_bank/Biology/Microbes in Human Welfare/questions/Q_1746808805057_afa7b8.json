@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805057_afa7b8",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used as a biocontrol agent against butterfly caterpillars?",
+    "image": null
+  },
+  "options": {
+    "A": "Bacillus thuringiensis",
+    "B": "Trichoderma viride",
+    "C": "Pseudomonas fluorescens",
+    "D": "Beauveria bassiana"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Bacillus thuringiensis** produces Bt toxin, lethal to Lepidoptera larvae (butterflies/moths).",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.057Z",
+  "modified": "2025-05-09T16:40:05.057Z"
+}

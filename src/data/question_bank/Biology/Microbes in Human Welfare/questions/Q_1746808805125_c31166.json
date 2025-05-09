@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805125_c31166",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which yeast is used in the 'second fermentation' of champagne production?",
+    "image": null
+  },
+  "options": {
+    "A": "Saccharomyces cerevisiae",
+    "B": "Saccharomyces boulardii",
+    "C": "Saccharomyces uvarum",
+    "D": "Candida utilis"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Saccharomyces cerevisiae** ferments added sugar in bottled champagne, producing CO<sub>2</sub> bubbles.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.125Z",
+  "modified": "2025-05-09T16:40:05.125Z"
+}

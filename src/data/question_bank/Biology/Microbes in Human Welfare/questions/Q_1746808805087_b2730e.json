@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805087_b2730e",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'bioaugmentation' process in wastewater treatment involves:",
+    "image": null
+  },
+  "options": {
+    "A": "Adding chlorine",
+    "B": "Introducing specific pollutant-degrading microbes",
+    "C": "Mechanical filtration",
+    "D": "pH adjustment"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Bioaugmentation** adds specialized microbes (e.g., *Pseudomonas*) to degrade xenobiotics like oil spills.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.087Z",
+  "modified": "2025-05-09T16:40:05.087Z"
+}

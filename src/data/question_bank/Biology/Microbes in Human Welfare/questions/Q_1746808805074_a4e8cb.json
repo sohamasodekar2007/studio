@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805074_a4e8cb",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'trickling filter' in sewage treatment is designed to:",
+    "image": null
+  },
+  "options": {
+    "A": "Remove heavy metals",
+    "B": "Provide surface for microbial biofilm growth",
+    "C": "Chlorinate water",
+    "D": "Precipitate phosphates"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Trickling filters** use microbial biofilms on rock beds to aerobically degrade organic matter.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.074Z",
+  "modified": "2025-05-09T16:40:05.074Z"
+}

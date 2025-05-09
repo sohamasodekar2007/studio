@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   ClipboardList, LineChart, ListChecks, MessageSquare, Activity, ArrowRight,
   Sparkles, Trophy, Users, BarChartBig, UserCircle, Percent, Target, BrainCircuit, BookOpen, NotebookIcon, Flame
-} from "lucide-react"; // Removed Wand2
+} from "lucide-react";
 import Link from "next/link";
 import Image from 'next/image';
 import { useAuth } from '@/context/auth-context';
@@ -25,7 +25,8 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { Bar, BarChart, Pie, PieChart, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
+import { Bar, BarChart, Pie, PieChart, Cell, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Label as RechartsLabel } from 'recharts';
+
 
 const chartConfig = {
   score: { label: "Score", color: "hsl(var(--chart-1))" },
@@ -43,8 +44,8 @@ export default function DashboardPage() {
     testsTaken: 0,
     averageScorePercent: 0,
     highestScorePercent: 0,
-    dppsCompleted: 0, 
-    questionsPracticed: 0, 
+    dppsCompleted: 0,
+    questionsPracticed: 0,
   });
   const [userPointsData, setUserPointsData] = useState<UserPoints | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -52,6 +53,9 @@ export default function DashboardPage() {
   const [totalRankedUsers, setTotalRankedUsers] = useState(0);
   const [recentHistory, setRecentHistory] = useState<Partial<TestResultSummary>[]>([]);
   const [scoreTrendData, setScoreTrendData] = useState<Array<{ name: string; score: number | null }>>([]);
+
+  // Initialize recentActivity to prevent ReferenceError
+  const [recentActivity, setRecentActivity] = useState<Partial<TestResultSummary>[]>([]);
 
 
   const [isLoadingStats, setIsLoadingStats] = useState(true);
@@ -87,11 +91,12 @@ export default function DashboardPage() {
           testsTaken: testsTakenCount,
           averageScorePercent: parseFloat(averageScorePercent.toFixed(1)),
           highestScorePercent: parseFloat(highestScorePercent.toFixed(1)),
-          dppsCompleted: 25, 
-          questionsPracticed: 350, 
+          dppsCompleted: 25, // Placeholder
+          questionsPracticed: 350, // Placeholder
         });
         setUserPointsData(pointsData);
         setRecentHistory(history.slice(0, 3));
+        setRecentActivity(history.slice(0, 3)); // Also set recentActivity
       }).catch(error => {
         console.error("Error fetching dashboard data:", error);
       }).finally(() => {
@@ -103,11 +108,12 @@ export default function DashboardPage() {
       setUserPointsData(null);
       setRecentHistory([]);
       setScoreTrendData([]);
+      setRecentActivity([]); // Initialize recentActivity for guests
     }
   }, [user, authLoading]);
 
    useEffect(() => {
-    if (user || !authLoading) { 
+    if (user || !authLoading) { // Check if user exists or auth loading is complete
         setIsLoadingLeaderboard(true);
         Promise.all([
             getAllUserPoints(),
@@ -124,10 +130,10 @@ export default function DashboardPage() {
                     rank: index + 1,
                     userProfile: userMap.get(pointsEntry.userId) || null,
                 }));
-            setLeaderboard(rankedData.slice(0, 3)); 
+            setLeaderboard(rankedData.slice(0, 3)); // Top 3 for snapshot
             setTotalRankedUsers(rankedData.length);
 
-            if (user && user.id) {
+            if (user && user.id) { // Check if user is not null before accessing id
                 const currentUserRanking = rankedData.find(entry => entry.userId === user.id);
                 setUserRank(currentUserRanking?.rank ?? 'N/A');
             } else {
@@ -201,16 +207,32 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button variant="default" className="w-full justify-start text-sm py-3 h-auto" asChild>
-              <Link href="/tests"><ListChecks className="mr-2 h-4 w-4" /> Test Series</Link>
+              <Link href="/tests">
+                <span className="flex items-center">
+                  <ListChecks className="mr-2 h-4 w-4" /> Test Series
+                </span>
+              </Link>
             </Button>
             <Button variant="outline" className="w-full justify-start text-sm py-3 h-auto" asChild>
-              <Link href="/dpp"><ClipboardList className="mr-2 h-4 w-4" /> Daily Practice</Link>
+              <Link href="/dpp">
+                <span className="flex items-center">
+                  <ClipboardList className="mr-2 h-4 w-4" /> Daily Practice
+                </span>
+              </Link>
             </Button>
             <Button variant="outline" className="w-full justify-start text-sm py-3 h-auto" asChild>
-              <Link href="/progress"><Activity className="mr-2 h-4 w-4" /> My Progress</Link>
+              <Link href="/progress">
+                <span className="flex items-center">
+                  <Activity className="mr-2 h-4 w-4" /> My Progress
+                </span>
+              </Link>
             </Button>
             <Button variant="outline" className="w-full justify-start text-sm py-3 h-auto" asChild>
-              <Link href="/notebooks"><NotebookIcon className="mr-2 h-4 w-4" /> My Notebooks</Link>
+              <Link href="/notebooks">
+                <span className="flex items-center">
+                  <NotebookIcon className="mr-2 h-4 w-4" /> My Notebooks
+                </span>
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -221,9 +243,12 @@ export default function DashboardPage() {
             <CardTitle className="text-lg font-semibold flex items-center gap-2"><BrainCircuit className="text-accent"/>AI Powered Tools</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* AI Study Tips Card Removed */}
             <Button variant="secondary" className="w-full justify-start text-sm py-3 h-auto bg-accent/10 hover:bg-accent/20 border border-accent/20" asChild>
-              <Link href="/doubt-solving"><MessageSquare className="mr-2 h-4 w-4" /> Ask EduNexus AI</Link>
+              <Link href="/doubt-solving">
+                <span className="flex items-center">
+                  <MessageSquare className="mr-2 h-4 w-4" /> Ask EduNexus AI
+                </span>
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -266,7 +291,7 @@ export default function DashboardPage() {
                             <div className="flex items-center justify-between p-2 bg-primary/10 rounded-md">
                                 <div className="flex items-center gap-2">
                                     <Avatar className="h-6 w-6">
-                                        <AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email}.png`} />
+                                        <AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : (user.email ? `https://avatar.vercel.sh/${user.email}.png` : undefined)} />
                                         <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                                     </Avatar>
                                     <span className="text-sm font-medium">Your Rank</span>
@@ -281,7 +306,7 @@ export default function DashboardPage() {
                                     <div className="flex items-center gap-2">
                                         <span className="font-medium w-5 text-center">{entry.rank}.</span>
                                         <Avatar className="h-5 w-5">
-                                          <AvatarImage src={entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : `https://avatar.vercel.sh/${entry.userId}.png`} />
+                                          <AvatarImage src={entry.userProfile?.avatarUrl ? `/avatars/${entry.userProfile.avatarUrl}` : (entry.userProfile?.email ? `https://avatar.vercel.sh/${entry.userProfile.email}.png` : undefined)} />
                                           <AvatarFallback>{getInitials(entry.userProfile?.name)}</AvatarFallback>
                                         </Avatar>
                                         <span className="truncate max-w-[100px] sm:max-w-[120px]">{entry.userProfile?.name || 'Anonymous'}</span>
@@ -302,9 +327,9 @@ export default function DashboardPage() {
                 <CardDescription className="text-xs">Your latest test attempts.</CardDescription>
             </CardHeader>
             <CardContent>
-                {isLoadingStats ? <Skeleton className="h-32 w-full" /> : recentHistory.length > 0 ? (
+                {isLoadingStats ? <Skeleton className="h-32 w-full" /> : recentActivity.length > 0 ? (
                     <ul className="space-y-3">
-                        {recentHistory.map((attempt) => (
+                        {recentActivity.map((attempt) => (
                             <li key={attempt.attemptTimestamp} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2.5 border rounded-md hover:bg-muted/50 transition-colors">
                                 <div>
                                     <p className="text-sm font-medium truncate max-w-[200px] sm:max-w-xs md:max-w-md">{attempt.testName || `Test: ${attempt.testCode}`}</p>
@@ -326,3 +351,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

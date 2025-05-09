@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805120_edeccd",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Environmental Science"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'microbial leaching' of copper ores primarily uses:",
+    "image": null
+  },
+  "options": {
+    "A": "Thiobacillus ferrooxidans",
+    "B": "Nitrobacter",
+    "C": "Azotobacter",
+    "D": "Rhizobium"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Thiobacillus ferrooxidans** oxidizes Fe<sup>2+</sup> and sulfur compounds to solubilize metals from ores.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.120Z",
+  "modified": "2025-05-09T16:40:05.120Z"
+}

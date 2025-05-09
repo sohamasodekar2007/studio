@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808805112_5cdd21",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Industrial Applications"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used in the 'retting' of flax and jute fibers?",
+    "image": null
+  },
+  "options": {
+    "A": "Clostridium butyricum",
+    "B": "Bacillus subtilis",
+    "C": "Pseudomonas aeruginosa",
+    "D": "Streptomyces"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Clostridium butyricum** degrades pectins during retting, separating plant fibers.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:40:05.112Z",
+  "modified": "2025-05-09T16:40:05.112Z"
+}
