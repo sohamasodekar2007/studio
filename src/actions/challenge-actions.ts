@@ -4,13 +4,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { Challenge, ChallengeTestConfig, ChallengeParticipant, TestQuestion, UserProfile, ChallengeInvite, UserChallengeInvites, QuestionBankItem, DifficultyLevel, ExamOption, UserAnswer, DetailedAnswer } from '@/types';
+import type { Challenge, ChallengeTestConfig, ChallengeParticipant, TestQuestion, UserProfile, ChallengeInvite, UserChallengeInvites, QuestionBankItem, DifficultyLevel, ExamOption, UserAnswer, DetailedAnswer, UserChallengeHistory, UserChallengeHistoryItem } from '@/types';
 import { getQuestionsForLesson } from './question-bank-query-actions'; // To fetch questions
 import { getUserById } from './user-actions'; // To fetch user names
 
 const challengesBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenges');
 const challengeInvitesBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenge-invites');
-const challengeHistoryBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenge-history');
+const userChallengeHistoryBasePath = path.join(process.cwd(), 'src', 'data', 'user-challenge-history');
 
 
 async function ensureDirExists(dirPath: string): Promise<void> {
@@ -25,7 +25,7 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 function generateChallengeCode(): string {
   const part1 = Math.floor(1000 + Math.random() * 9000);
   const part2 = Math.floor(1000 + Math.random() * 9000);
-  const part3 = Math.random().toString(36).substring(2, 4).toUpperCase();
+  const part3 = Math.random().toString(36).substring(2, 6).toUpperCase(); // Increased length for uniqueness
   return `CHL-${part1}-${part2}-${part3}`;
 }
 
@@ -78,6 +78,65 @@ async function writeUserInvites(userId: string, invitesData: UserChallengeInvite
     }
 }
 
+// --- User Challenge History Actions ---
+async function getUserChallengeHistory(userId: string): Promise<UserChallengeHistory> {
+  const filePath = path.join(userChallengeHistoryBasePath, `${userId}.json`);
+  try {
+    await fs.access(filePath);
+    const fileContent = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(fileContent) as UserChallengeHistory;
+  } catch (error) {
+    return { userId, completedChallenges: [] };
+  }
+}
+
+async function writeUserChallengeHistory(userId: string, historyData: UserChallengeHistory): Promise<boolean> {
+  const filePath = path.join(userChallengeHistoryBasePath, `${userId}.json`);
+  try {
+    await ensureDirExists(userChallengeHistoryBasePath);
+    await fs.writeFile(filePath, JSON.stringify(historyData, null, 2), 'utf-8');
+    return true;
+  } catch (error) {
+    console.error(`Failed to write challenge history for user ${userId}:`, error);
+    return false;
+  }
+}
+
+export async function addChallengeToUserHistory(userId: string, challenge: Challenge, participantData: ChallengeParticipant): Promise<boolean> {
+    const history = await getUserChallengeHistory(userId);
+    const opponentNames = Object.values(challenge.participants)
+                                .filter(p => p.userId !== userId && p.status === 'completed') // Consider only completed opponents
+                                .map(p => p.name);
+
+    const historyItem: UserChallengeHistoryItem = {
+        challengeCode: challenge.challengeCode,
+        testName: `${challenge.testConfig.subject} - ${challenge.testConfig.lesson}`,
+        creatorName: challenge.creatorName,
+        opponentNames: opponentNames,
+        userScore: participantData.score || 0,
+        totalPossibleScore: challenge.questions.reduce((sum, q) => sum + q.marks, 0),
+        rank: participantData.rank,
+        totalParticipants: Object.values(challenge.participants).filter(p => p.status === 'completed').length,
+        completedAt: Date.now(), // Timestamp of adding to history
+    };
+
+    // Avoid duplicates if already added
+    const existingEntryIndex = history.completedChallenges.findIndex(c => c.challengeCode === challenge.challengeCode);
+    if (existingEntryIndex !== -1) {
+        history.completedChallenges[existingEntryIndex] = historyItem; // Update if exists
+    } else {
+        history.completedChallenges.unshift(historyItem); // Add to beginning
+    }
+    
+    return writeUserChallengeHistory(userId, history);
+}
+
+export async function getCompletedChallengesForUser(userId: string): Promise<UserChallengeHistoryItem[]> {
+    const history = await getUserChallengeHistory(userId);
+    return history.completedChallenges.sort((a, b) => b.completedAt - a.completedAt); // Newest first
+}
+// --- End User Challenge History Actions ---
+
 
 export async function createChallenge(
   creatorId: string,
@@ -97,6 +156,8 @@ export async function createChallenge(
         subject: testConfig.subject,
         lesson: testConfig.lesson,
         examType: testConfig.examFilter === 'all' ? undefined : testConfig.examFilter,
+        // Add difficulty filter if present in testConfig
+        difficulty: testConfig.difficulty === 'all' ? undefined : testConfig.difficulty,
     });
 
     if (questionsFromBank.length < testConfig.numQuestions) {
@@ -120,12 +181,12 @@ export async function createChallenge(
 
 
     const participants: Record<string, ChallengeParticipant> = {
-      [creatorId]: { userId: creatorId, name: creatorName, status: 'accepted' },
+      [creatorId]: { userId: creatorId, name: creatorName, status: 'accepted', avatarUrl: (await getUserById(creatorId))?.avatarUrl },
     };
-    // Fetch and store names for challenged users
+    
     for (const id of challengedUserIds) {
         const userProfile = await getUserById(id);
-        participants[id] = { userId: id, name: userProfile?.name || null, status: 'pending' };
+        participants[id] = { userId: id, name: userProfile?.name || null, status: 'pending', avatarUrl: userProfile?.avatarUrl };
     }
 
     const newChallenge: Challenge = {
@@ -182,19 +243,17 @@ export async function acceptChallenge(challengeCode: string, userId: string): Pr
 
     if (challenge.participants[userId]) {
         challenge.participants[userId].status = 'accepted';
-        // Fetch user's name if not already present or to update it
         const userProfile = await getUserById(userId);
         if (userProfile) {
             challenge.participants[userId].name = userProfile.name;
-        } else if (!challenge.participants[userId].name) { // If profile not found and name was null
-             challenge.participants[userId].name = `User ${userId.substring(0,6)}`; // Fallback
+            challenge.participants[userId].avatarUrl = userProfile.avatarUrl;
+        } else if (!challenge.participants[userId].name) { 
+             challenge.participants[userId].name = `User ${userId.substring(0,6)}`; 
         }
-
 
         const saveSuccess = await writeChallengeFile(challenge);
         if (!saveSuccess) return { success: false, message: "Failed to update challenge status."};
 
-        // Update user's invite status
         const userInvites = await getUserInvites(userId);
         const inviteIndex = userInvites.invites.findIndex(inv => inv.challengeCode === challengeCode);
         if (inviteIndex !== -1) {
@@ -215,7 +274,6 @@ export async function rejectChallenge(challengeCode: string, userId: string): Pr
         const saveSuccess = await writeChallengeFile(challenge);
          if (!saveSuccess) return { success: false, message: "Failed to update challenge status."};
 
-        // Update user's invite status
         const userInvites = await getUserInvites(userId);
         const inviteIndex = userInvites.invites.findIndex(inv => inv.challengeCode === challengeCode);
         if (inviteIndex !== -1) {
@@ -235,12 +293,22 @@ export async function startChallenge(challengeCode: string, creatorId: string): 
     if (challenge.testStatus !== 'waiting') return { success: false, message: "Challenge already started or completed."};
     if (challenge.expiresAt < Date.now()) return { success: false, message: "Challenge has expired."};
 
-    const allAccepted = Object.values(challenge.participants)
-                            .filter(p => p.userId !== creatorId) 
-                            .every(p => p.status === 'accepted');
+    const acceptedParticipants = Object.values(challenge.participants).filter(p => p.status === 'accepted');
+    if (acceptedParticipants.length === 0 && Object.keys(challenge.participants).length > 1) { // If only creator accepted & others invited
+        return { success: false, message: "No invited participants have accepted the challenge yet." };
+    }
+    // Allow starting if at least one other person accepted, or if it's a solo challenge (only creator)
+    // The original logic for `allAccepted` was fine:
+    const allInvitedAcceptedOrCreatorIsSolo = Object.values(challenge.participants)
+        .filter(p => p.userId !== creatorId) 
+        .every(p => p.status === 'accepted' || p.status === 'rejected'); // Consider rejected as "responded"
 
-    if (!allAccepted && Object.values(challenge.participants).filter(p => p.userId !== creatorId).length > 0) { 
-        return { success: false, message: "Not all invited participants have accepted the challenge yet." };
+    // If there are invited users, and not all have accepted (and not rejected), don't start.
+    const invitedUsers = Object.values(challenge.participants).filter(p => p.userId !== creatorId);
+    const pendingInvitedUsers = invitedUsers.filter(p => p.status === 'pending');
+
+    if (invitedUsers.length > 0 && pendingInvitedUsers.length > 0) {
+         return { success: false, message: "Not all invited participants have responded to the challenge yet." };
     }
 
 
@@ -255,37 +323,27 @@ export async function submitChallengeAttempt(
   userId: string,
   answers: UserAnswer[],
   timeTakenSeconds: number
-): Promise<{ success: boolean; message?: string }> {
+): Promise<{ success: boolean; message?: string, challenge?: Challenge }> {
   const challenge = await readChallengeFile(challengeCode);
   if (!challenge) return { success: false, message: "Challenge not found." };
   if (challenge.testStatus !== 'started') return { success: false, message: "Challenge not started or already completed/expired."};
-  if (challenge.expiresAt < Date.now()) {
+  
+  if (challenge.expiresAt < Date.now() && challenge.testStatus !== 'completed') {
       challenge.testStatus = 'expired';
       await writeChallengeFile(challenge);
       return { success: false, message: "Challenge has expired."};
   }
 
-
   const participant = challenge.participants[userId];
   if (!participant) return { success: false, message: "You are not part of this challenge."};
   if (participant.status === 'completed') return { success: false, message: "You have already submitted this challenge."};
 
-
   let score = 0;
-  let correctCount = 0;
-  let incorrectCount = 0;
-  const detailedAnswersForReport: DetailedAnswer[] = [];
-
-
   challenge.questions.forEach((q, index) => {
-    const userAnswer = answers.find(a => a.questionId === q.id || a.questionId === `q-${index}`); 
-    const isCorrect = userAnswer?.selectedOption === q.answer;
+    const userAnswer = answers.find(a => a.questionId === q.id); 
     if (userAnswer && userAnswer.selectedOption) {
-      if (isCorrect) {
+      if (userAnswer.selectedOption === q.answer) {
         score += q.marks;
-        correctCount++;
-      } else {
-        incorrectCount++;
       }
     }
   });
@@ -295,13 +353,19 @@ export async function submitChallengeAttempt(
   participant.status = 'completed';
   participant.answers = answers; 
 
-  const allCompletedOrRejected = Object.values(challenge.participants).every(p => p.status === 'completed' || p.status === 'rejected');
-  if (allCompletedOrRejected) {
+  // After attempt, add to user's challenge history
+  await addChallengeToUserHistory(userId, challenge, participant);
+
+  const allCompletedOrRejectedOrExpired = Object.values(challenge.participants).every(
+      p => p.status === 'completed' || p.status === 'rejected' || challenge.expiresAt < Date.now()
+  );
+
+  if (allCompletedOrRejectedOrExpired && challenge.testStatus !== 'expired') {
     challenge.testStatus = 'completed';
   }
 
   const saveSuccess = await writeChallengeFile(challenge);
-  return { success: saveSuccess, message: saveSuccess ? "Attempt submitted." : "Failed to save attempt." };
+  return { success: saveSuccess, message: saveSuccess ? "Attempt submitted." : "Failed to save attempt.", challenge };
 }
 
 export async function getChallengeResults(challengeCode: string): Promise<Challenge | null> {
@@ -320,6 +384,8 @@ export async function getChallengeResults(challengeCode: string): Promise<Challe
                  challenge.participants[p.userId].rank = index + 1;
             }
         });
+        // Update the file with ranks (optional, or do it on demand)
+        // await writeChallengeFile(challenge); 
     }
     return challenge;
 }

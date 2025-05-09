@@ -22,23 +22,23 @@ export type ClassLevel = typeof classLevels[number];
 
 // Interface for User Data (Stored in users.json)
 export interface UserProfile {
-  id: string; // User ID is now always a string (UUID or numeric string)
+  id: string;
   email: string | null;
-  password?: string; // Store hashed password
+  password?: string; 
   name: string | null;
   phone: string | null;
-  avatarUrl?: string | null; // Filename (e.g., avatar-userid-timestamp.png) stored relative to public/avatars
-  referral?: string; // Optional referral code
-  class: AcademicStatus | null; // Academic status
-  model: UserModel; // User's subscription model
-  role: 'Admin' | 'User'; // Role is now mandatory
-  expiry_date: string | null; // ISO string date or null for free/admin
-  createdAt?: string; // Optional ISO timestamp
-  totalPoints?: number; // Add totalPoints field, optional for existing users
+  avatarUrl?: string | null; 
+  referral?: string; 
+  class: AcademicStatus | null;
+  model: UserModel; 
+  role: 'Admin' | 'User'; 
+  expiry_date: string | null; 
+  createdAt?: string; 
+  totalPoints?: number; 
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
-export type ContextUser = Omit<UserProfile, 'password'> | null; // Role is now part of UserProfile
+export type ContextUser = Omit<UserProfile, 'password'> | null; 
 
 
 // ---- Question Bank Types ----
@@ -49,7 +49,7 @@ export type QuestionType = typeof questionTypes[number];
 export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
 export type DifficultyLevel = typeof difficultyLevels[number];
 
-export const pyqShifts = ["S1", "S2", "Single"] as const; // Shift 1, Shift 2, or Single Shift Exam
+export const pyqShifts = ["S1", "S2", "Single"] as const; 
 export type PyqShift = typeof pyqShifts[number];
 
 
@@ -59,13 +59,13 @@ export interface QuestionBankItem {
   subject: string;
   lesson: string;
   class: ClassLevel;
-  examType: ExamOption; // The primary exam this question is tagged for initially
+  examType: ExamOption; 
   difficulty: DifficultyLevel;
   tags: string[];
   type: QuestionType;
   question: {
     text?: string | null;
-    image?: string | null; // Filename relative to public/question_bank_images/{subject}/{lesson}/images/
+    image?: string | null; 
   };
   options: {
     A: string;
@@ -76,24 +76,24 @@ export interface QuestionBankItem {
   correct: "A" | "B" | "C" | "D";
   explanation: {
     text?: string | null;
-    image?: string | null; // Filename relative to public/question_bank_images/{subject}/{lesson}/images/
+    image?: string | null; 
   };
-  marks: number; // Added marks field
-  isPyq?: boolean; // Flag to indicate if it's a PYQ
+  marks: number; 
+  isPyq?: boolean; 
   pyqDetails?: {
-    exam: ExamOption; // The specific exam it appeared in
-    date: string; // ISO date string (YYYY-MM-DD)
-    shift: PyqShift; // S1, S2, or Single
+    exam: ExamOption; 
+    date: string; 
+    shift: PyqShift; 
   } | null;
-  created: string; // ISO timestamp
-  modified: string; // ISO timestamp
+  created: string; 
+  modified: string; 
 }
 
 
 // ---- Generated Test Definition Types ----
 
 // Reusing Academic Status for Audience
-export type AudienceType = AcademicStatus; // Type remains the same
+export type AudienceType = AcademicStatus; 
 
 // Define Test Streams
 export const testStreams = ["PCM", "PCB"] as const;
@@ -102,40 +102,40 @@ export type TestStream = typeof testStreams[number];
 
 // Interface for individual question within a generated test JSON
 export interface TestQuestion {
-    id?: string; // Original question ID from bank, if applicable
-    type?: QuestionType; // 'text' or 'image', from original question
-    question_text?: string | null;        // Textual content of the question (MathJax)
-    question_image_url?: string | null;   // Public URL to the question image (relative to /)
-    options: (string | null)[];           // Array of 4 option strings (may contain MathJax) - allow null
-    answer: string;                       // Correct option key e.g., "A", "B" (NOT "Option A")
+    id?: string; 
+    type?: QuestionType; 
+    question_text?: string | null;        
+    question_image_url?: string | null;   
+    options: (string | null)[];           
+    answer: string;                       
     marks: number;
-    explanation_text?: string | null;     // Textual explanation (MathJax)
-    explanation_image_url?: string | null;// Public URL to the explanation image (relative to /)
-    explanation?: string | null; // Fallback for older data or text-only explanations
-    question?: string | null; // Fallback for older question text storage
+    explanation_text?: string | null;     
+    explanation_image_url?: string | null;
+    explanation?: string | null; 
+    question?: string | null; 
 }
 
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
-    testType: 'chapterwise' | 'full_length'; // Discriminator added here
+    testType: 'chapterwise' | 'full_length'; 
     test_code: string;
     name: string;
-    duration: number; // in minutes
-    count: number; // Number of questions specified by user (for chapterwise), or calculated total (for full length)
-    total_questions: number; // Actual total number of questions included
-    type: PricingType; // FREE, PAID, FREE_PREMIUM
-    audience: AudienceType | null; // Allow null for audience
-    createdAt?: string; // ISO timestamp
-    test_subject: string[]; // Subjects involved
+    duration: number; 
+    count: number; 
+    total_questions: number; 
+    type: PricingType; 
+    audience: AudienceType | null; 
+    createdAt?: string; 
+    test_subject: string[]; 
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
-    testType: 'chapterwise'; // Explicit discriminator
+    testType: 'chapterwise'; 
     lesson: string;
-    examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
-    questions: TestQuestion[]; // Directly embed questions
+    examFilter?: ExamOption | 'all'; 
+    questions: TestQuestion[]; 
 
     // Ensure fields from FullLengthTestJson are explicitly undefined
     stream?: undefined;
@@ -148,14 +148,14 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
-    testType: 'full_length'; // Explicit discriminator
+    testType: 'full_length'; 
     stream: TestStream;
-    examFilter?: ExamOption | 'all'; // Optional exam filter used during generation
+    examFilter?: ExamOption | 'all'; 
     weightage?: {
         physics: number;
         chemistry: number;
-        maths?: number; // Optional based on stream
-        biology?: number; // Optional based on stream
+        maths?: number; 
+        biology?: number; 
     };
     // Subject-specific question arrays
     physics?: TestQuestion[];
@@ -182,19 +182,19 @@ export enum QuestionStatus {
 }
 
 export interface UserAnswer {
-  questionId: string; // Original ID from QuestionBankItem
-  selectedOption: string | null; // e.g., "A", "B", "C", "D", or null if unanswered
+  questionId: string; 
+  selectedOption: string | null; 
   status: QuestionStatus;
-  timeTaken?: number; // Optional: time spent on this question
+  timeTaken?: number; 
 }
 
 // Data structure for the actual test taking session BEFORE saving the report
 export interface TestSession {
-  testId: string; // Corresponds to test_code
+  testId: string; 
   userId: string;
-  startTime: number; // Timestamp (used as attemptTimestamp)
-  endTime?: number; // Timestamp, set on submit
-  answers: UserAnswer[]; // Array of user's answers during the session
+  startTime: number; 
+  endTime?: number; 
+  answers: UserAnswer[]; 
 }
 
 // Detailed answer structure stored within the test report
@@ -203,7 +203,7 @@ export interface DetailedAnswer {
   questionIndex: number;
   questionText?: string | null;
   questionImageUrl?: string | null;
-  options?: (string | null)[]; // Array of 4 option strings, allow null
+  options?: (string | null)[]; 
   userAnswer: string | null;
   correctAnswer: string;
   isCorrect: boolean;
@@ -218,23 +218,21 @@ export interface TestResultSummary {
     testCode: string;
     userId: string;
     testName: string;
-    attemptTimestamp: number; // Unique ID for this attempt (startTime from TestSession)
-    submittedAt: number; // endTime from TestSession
-    duration: number; // Test duration in minutes (from definition)
+    attemptTimestamp: number; 
+    submittedAt: number; 
+    duration: number; 
     totalQuestions: number;
     attempted: number;
     correct: number;
     incorrect: number;
     unanswered: number;
     score: number;
-    totalMarks: number; // Add total marks possible for the test
+    totalMarks: number; 
     percentage: number;
-    timeTakenMinutes: number; // Total time taken for the test
-    pointsEarned?: number; // Points earned for THIS test attempt
-    detailedAnswers: DetailedAnswer[]; // Use the defined interface
-     // Add optional user profile for ranking/display in reports
+    timeTakenMinutes: number; 
+    pointsEarned?: number; 
+    detailedAnswers: DetailedAnswer[]; 
      user?: Omit<UserProfile, 'password'> | null;
-     // Add optional rank if calculated
      rank?: number;
 }
 
@@ -242,15 +240,15 @@ export interface TestResultSummary {
 
 // ---- Short Notes Types ----
 export interface ShortNote {
-    id: string; // Unique identifier for the note (e.g., timestamp or UUID)
+    id: string; 
     title: string;
     description: string;
     subject: string;
     examType: ExamOption;
-    contentType: 'pdf' | 'html'; // Type of content
-    filePath: string; // Path relative to public/short_notes/{pdf_pages|html_pages}/
-    createdAt: string; // ISO timestamp
-    modifiedAt: string; // ISO timestamp
+    contentType: 'pdf' | 'html'; 
+    filePath: string; 
+    createdAt: string; 
+    modifiedAt: string; 
 }
 
 // Interface for the JSON file storing note metadata per subject/exam
@@ -264,19 +262,17 @@ export interface ShortNotesMetadata {
 
 // Represents a single attempt on a DPP question
 export interface DppAttempt {
-  timestamp: number; // Unix timestamp of the attempt
-  selectedOption: string | null; // "A", "B", "C", "D", or null if skipped/cleared
+  timestamp: number; 
+  selectedOption: string | null; 
   isCorrect: boolean;
 }
 
 // Structure for storing a user's progress on a specific DPP lesson
-// This will be the content of the file: src/data/user-dpp-progress/{userId}/{subject}/{lesson}.json
 export interface UserDppLessonProgress {
   userId: string;
   subject: string;
   lesson: string;
-  lastAccessed?: number; // Optional: timestamp of last access
-  // Map where key is questionId and value is an array of attempts
+  lastAccessed?: number; 
   questionAttempts: Record<string, DppAttempt[]>;
 }
 
@@ -284,26 +280,24 @@ export interface UserDppLessonProgress {
 
 // Interface for a single Notebook created by the user
 export interface Notebook {
-  id: string; // Unique ID for the notebook (e.g., UUID)
+  id: string; 
   name: string;
-  createdAt: number; // Timestamp
+  createdAt: number; 
 }
 
 // Interface for a bookmarked question within a notebook
 export interface BookmarkedQuestion {
-  questionId: string; // ID linking back to the QuestionBankItem
-  subject: string;    // Subject of the question
-  lesson: string;     // Lesson of the question
-  addedAt: number;    // Timestamp when bookmarked
-  tags?: BookmarkTag[];    // Use specific BookmarkTag type
+  questionId: string; 
+  subject: string;    
+  lesson: string;     
+  addedAt: number;    
+  tags?: BookmarkTag[];    
 }
 
 // Interface for the user's entire notebook data structure
-// This will be the content of src/data/user-notebooks/{userId}/notebooks.json
 export interface UserNotebookData {
   userId: string;
   notebooks: Notebook[];
-  // Maps notebookId to an array of bookmarked questions in that notebook
   bookmarkedQuestions: Record<string, BookmarkedQuestion[]>;
 }
 
@@ -313,12 +307,10 @@ export type BookmarkTag = typeof bookmarkTags[number];
 
 
 // ---- User Follows Types ----
-// Structure for storing follow data for a single user
-// Stored in src/data/user-follows/{userId}.json
 export interface UserFollows {
   userId: string;
-  following: string[]; // Array of user IDs this user is following
-  followers: string[]; // Array of user IDs following this user
+  following: string[]; 
+  followers: string[]; 
 }
 
 // ---- Challenge Test Types ----
@@ -326,13 +318,13 @@ export type ChallengeStatus = "pending" | "accepted" | "rejected" | "completed" 
 
 export interface ChallengeParticipant {
   userId: string;
-  name: string | null; // Name of the participant
+  name: string | null; 
   avatarUrl?: string | null;
   status: ChallengeStatus;
   score?: number;
   timeTaken?: number; // in seconds
   rank?: number;
-  answers?: UserAnswer[]; // Store their answers for this challenge
+  answers?: UserAnswer[]; 
 }
 
 export interface ChallengeTestConfig {
@@ -344,17 +336,16 @@ export interface ChallengeTestConfig {
 }
 
 export interface Challenge {
-  challengeCode: string; // Unique CHL-XXXX-XXXX-XX code
+  challengeCode: string; 
   creatorId: string;
-  creatorName: string | null; // Name of the creator
+  creatorName: string | null; 
   participants: Record<string, ChallengeParticipant>; // Keyed by userId
   testConfig: ChallengeTestConfig;
   testStatus: "waiting" | "started" | "completed" | "expired";
-  questions: TestQuestion[]; // Array of questions for this challenge instance
-  createdAt: number; // Timestamp
-  expiresAt: number; // Timestamp (createdAt + 3 hours)
-  startedAt?: number; // Timestamp when creator starts the test
-  // Potentially add winnerId or other summary fields after completion
+  questions: TestQuestion[]; 
+  createdAt: number; 
+  expiresAt: number; 
+  startedAt?: number; 
 }
 
 // For notifications/invites
@@ -362,42 +353,44 @@ export interface ChallengeInvite {
   challengeCode: string;
   creatorId: string;
   creatorName: string | null;
-  testName: string; // e.g., "Physics - Kinematics Challenge"
+  testName: string; 
   numQuestions: number;
-  status: "pending" | "accepted" | "rejected" | "expired"; // Status of the invite for the recipient
+  status: "pending" | "accepted" | "rejected" | "expired"; 
   createdAt: number;
   expiresAt: number;
 }
 
 // Structure for storing challenge invites for a user
-// src/data/user-challenge-invites/{userId}.json
 export interface UserChallengeInvites {
     userId: string;
     invites: ChallengeInvite[];
 }
 
 // Structure for storing a user's completed challenge attempts (for their history)
-// src/data/user-challenge-history/{userId}.json
+export interface UserChallengeHistoryItem {
+  challengeCode: string;
+  testName: string;
+  creatorName: string | null;
+  opponentNames: (string | null)[]; // Names of other participants
+  userScore: number;
+  totalPossibleScore: number;
+  rank?: number; // User's rank in that specific challenge
+  totalParticipants: number;
+  completedAt: number; // Timestamp when the user completed/submitted
+}
 export interface UserChallengeHistory {
     userId: string;
-    completedChallenges: Array<{
-        challengeCode: string;
-        testName: string; // Or creatorName + config details
-        userScore: number;
-        totalScore: number;
-        rank?: number; // Rank within that specific challenge
-        completedAt: number;
-    }>;
+    completedChallenges: UserChallengeHistoryItem[];
 }
 
 // ---- Notification Types (Basic for now) ----
 export interface AppNotification {
-    id: string; // Unique ID for the notification
+    id: string; 
     type: 'challenge_invite' | 'general_update' | 'test_result';
     title: string;
     message: string;
-    link?: string; // Optional link for navigation
+    link?: string; 
     isRead: boolean;
-    createdAt: number; // Timestamp
-    icon?: React.ElementType; // Optional Lucide icon
+    createdAt: number; 
+    icon?: React.ElementType; 
 }

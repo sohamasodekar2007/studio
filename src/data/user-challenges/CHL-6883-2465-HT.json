@@ -21,7 +21,7 @@
     "difficulty": "all",
     "examFilter": "all"
   },
-  "testStatus": "waiting",
+  "testStatus": "started",
   "questions": [
     {
       "id": "Q_1746702889078",
@@ -41,5 +41,6 @@
     }
   ],
   "createdAt": 1746773407890,
-  "expiresAt": 1746784207890
+  "expiresAt": 1746784207890,
+  "startedAt": 1746773673178
 }
