@@ -123,34 +123,42 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
         }
         
         const qImageUrl = questionDef.question_image_url || null;
-        let explImageUrl = questionDef.explanation_image_url || null;
-        if (!explImageUrl && questionDef.explanation && typeof questionDef.explanation === 'string' && (questionDef.explanation.startsWith('/') || questionDef.explanation.startsWith('http'))) {
-            explImageUrl = questionDef.explanation; 
+        
+        // Correctly determine explanationText and explanationImageUrl
+        const qDefExplText = questionDef.explanation_text || null;
+        const qDefExplImageUrl = questionDef.explanation_image_url || null;
+
+        let finalExplanationText: string | null = null;
+        let finalExplanationImageUrl: string | null = null;
+
+        if (qDefExplImageUrl) {
+            finalExplanationImageUrl = qDefExplImageUrl.trim();
+            // If there's an image, text might be a caption or supplemental.
+            // Avoid duplicating the URL in text if explanation_text itself is the URL.
+            if (qDefExplText && qDefExplText.trim() !== finalExplanationImageUrl) {
+                 finalExplanationText = qDefExplText.trim();
+            }
+        } else if (qDefExplText) {
+            // If no image URL from questionDef.explanation_image_url, but text exists.
+            // Check if this text itself is an image path (legacy data or misformatted).
+            const trimmedText = qDefExplText.trim();
+            if (trimmedText.startsWith('/') && (trimmedText.endsWith('.png') || trimmedText.endsWith('.jpg') || trimmedText.endsWith('.jpeg') || trimmedText.endsWith('.webp'))) {
+                finalExplanationImageUrl = trimmedText; // Use text as image URL
+            } else {
+                finalExplanationText = trimmedText; // It's actual text
+            }
         }
+
 
         let questionTextForDetailedAnswer: string | null = null;
         if (questionDef.type === 'text') {
-            // For text questions, use question_text. Fallback to legacy 'question' if question_text is empty.
             questionTextForDetailedAnswer = questionDef.question_text || questionDef.question || null;
         } else if (questionDef.type === 'image') {
-            // For image questions, questionText should explicitly be null as the image is primary.
             questionTextForDetailedAnswer = null;
         } else {
-            // Fallback for older TestQuestion formats that might not have 'type'
-            // or if type is somehow different. Prioritize text if image is also present.
             questionTextForDetailedAnswer = questionDef.question_text || questionDef.question || null;
         }
         
-        let explanationTextForDetailedAnswer: string | null = null;
-        // If explanation_image_url exists, text explanation might be less critical or a caption.
-        // If no image, text is primary.
-        if (questionDef.explanation_text) {
-            explanationTextForDetailedAnswer = questionDef.explanation_text;
-        } else if (typeof questionDef.explanation === 'string' && !explImageUrl) {
-            // If explanation is a string and there's no explainer image, use it as text.
-             explanationTextForDetailedAnswer = questionDef.explanation;
-        }
-
 
         return {
             questionId: questionDef.id || `q-${index}`,
@@ -162,8 +170,8 @@ function calculateResultsInternal(session: TestSession, testDef: GeneratedTest):
             correctAnswer: correctAnswerKey,
             isCorrect,
             status: status,
-            explanationText: explanationTextForDetailedAnswer,
-            explanationImageUrl: explImageUrl,
+            explanationText: finalExplanationText,
+            explanationImageUrl: finalExplanationImageUrl,
             marks: currentMarks,
         };
     });
