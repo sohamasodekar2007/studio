@@ -21,18 +21,17 @@ const nextConfig = {
     // Create a new object for watchOptions to avoid modifying a potentially frozen object.
     const newWatchOptions = {
       ...(config.watchOptions || {}), // Spread existing options
-      poll: typeof config.watchOptions?.poll === 'number' ? config.watchOptions.poll : 1000,
-      aggregateTimeout: typeof config.watchOptions?.aggregateTimeout === 'number' ? config.watchOptions.aggregateTimeout : 300,
     };
 
     let existingIgnored = [];
     if (newWatchOptions.ignored) {
         if (Array.isArray(newWatchOptions.ignored)) {
-            existingIgnored = newWatchOptions.ignored;
-        } else {
-            // If it's not an array but exists (e.g., a string or RegExp), wrap it in an array
+            existingIgnored = newWatchOptions.ignored.filter(path => typeof path === 'string' && path.trim() !== '');
+        } else if (typeof newWatchOptions.ignored === 'string' && newWatchOptions.ignored.trim() !== '') {
+            // If it's a non-empty string, wrap it in an array
             existingIgnored = [newWatchOptions.ignored];
         }
+        // If it's an empty string or not a string/array, existingIgnored remains []
     }
 
     // Define the paths to be added to the ignored list
@@ -43,8 +42,13 @@ const nextConfig = {
         '**/.next/**',
     ];
 
-    // Add new paths to the existing ignored paths, ensuring no duplicates
-    newWatchOptions.ignored = Array.from(new Set([...existingIgnored, ...pathsToIgnore]));
+    // Combine existing valid paths with new paths, ensuring no duplicates and filtering out any empty strings
+    const combinedIgnored = Array.from(new Set([...existingIgnored, ...pathsToIgnore]));
+    newWatchOptions.ignored = combinedIgnored.filter(path => typeof path === 'string' && path.trim() !== '');
+
+    // Set poll and aggregateTimeout, ensuring they are numbers
+    newWatchOptions.poll = typeof newWatchOptions.poll === 'number' ? newWatchOptions.poll : 1000;
+    newWatchOptions.aggregateTimeout = typeof newWatchOptions.aggregateTimeout === 'number' ? newWatchOptions.aggregateTimeout : 300;
     
     // Assign the new or modified watchOptions back to the config
     config.watchOptions = newWatchOptions;
