@@ -1,10 +1,11 @@
 // src/actions/question-bank-actions.ts
 'use server';
 
-import type { QuestionBankItem, QuestionType, DifficultyLevel, ExamOption, ClassLevel, PyqShift } from '@/types';
+import type { QuestionBankItem, QuestionType, DifficultyLevel, ExamOption, ClassLevel, PyqShift, BulkQuestionInput } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
+import { exams as allExamOptions } from '@/types'; // Import allExamOptions to validate pyqExam
 
 // Base path for JSON question data files
 const jsonQuestionBankBasePath = path.join(process.cwd(), 'src', 'data', 'question_bank');
@@ -24,10 +25,11 @@ async function ensureDirExists(dirPath: string): Promise<void> {
 }
 
 // Helper function to generate a unique filename
-async function generateUniqueFilename(prefix: 'Q' | 'E', fileExtension: string, fileBuffer: Buffer): Promise<string> {
+async function generateUniqueFilename(prefix: 'Q' | 'E', fileExtensionWithDot: string, fileBuffer: Buffer): Promise<string> {
     const timestamp = Date.now();
     const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex').substring(0, 6);
-    return `${prefix}_${timestamp}_${hash}.${fileExtension.toLowerCase()}`;
+    const extension = fileExtensionWithDot.startsWith('.') ? fileExtensionWithDot.substring(1) : fileExtensionWithDot;
+    return `${prefix}_${timestamp}_${hash}.${extension.toLowerCase()}`;
 }
 
 // Helper function to save an image file to the public directory
@@ -43,7 +45,7 @@ async function saveImage(
         await ensureDirExists(imagesDir);
 
         const fileBuffer = Buffer.from(await file.arrayBuffer());
-        const fileExtension = path.extname(file.name).substring(1);
+        const fileExtension = path.extname(file.name); // Includes the dot
         const uniqueFilename = await generateUniqueFilename(prefix, fileExtension, fileBuffer);
         const filePath = path.join(imagesDir, uniqueFilename);
 
@@ -294,5 +296,131 @@ export async function updateQuestionDetails(
     } catch (error: any) {
         console.error(`Error updating question ${formData.get('questionId')}:`, error);
         return { success: false, question: null, error: error.message || 'An unknown error occurred.' };
+    }
+}
+
+/**
+ * Adds multiple questions from an uploaded JSON file to the question bank.
+ * @param formData FormData containing subject, lesson, examType, isAllPyq, pyqExamForAll, pyqYearForAll, and jsonFile.
+ * @returns A promise resolving with success status, count of added/failed questions, and optional error message.
+ */
+export async function addBulkQuestionsToBank(
+    formData: FormData
+): Promise<{ success: boolean; questionsAdded: number; questionsFailed: number; message?: string }> {
+    let questionsAdded = 0;
+    let questionsFailed = 0;
+    console.log("Received FormData Keys for Bulk Add:", Array.from(formData.keys()));
+
+    try {
+        const subject = formData.get('subject') as string;
+        const lesson = formData.get('lesson') as string;
+        const defaultExamType = formData.get('examType') as ExamOption;
+        const jsonFile = formData.get('jsonFile') as File | null;
+        const isAllPyq = formData.get('isAllPyq') === 'true';
+        const pyqExamForAll = formData.get('pyqExamForAll') as ExamOption | undefined;
+        const pyqYearForAll = formData.get('pyqYearForAll') as string | undefined;
+
+        if (!subject || !lesson || !defaultExamType || !jsonFile) {
+            return { success: false, questionsAdded, questionsFailed, message: "Missing required fields for bulk upload." };
+        }
+
+        const fileContent = await jsonFile.text();
+        const bulkQuestions: BulkQuestionInput[] = JSON.parse(fileContent);
+
+        if (!Array.isArray(bulkQuestions)) {
+            throw new Error("JSON file content must be an array of questions.");
+        }
+
+        const lessonJsonDir = path.join(jsonQuestionBankBasePath, subject, lesson);
+        const questionsJsonDir = path.join(lessonJsonDir, 'questions');
+        await ensureDirExists(lessonJsonDir);
+        await ensureDirExists(questionsJsonDir);
+        // Ensure public images directory also exists if images are referenced
+        await ensureDirExists(path.join(publicImagesBasePath, subject, lesson, 'images'));
+
+
+        for (const qInput of bulkQuestions) {
+            try {
+                // Validate basic structure of qInput
+                if (!qInput.options || !qInput.correctAnswer || typeof qInput.marks !== 'number' || (!qInput.questionText && !qInput.questionImageFilename)) {
+                    console.warn("Skipping invalid question in bulk due to missing core fields:", qInput);
+                    questionsFailed++;
+                    continue;
+                }
+
+                const timestamp = Date.now();
+                const questionId = `Q_${timestamp}_${crypto.randomBytes(3).toString('hex')}`; // Ensure more uniqueness
+                const nowISO = new Date().toISOString();
+
+                const questionType: QuestionType = qInput.questionImageFilename ? 'image' : 'text';
+                let options: { A: string, B: string, C: string, D: string };
+                if(Array.isArray(qInput.options) && qInput.options.length === 4){
+                    options = { A: qInput.options[0], B: qInput.options[1], C: qInput.options[2], D: qInput.options[3] };
+                } else if (typeof qInput.options === 'object' && qInput.options !== null && 'A' in qInput.options) {
+                    options = qInput.options as { A: string, B: string, C: string, D: string };
+                } else {
+                    console.warn("Skipping question due to invalid options format:", qInput.options);
+                    questionsFailed++;
+                    continue;
+                }
+
+                const newQuestion: QuestionBankItem = {
+                    id: questionId,
+                    subject,
+                    lesson,
+                    class: qInput.classLevel || '11', // Default if not provided
+                    examType: defaultExamType, // Use default from form
+                    difficulty: qInput.difficulty || 'Medium', // Default
+                    tags: qInput.tags || [],
+                    type: questionType,
+                    question: {
+                        text: questionType === 'text' ? qInput.questionText : null,
+                        image: questionType === 'image' ? qInput.questionImageFilename : null, // Filename from JSON
+                    },
+                    options: options,
+                    correct: qInput.correctAnswer,
+                    explanation: {
+                        text: qInput.explanationText || null,
+                        image: qInput.explanationImageFilename || null, // Filename from JSON
+                    },
+                    marks: qInput.marks,
+                    isPyq: isAllPyq || qInput.isPyq || false,
+                    pyqDetails: null, // Initialize as null
+                    created: nowISO,
+                    modified: nowISO,
+                };
+
+                if (newQuestion.isPyq) {
+                    let examForPyq: ExamOption | undefined = isAllPyq ? pyqExamForAll : qInput.pyqExam;
+                    let dateForPyq: string | undefined = isAllPyq && pyqYearForAll ? `${pyqYearForAll}-01-01` : qInput.pyqDate; // Default to Jan 1 if only year provided
+                    let shiftForPyq: PyqShift | undefined = qInput.pyqShift || (isAllPyq ? 'S1' : undefined); // Default shift if bulk
+
+                    if (examForPyq && dateForPyq && shiftForPyq) {
+                        if (!allExamOptions.includes(examForPyq)) examForPyq = undefined; // Validate exam option
+
+                        newQuestion.pyqDetails = {
+                            exam: examForPyq!, // Assert non-null after check or provide default
+                            date: dateForPyq,
+                            shift: shiftForPyq,
+                        };
+                    } else {
+                        newQuestion.isPyq = false; // If PYQ details are incomplete, mark as not PYQ
+                    }
+                }
+
+
+                const questionJsonFilePath = path.join(questionsJsonDir, `${questionId}.json`);
+                await fs.writeFile(questionJsonFilePath, JSON.stringify(newQuestion, null, 2), 'utf-8');
+                questionsAdded++;
+            } catch (singleError: any) {
+                console.error("Error processing a single question from bulk:", singleError.message, "Question data:", qInput);
+                questionsFailed++;
+            }
+        }
+        return { success: true, questionsAdded, questionsFailed, message: `Processed ${bulkQuestions.length} questions.` };
+
+    } catch (error: any) {
+        console.error('Error adding bulk questions to bank:', error);
+        return { success: false, questionsAdded, questionsFailed, message: error.message || 'An unknown error occurred during bulk upload.' };
     }
 }

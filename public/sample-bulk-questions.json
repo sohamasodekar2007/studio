@@ -1,0 +1,52 @@
+[
+  {
+    "questionText": "What is the capital of France?",
+    "options": {
+      "A": "Berlin",
+      "B": "Madrid",
+      "C": "Paris",
+      "D": "Rome"
+    },
+    "correctAnswer": "C",
+    "explanationText": "Paris is the capital and most populous city of France.",
+    "marks": 1,
+    "difficulty": "Easy",
+    "tags": ["Geography", "Europe"],
+    "classLevel": "6"
+  },
+  {
+    "questionText": "Solve for x: $2x + 5 = 15$",
+    "options": {
+      "A": "2",
+      "B": "5",
+      "C": "7.5",
+      "D": "10"
+    },
+    "correctAnswer": "B",
+    "explanationText": "To solve for x: \n1. Subtract 5 from both sides: $2x = 10$. \n2. Divide by 2: $x = 5$.",
+    "marks": 2,
+    "difficulty": "Medium",
+    "tags": ["Algebra", "Equation"],
+    "classLevel": "8"
+  },
+  {
+    "questionImageFilename": "sample_diagram.png",
+    "options": {
+      "A": "Option A from image",
+      "B": "Option B from image",
+      "C": "Option C from image",
+      "D": "Option D from image"
+    },
+    "correctAnswer": "A",
+    "explanationText": "This is the explanation for the image-based question.",
+    "explanationImageFilename": "sample_explanation_diagram.png",
+    "marks": 3,
+    "difficulty": "Hard",
+    "tags": ["Diagram", "Physics"],
+    "classLevel": "11",
+    "isPyq": true,
+    "pyqExam": "JEE Main",
+    "pyqDate": "2023-04-10",
+    "pyqShift": "S1"
+  }
+]

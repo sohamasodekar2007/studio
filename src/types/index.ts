@@ -90,6 +90,25 @@ export interface QuestionBankItem {
   modified: string; 
 }
 
+// Interface for a single question object within a bulk uploaded JSON
+export interface BulkQuestionInput {
+  questionText?: string;
+  questionImageFilename?: string; // Filename like "diagram.png"
+  options: { A: string; B: string; C: string; D: string } | [string, string, string, string];
+  correctAnswer: "A" | "B" | "C" | "D";
+  explanationText?: string;
+  explanationImageFilename?: string; // Filename
+  marks: number;
+  difficulty?: DifficultyLevel;
+  tags?: string[];
+  classLevel?: ClassLevel; // Use ClassLevel to match QuestionBankItem
+  // PYQ details specific to this question in the bulk file
+  isPyq?: boolean;
+  pyqExam?: ExamOption;
+  pyqDate?: string; // YYYY-MM-DD format
+  pyqShift?: PyqShift;
+}
+
 
 // ---- Generated Test Definition Types ----
 
@@ -246,7 +265,7 @@ export interface ShortNote {
     description: string;
     subject: string;
     examType: ExamOption;
-    contentType: 'pdf' | 'html'; 
+    contentType: 'pdf' | 'html_php'; // Adjusted contentType
     filePath: string; 
     createdAt: string; 
     modifiedAt: string; 
