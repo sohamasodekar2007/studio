@@ -23,21 +23,25 @@ It uses local storage for authentication and `users.json` for user data persiste
 3.  **Set up Google AI:**
     *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 4.  **Configure Environment Variables:**
-    *   **CRITICAL:** Create a file named `.env` in the project root (if it doesn't exist). Do NOT use `.env.example`.
+    *   **CRITICAL:** Create a file named `.env.local` in the project root (if it doesn't exist). Do NOT use `.env.example` or just `.env` for Next.js public variables.
     *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in.
     *   Set `ADMIN_PASSWORD` to a secure password for the default admin user (e.g., `Soham@1234`). This is used for the initial local admin setup.
-    *   **Example `.env` content:**
+    *   **Example `.env.local` content:**
         ```
         GOOGLE_GENAI_API_KEY=YOUR_GOOGLE_GENAI_API_KEY_HERE
         NEXT_PUBLIC_ADMIN_EMAIL=admin@edunexus.com
         ADMIN_PASSWORD=Soham@1234
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=YourTelegramBotUsername # Replace with your bot's username
+        NEXT_PUBLIC_TELEGRAM_REDIRECT_URI=http://localhost:9002/auth/telegram/callback # For local dev
+        # For production on Netlify/Render, update NEXT_PUBLIC_TELEGRAM_REDIRECT_URI to your deployed site's callback URL
+        TELEGRAM_BOT_TOKEN=YourTelegramBotToken # Server-side, keep out of NEXT_PUBLIC_
         ```
 5.  **Run the development server:**
     ```bash
     npm run dev
     ```
-    **IMPORTANT:** You **MUST** restart the server after creating or modifying the `.env` file for the changes to take effect.
+    **IMPORTANT:** You **MUST** restart the server after creating or modifying the `.env.local` file for the changes to take effect.
     The application will be available at `http://localhost:9002`.
 6.  **(Optional) Run Genkit locally for AI development:**
     ```bash
@@ -46,14 +50,20 @@ It uses local storage for authentication and `users.json` for user data persiste
     This allows testing Genkit flows via the Genkit developer UI (usually at `http://localhost:4000`).
 7.  **Access Admin Panel:** Log in using the email address set in `NEXT_PUBLIC_ADMIN_EMAIL` and the password set in `ADMIN_PASSWORD`. The "Admin Panel" link should appear in the sidebar.
 
+## Deployment Notes (Netlify/Render)
+
+*   **Node.js Version:** The project includes a `.nvmrc` file and `netlify.toml` specifies `NODE_VERSION = "20"`. This helps ensure Netlify uses a consistent and compatible Node.js version. Render typically respects `.nvmrc` or allows setting Node version in its dashboard.
+*   **Go Version / `mise` errors:** If you encounter errors related to `mise` or Go during Netlify builds (e.g., "mise go@1.19 install"), it might be due to Netlify's build image auto-detecting Go. The included `.tool-versions` file, specifying `nodejs 20`, aims to prevent this by instructing `mise` (or `asdf`) to focus on Node.js. Ensure no other Go-specific files (like `go.mod`) are accidentally committed. If issues persist, check your Netlify site's build settings in the UI to ensure the build image is appropriate (e.g., a modern Ubuntu LTS) and that no conflicting language version environment variables (like `GO_VERSION`) are set.
+*   **Environment Variables:** Ensure all necessary environment variables (especially `GOOGLE_GENAI_API_KEY`, `NEXT_PUBLIC_ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, and the production `NEXT_PUBLIC_TELEGRAM_REDIRECT_URI`) are correctly configured in your Netlify/Render site settings.
+
 ## Troubleshooting
 
 *   **Login/Signup not working**:
-    *   Ensure your `.env` file is correctly configured with `NEXT_PUBLIC_ADMIN_EMAIL` and `ADMIN_PASSWORD`.
-    *   **Restart your development server (`npm run dev`)** after making changes to the `.env` file.
+    *   Ensure your `.env.local` file is correctly configured with `NEXT_PUBLIC_ADMIN_EMAIL` and `ADMIN_PASSWORD`.
+    *   **Restart your development server (`npm run dev`)** after making changes to the `.env.local` file.
     *   Check the browser console for any error messages related to local storage or `users.json` file access.
     *   The `src/data/users.json` file is created automatically on first run if it doesn't exist, containing the default admin user. Check its contents.
-*   **Admin panel link missing:** Ensure you are logged in with the email specified in `NEXT_PUBLIC_ADMIN_EMAIL` in your `.env` file and that you **restarted the server** after setting it.
+*   **Admin panel link missing:** Ensure you are logged in with the email specified in `NEXT_PUBLIC_ADMIN_EMAIL` in your `.env.local` file and that you **restarted the server** after setting it.
 
 ## Project Structure
 
@@ -71,7 +81,7 @@ It uses local storage for authentication and `users.json` for user data persiste
 *   `src/actions/`: Server Actions (e.g., `user-actions.ts`, `auth-actions.ts`).
 *   `public/`: Static assets (e.g., `question_bank_images`, logos).
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
-*   `.env`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY & SERVER RESTARTED.**
+*   `.env.local`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY & SERVER RESTARTED.**
 *   `.env.example`: Example environment variables file.
 
 ## Available Scripts
