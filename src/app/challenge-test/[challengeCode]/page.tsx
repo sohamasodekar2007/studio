@@ -1,4 +1,4 @@
-// src/app/challenge-test/[testCode]/page.tsx
+// src/app/challenge-test/[challengeCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -38,14 +38,14 @@ const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
   [QuestionStatusEnum.AnsweredAndMarked]: 'bg-blue-500 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-500',
 };
 
-export default function ChallengeTestInterfacePage() { // Renamed component for clarity
+export default function ChallengeTestInterfacePage() { 
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const testCode = params.testCode as string; 
+  const challengeCode = params.challengeCode as string; 
   const userId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -83,7 +83,7 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
 
 
   const loadChallenge = useCallback(async () => {
-    if (!testCode) { 
+    if (!challengeCode) { 
       setError("Challenge code is missing.");
       setIsLoading(false);
       return;
@@ -91,18 +91,17 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getChallengeDetails(testCode); 
+      const data = await getChallengeDetails(challengeCode); 
       if (!data) {
         setError("Challenge not found or has expired.");
         setChallengeData(null);
       } else if (data.testStatus !== 'started') {
         setError(`Challenge is not active. Status: ${data.testStatus}. Redirecting to lobby...`);
         setChallengeData(data); 
-        setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); 
+        setTimeout(() => router.push(`/challenge/lobby/${challengeCode}`), 3000); 
       }
       else {
         setChallengeData(data);
-        // Calculate duration based on number of questions, e.g., 1.5 mins per question
         const challengeDurationMinutes = data.testConfig.numQuestions * 1.5; 
         setTimeLeft(challengeDurationMinutes * 60);
         const initialStatuses: Record<number, QuestionStatus> = {};
@@ -120,12 +119,12 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, router]); 
+  }, [challengeCode, router]); 
 
   useEffect(() => {
     if (!authLoading) {
         if (!user) {
-          router.push(`/auth/login?redirect=/challenge-test/${testCode}?userId=${userId}`); 
+          router.push(`/auth/login?redirect=/challenge-test/${challengeCode}?userId=${userId}`); 
           return;
         }
         if (user.id !== userId) {
@@ -135,13 +134,13 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
         }
         loadChallenge();
     }
-  }, [testCode, userId, authLoading, user, router, toast, loadChallenge]); 
+  }, [challengeCode, userId, authLoading, user, router, toast, loadChallenge]); 
 
   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!challengeData || !user || !userId || isSubmitting || !startTime) return;
     setIsSubmitting(true);
 
-    const timeTakenSeconds = (challengeData.testConfig.numQuestions * 1.5 * 60) - timeLeft; // Use initial total time - time left
+    const timeTakenSeconds = (challengeData.testConfig.numQuestions * 1.5 * 60) - timeLeft;
 
     const submittedAnswers: UserAnswer[] = (challengeData.questions || []).map((q, index) => ({
       questionId: q.id || `q-${index}`,
@@ -150,10 +149,10 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
     }));
 
     try {
-        const result = await submitChallengeAttempt(testCode, userId, submittedAnswers, timeTakenSeconds); 
+        const result = await submitChallengeAttempt(challengeCode, userId, submittedAnswers, timeTakenSeconds); 
         if (result.success) {
              toast({ title: "Challenge Submitted!", description: "Your responses have been saved." });
-             router.push(`/challenge-test-result/${testCode}`); 
+             router.push(`/challenge-test-result/${challengeCode}`); 
         } else {
              throw new Error(result.message || "Failed to submit challenge attempt.");
         }
@@ -161,7 +160,7 @@ export default function ChallengeTestInterfacePage() { // Renamed component for 
        toast({ variant: 'destructive', title: 'Submission Failed', description: e.message });
        setIsSubmitting(false);
     }
-  }, [challengeData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router, timeLeft]); 
+  }, [challengeData, user, userId, isSubmitting, startTime, challengeCode, userAnswers, questionStatuses, toast, router, timeLeft]); 
 
   useEffect(() => {
     if (timeLeft <= 0 || !challengeData || isSubmitting || !startTime || challengeData.testStatus !== 'started') return;

@@ -1,4 +1,4 @@
-// src/app/challenge-test-result/[testCode]/page.tsx
+// src/app/challenge-test-result/[challengeCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -20,25 +20,25 @@ export default function ChallengeTestResultPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
-  const testCode = params.testCode as string; // Changed from challengeCode to testCode
+  const challengeCode = params.challengeCode as string; 
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchResults = useCallback(async () => {
-    if (!testCode) { 
+    if (!challengeCode) { 
       setError("Invalid challenge link.");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await getChallengeResults(testCode); 
+      const data = await getChallengeResults(challengeCode); 
       if (!data || (data.testStatus !== 'completed' && data.testStatus !== 'expired')) {
         setError("Challenge results are not yet available or challenge has expired without completion.");
         setChallenge(data);
         if (data && (data.testStatus === 'waiting' || data?.testStatus === 'started')) {
-           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); // Use testCode
+           setTimeout(() => router.push(`/challenge/lobby/${challengeCode}`), 3000); 
         }
       } else {
         setChallenge(data);
@@ -48,17 +48,17 @@ export default function ChallengeTestResultPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, router]); 
+  }, [challengeCode, router]); 
 
   useEffect(() => {
      if (!authLoading) {
         if (!user) {
-            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); // Use testCode
+            router.push(`/auth/login?redirect=/challenge-test-result/${challengeCode}`); 
             return;
         }
         fetchResults();
     }
-  }, [authLoading, user, testCode, fetchResults, router]); 
+  }, [authLoading, user, challengeCode, fetchResults, router]); 
 
   const getInitials = (name?: string | null) => name ? name.charAt(0).toUpperCase() : '?';
 
@@ -159,7 +159,7 @@ export default function ChallengeTestResultPage() {
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-3 pt-6 border-t">
             <Button variant="outline" asChild>
-                <Link href={`/challenge-test-review/${testCode}?userId=${user?.id}`}> 
+                <Link href={`/challenge-test-review/${challengeCode}?userId=${user?.id}`}> 
                     Review Your Answers
                 </Link>
             </Button>

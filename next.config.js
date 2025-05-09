@@ -17,8 +17,13 @@ const nextConfig = {
     ],
   },
   webpack: (config) => {
-    // Create a new watchOptions object, copying from existing if it exists
-    const newWatchOptions = { ...(config.watchOptions || {}) };
+    // Ensure watchOptions exists and is an object, then modify it.
+    // Create a new object for watchOptions to avoid modifying a potentially frozen object.
+    const newWatchOptions = {
+      ...(config.watchOptions || {}), // Spread existing options
+      poll: typeof config.watchOptions?.poll === 'number' ? config.watchOptions.poll : 1000,
+      aggregateTimeout: typeof config.watchOptions?.aggregateTimeout === 'number' ? config.watchOptions.aggregateTimeout : 300,
+    };
 
     let existingIgnored = [];
     if (newWatchOptions.ignored) {
@@ -30,16 +35,16 @@ const nextConfig = {
         }
     }
 
-    newWatchOptions.ignored = [
-        ...existingIgnored,
+    // Define the paths to be added to the ignored list
+    const pathsToIgnore = [
         '**/.git/**',
         '**/node_modules/**',
         '**/src/data/**', 
         '**/.next/**',
     ];
-    
-    newWatchOptions.poll = typeof newWatchOptions.poll === 'number' ? newWatchOptions.poll : 1000;
-    newWatchOptions.aggregateTimeout = typeof newWatchOptions.aggregateTimeout === 'number' ? newWatchOptions.aggregateTimeout : 300;
+
+    // Add new paths to the existing ignored paths, ensuring no duplicates
+    newWatchOptions.ignored = Array.from(new Set([...existingIgnored, ...pathsToIgnore]));
     
     // Assign the new or modified watchOptions back to the config
     config.watchOptions = newWatchOptions;

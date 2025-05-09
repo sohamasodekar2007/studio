@@ -55,11 +55,9 @@ export default function ChallengeInvitesPage() {
       setPendingActiveInvites(currentPending);
       setPastInvites(currentPast);
 
-      // Update local storage for notification simulation when this page is visited
       if (typeof window !== 'undefined') {
         localStorage.setItem(`userChallengeInvites_${user.id}`, JSON.stringify(data.invites));
         localStorage.setItem(`lastSeenInvitesCount_${user.id}_header`, currentPending.length.toString());
-         // Trigger a custom event to let AppHeader know that invites page was visited, so it can refresh its dot
          window.dispatchEvent(new CustomEvent('invitesPageVisited'));
       }
 
@@ -92,7 +90,7 @@ export default function ChallengeInvitesPage() {
         toast({ title: `Challenge ${action === 'accept' ? 'Accepted' : 'Rejected'}!` });
         fetchInvites(); 
         if (action === 'accept' && result.challenge) {
-          router.push(`/challenge/lobby/${result.challenge.challengeCode}`); // Use challengeCode from result (which is the testCode)
+          router.push(`/challenge/lobby/${result.challenge.challengeCode}`); 
         }
       } else {
         throw new Error(result.message || `Failed to ${action} challenge.`);
@@ -255,7 +253,7 @@ export default function ChallengeInvitesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {getInviteStatusBadge(invite)}
-                   {invite.status === 'accepted' && ( // This should ideally check if the challenge itself is completed/started
+                   {invite.status === 'accepted' && ( 
                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
                         <Link href={`/challenge-test-result/${invite.challengeCode}`}>View Result</Link>
                      </Button>

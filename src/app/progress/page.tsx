@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, History, Eye, Loader2, RefreshCw, Swords } from 'lucide-react';
 import type { TestResultSummary, UserChallengeHistoryItem } from '@/types';
 import { getAllTestReportsForUser } from '@/actions/test-report-actions';
-import { getCompletedChallengesForUser } from '@/actions/challenge-actions'; // Updated import
+import { getCompletedChallengesForUser } from '@/actions/challenge-actions'; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ProgressPage() {

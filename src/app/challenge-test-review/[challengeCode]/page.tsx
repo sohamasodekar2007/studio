@@ -1,4 +1,4 @@
-// src/app/challenge-test-review/[testCode]/page.tsx
+// src/app/challenge-test-review/[challengeCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
-import type { Challenge, TestQuestion, UserAnswer, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types';
+import type { Challenge, TestQuestion, UserAnswer, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer, ChapterwiseTestJson } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { getChallengeDetails } from '@/actions/challenge-actions';
 import Image from 'next/image';
@@ -38,11 +38,10 @@ const OPTION_STYLES = {
 
 const constructPublicImagePath = (imagePath: string | null | undefined): string | null => {
     if (!imagePath) return null;
+    // Assuming imagePath from challenge questions is already a full public path
     if (imagePath.startsWith('/') || imagePath.startsWith('http')) return imagePath;
-    // This path construction might need adjustment if challenge question images are stored differently
-    // For now, assuming a similar structure to question_bank for consistency.
-    // If challenge images are directly in /public/challenge_images/{testCode}/ for example, adjust accordingly.
-    console.warn(`constructPublicImagePath in challenge review received: ${imagePath}. Assuming it's a direct public path or needs context.`);
+    // Fallback or further logic might be needed if paths are not absolute
+    console.warn(`constructPublicImagePath in challenge review received relative path: ${imagePath}. Ensure it's a full public path.`);
     return imagePath; 
 };
 
@@ -54,7 +53,7 @@ export default function ChallengeTestReviewPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const testCode = params.testCode as string; // Changed from challengeCode to testCode
+  const challengeCode = params.challengeCode as string; 
   const viewingUserId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -83,7 +82,7 @@ export default function ChallengeTestReviewPage() {
    }, []);
 
   const fetchChallengeData = useCallback(async () => {
-    if (!testCode || !viewingUserId) { 
+    if (!challengeCode || !viewingUserId) { 
       setError("Missing information to load challenge review.");
       setIsLoading(false);
       return;
@@ -91,8 +90,8 @@ export default function ChallengeTestReviewPage() {
     setIsLoading(true);
     setError(null);
     try {
-        const data = await getChallengeDetails(testCode); 
-        if (!data) throw new Error(`Challenge data not found for code ${testCode}.`); 
+        const data = await getChallengeDetails(challengeCode); 
+        if (!data) throw new Error(`Challenge data not found for code ${challengeCode}.`); 
         
         if (!data.participants[viewingUserId] || data.participants[viewingUserId].status !== 'completed') {
             setError("This user did not complete the challenge, or results are not available.");
@@ -105,20 +104,21 @@ export default function ChallengeTestReviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [testCode, viewingUserId]); 
+  }, [challengeCode, viewingUserId]); 
 
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
-        router.push(`/auth/login?redirect=/challenge-test-review/${testCode}?userId=${viewingUserId}`); 
+        router.push(`/auth/login?redirect=/challenge-test-review/${challengeCode}?userId=${viewingUserId}`); 
       } else if (user.id !== viewingUserId) {
-        console.warn("Attempting to view another user's challenge review. Current implementation might restrict this.");
+        // Allow viewing others' review if needed by changing logic here
+        console.warn("Attempting to view another user's challenge review.");
         fetchChallengeData();
       } else {
         fetchChallengeData();
       }
     }
-  }, [user, authLoading, router, testCode, viewingUserId, fetchChallengeData]); 
+  }, [user, authLoading, router, challengeCode, viewingUserId, fetchChallengeData]); 
 
   useEffect(() => {
     if (user?.id) {
@@ -147,7 +147,6 @@ export default function ChallengeTestReviewPage() {
   const totalQuestions = useMemo(() => allQuestionsFromChallenge.length || 0, [allQuestionsFromChallenge]);
   const optionKeys = useMemo(() => ["A", "B", "C", "D"], []);
 
-  // Get detailed answer for the current question from participant's answers
   const currentUserAnswerDetailed: UserAnswer | undefined = useMemo(() => {
       if (!participantData?.answers || !currentQuestionFromChallenge?.id) return undefined;
       return participantData.answers.find(ans => ans.questionId === currentQuestionFromChallenge.id);
@@ -169,8 +168,15 @@ export default function ChallengeTestReviewPage() {
             <Image src={publicImagePath} alt={context === 'question' ? "Question Image" : "Explanation Image"} width={800} height={600} className="rounded-md border bg-card object-contain" data-ai-hint={context === 'question' ? "question diagram" : "explanation image"} priority={currentQuestionReviewIndex < 3 && context === 'question'} unoptimized onError={(e) => { (e.target as HTMLImageElement).style.display = 'none';}} />
         </div>
       );
-    } else if (textContent) {
-      return <div className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content" dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />;
+    } 
+    
+    if (textContent) {
+      return (
+         <div
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground mathjax-content"
+            dangerouslySetInnerHTML={{ __html: textContent.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+         />
+      );
     }
     return <p className="text-sm text-muted-foreground">{context === 'question' ? 'Question content not available.' : 'Explanation not available.'}</p>;
   }, [currentQuestionFromChallenge, currentQuestionReviewIndex]);
@@ -257,7 +263,7 @@ export default function ChallengeTestReviewPage() {
     return (
       <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
         <AlertTriangle className="h-16 w-16 text-destructive mx-auto mb-4" /> <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Review</h1> <p className="text-muted-foreground mb-6">{error}</p>
-        <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> 
+        <Button asChild variant="outline"><Link href={`/challenge-test-result/${challengeCode}`}>Back to Results</Link></Button> 
       </div>
     );
   }
@@ -265,7 +271,7 @@ export default function ChallengeTestReviewPage() {
      return (
        <div className="container mx-auto py-8 px-4 max-w-3xl text-center">
          <HelpCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" /> <h1 className="text-2xl font-bold mb-2">Challenge Review Data Not Found</h1> <p className="text-muted-foreground mb-6">Could not load the details for this challenge review.</p>
-         <Button asChild variant="outline"><Link href={`/challenge-test-result/${testCode}`}>Back to Results</Link></Button> 
+         <Button asChild variant="outline"><Link href={`/challenge-test-result/${challengeCode}`}>Back to Results</Link></Button> 
        </div>
      );
   }
@@ -275,7 +281,7 @@ export default function ChallengeTestReviewPage() {
       <Script id="mathjax-script-challenge-review" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={typesetMathJax} />
     <div className="container mx-auto py-8 px-4 max-w-3xl space-y-6">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${testCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button> 
+          <Button variant="outline" size="sm" asChild><Link href={`/challenge-test-result/${challengeCode}`}><ArrowLeft className="mr-2 h-4 w-4" /> Back to Results</Link></Button> 
           <h1 className="text-xl md:text-2xl font-bold text-center flex-grow mx-2 truncate" title={`${challengeData.testConfig.subject} - ${challengeData.testConfig.lesson}`}>
             Challenge Review: {challengeData.testConfig.subject} - {challengeData.testConfig.lesson}
           </h1>
