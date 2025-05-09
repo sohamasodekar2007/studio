@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Construction, ArrowLeft, Users, BarChartHorizontal, Loader2, AlertCircle, Trophy, Scale } from "lucide-react";
+import { ArrowLeft, Users, BarChartHorizontal, Loader2, AlertCircle, Trophy, Scale, Swords } from "lucide-react"; // Added Swords
 import { useAuth } from '@/context/auth-context';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import Link from 'next/link';
@@ -18,18 +18,20 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 interface ComparisonData {
     userId: string;
     name: string | null;
     avatarUrl?: string | null;
     points: number;
-    commonTests: Array<Partial<TestResultSummary> & { friendScore?: number | null }>; // Store user's score and friend's score for common tests
+    commonTests: Array<Partial<TestResultSummary> & { friendScore?: number | null }>;
 }
 
 export default function FriendsComparePage() {
     const { user, loading: authLoading } = useAuth();
     const { toast } = useToast();
+    const router = useRouter(); // Initialize useRouter
     const [isLoading, setIsLoading] = useState(true);
     const [followingProfiles, setFollowingProfiles] = useState<Omit<UserProfile, 'password'>[]>([]);
     const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
@@ -39,7 +41,6 @@ export default function FriendsComparePage() {
 
     const isPremium = user?.model !== 'free';
 
-    // Fetch following list and their profiles
     useEffect(() => {
         const fetchData = async () => {
             if (!user?.id) {
@@ -65,7 +66,7 @@ export default function FriendsComparePage() {
         if (!authLoading && user) {
             fetchData();
         } else if (!authLoading && !user) {
-            setIsLoading(false); // Stop loading if user is not logged in
+            setIsLoading(false);
         }
     }, [user, authLoading, toast]);
 
@@ -75,13 +76,9 @@ export default function FriendsComparePage() {
         );
     };
 
-    const handleCompareClick = async () => {
+    const handleCompareNowClick = async () => {
         if (!user?.id || selectedFriends.length === 0) {
             toast({ variant: "destructive", title: "No Friends Selected", description: "Please select at least one friend to compare." });
-            return;
-        }
-        if (!isPremium) {
-            toast({ variant: "destructive", title: "Premium Feature", description: "Detailed comparison requires a premium plan." });
             return;
         }
 
@@ -90,69 +87,67 @@ export default function FriendsComparePage() {
         setCurrentUserData(null);
 
         try {
-            // Fetch current user's data
             const currentUserPointsPromise = getUserPoints(user.id);
-            const currentUserHistoryPromise = getAllTestReportsForUser(user.id);
+            // const currentUserHistoryPromise = getAllTestReportsForUser(user.id); // Keep for future common tests
 
-            // Fetch selected friends' data
             const friendsPointsPromises = selectedFriends.map(id => getUserPoints(id));
-            const friendsHistoryPromises = selectedFriends.map(id => getAllTestReportsForUser(id));
+            // const friendsHistoryPromises = selectedFriends.map(id => getAllTestReportsForUser(id)); // Keep for future
 
-            const [currentUserPoints, currentUserHistory, ...friendsData] = await Promise.all([
+            const [currentUserPoints, ...friendsData] = await Promise.all([
                  currentUserPointsPromise,
-                 currentUserHistoryPromise,
+                 // currentUserHistoryPromise, // Keep for future
                  ...friendsPointsPromises,
-                 ...friendsHistoryPromises
+                 // ...friendsHistoryPromises // Keep for future
             ]);
 
              const numFriends = selectedFriends.length;
              const friendsPoints = friendsData.slice(0, numFriends);
-             const friendsHistories = friendsData.slice(numFriends);
+             // const friendsHistories = friendsData.slice(numFriends); // Keep for future
 
-             // --- Process Current User Data ---
-              const currentUserProfile = await getUserById(user.id); // Fetch profile for avatar/name
+             const currentUserProfile = await getUserById(user.id);
               setCurrentUserData({
                   userId: user.id,
                   name: currentUserProfile?.name ?? 'You',
                   avatarUrl: currentUserProfile?.avatarUrl,
                   points: currentUserPoints?.totalPoints ?? 0,
-                  commonTests: [], // Initialize, will be populated later if needed
+                  commonTests: [], 
               });
 
-
-             // --- Process Friends' Data & Compare ---
             const friendComparisonResults: ComparisonData[] = [];
              for (let i = 0; i < numFriends; i++) {
                 const friendId = selectedFriends[i];
-                const friendProfile = followingProfiles.find(f => f.id === friendId); // Get profile from state
-                const friendPoints = friendsPoints[i];
-                const friendHistory = friendsHistories[i];
+                const friendProfile = followingProfiles.find(f => f.id === friendId);
+                const friendPointsData = friendsPoints[i];
+                // const friendHistory = friendsHistories[i]; // Keep for future
 
-                 // Find common tests (basic implementation for now)
-                const commonTestCodes = currentUserHistory
-                    .map(h => h.testCode)
-                    .filter(code => friendHistory.some(fh => fh.testCode === code));
-
-                 // TODO: Implement detailed comparison logic here
-                 // For now, just store points and basic info
                  friendComparisonResults.push({
                      userId: friendId,
                      name: friendProfile?.name ?? `User ${friendId.substring(0, 4)}`,
                      avatarUrl: friendProfile?.avatarUrl,
-                     points: friendPoints?.totalPoints ?? 0,
-                     commonTests: [], // Placeholder for detailed test comparison
+                     points: friendPointsData?.totalPoints ?? 0,
+                     commonTests: [],
                  });
             }
-
              setComparisonData(friendComparisonResults);
-
-
         } catch (error: any) {
              console.error("Comparison failed:", error);
              toast({ variant: "destructive", title: "Comparison Failed", description: error.message || "Could not fetch comparison data." });
         } finally {
             setIsComparing(false);
         }
+    };
+
+    const handleCreateChallengeClick = () => {
+        if (!user) {
+             toast({ variant: "destructive", title: "Login Required", description: "Please log in to create a challenge." });
+             router.push('/auth/login?redirect=/friends-compare');
+             return;
+        }
+        if (!isPremium) {
+            toast({ variant: "destructive", title: "Premium Feature", description: "Creating custom challenges requires a premium plan. Please upgrade." });
+            return;
+        }
+        router.push('/challenge/create');
     };
 
 
@@ -170,11 +165,10 @@ export default function FriendsComparePage() {
                 <Skeleton className="h-40 w-full" />
                 <Skeleton className="h-40 w-full" />
             </div>
-        ); // Or a proper loading skeleton
+        );
     }
 
-    if (!user) {
-        // Redirect handled by AuthContext usually, but good to have a fallback
+    if (!user && !authLoading) { // Check if user is null AFTER loading is false
         return (
              <div className="container mx-auto py-8 px-4 max-w-4xl text-center">
                  <p>Please log in to use this feature.</p>
@@ -183,22 +177,6 @@ export default function FriendsComparePage() {
          );
     }
 
-    if (!isPremium) {
-         return (
-            <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6 text-center">
-                 <h1 className="text-3xl font-bold tracking-tight">Compare Performance</h1>
-                 <Alert variant="default" className="text-left bg-primary/5 border-primary/20 max-w-lg mx-auto">
-                   <Scale className="h-4 w-4 text-primary" />
-                   <AlertTitle className="text-primary">Premium Feature</AlertTitle>
-                   <AlertDescription>
-                     Comparing performance with friends requires a premium plan. Upgrade to unlock detailed statistics and challenge features.
-                   </AlertDescription>
-                    {/* Optional: Add an upgrade button */}
-                    <Button size="sm" className="mt-4" disabled>Upgrade Plan (Coming Soon)</Button>
-                 </Alert>
-            </div>
-         );
-    }
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
@@ -206,17 +184,16 @@ export default function FriendsComparePage() {
           <Link href="/find-friends" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight text-center flex-grow">Compare Performance</h1>
-          <div className="w-8"></div> {/* Spacer */}
+          <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-center flex-grow">Compare Performance</h1>
+          <div className="w-8 hidden sm:block"></div> {/* Spacer for larger screens */}
         </div>
 
-      <p className="text-muted-foreground text-center">Select friends you follow to compare your performance stats.</p>
+      <p className="text-muted-foreground text-center text-sm sm:text-base">Select friends you follow to compare your performance stats, or create a challenge!</p>
 
-       {/* Friend Selection Card */}
       <Card>
         <CardHeader>
             <CardTitle>Select Friends to Compare</CardTitle>
-             <CardDescription>Choose up to 5 friends from your following list.</CardDescription>
+             <CardDescription>Choose up to 5 friends from your following list for statistical comparison.</CardDescription>
         </CardHeader>
         <CardContent>
            {followingProfiles.length === 0 ? (
@@ -230,7 +207,7 @@ export default function FriendsComparePage() {
                              id={`friend-${friend.id}`}
                              checked={selectedFriends.includes(friend.id)}
                              onCheckedChange={(checked) => handleFriendSelection(friend.id, !!checked)}
-                             disabled={selectedFriends.length >= 5 && !selectedFriends.includes(friend.id)} // Limit selection
+                             disabled={selectedFriends.length >= 5 && !selectedFriends.includes(friend.id)}
                         />
                         <Label htmlFor={`friend-${friend.id}`} className="flex items-center gap-2 text-sm font-normal cursor-pointer flex-grow">
                              <Avatar className="h-6 w-6">
@@ -246,21 +223,12 @@ export default function FriendsComparePage() {
             )}
         </CardContent>
         <CardFooter>
-             <Button onClick={handleCompareClick} disabled={selectedFriends.length === 0 || isComparing}>
+             <Button onClick={handleCompareNowClick} disabled={selectedFriends.length === 0 || isComparing}>
                  {isComparing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BarChartHorizontal className="mr-2 h-4 w-4" />}
-                 Compare Now
+                 Compare Stats
              </Button>
          </CardFooter>
       </Card>
-
-       {/* Comparison Results Section */}
-        {isComparing && (
-             <Card>
-                <CardContent className="p-6 flex items-center justify-center text-muted-foreground">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading comparison data...
-                </CardContent>
-             </Card>
-         )}
 
         {!isComparing && (currentUserData || comparisonData.length > 0) && (
              <Card>
@@ -269,7 +237,6 @@ export default function FriendsComparePage() {
                      <CardDescription>Comparing your stats with selected friends.</CardDescription>
                 </CardHeader>
                  <CardContent className="space-y-4">
-                    {/* Total Points Comparison */}
                     <div className="space-y-2">
                         <h3 className="text-lg font-semibold flex items-center gap-2"><Trophy className="h-5 w-5 text-yellow-500"/> Total Points</h3>
                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
@@ -296,30 +263,31 @@ export default function FriendsComparePage() {
                          </div>
                     </div>
 
-                     {/* Common Tests Comparison (Placeholder) */}
                     <div className="space-y-2 pt-4 border-t">
                          <h3 className="text-lg font-semibold flex items-center gap-2"><Scale className="h-5 w-5 text-blue-500"/> Common Tests Performance</h3>
                          <p className="text-sm text-muted-foreground">Detailed comparison of performance on tests taken by everyone selected (Coming Soon).</p>
-                         {/* TODO: Add table or list comparing scores/accuracy on common tests */}
                      </div>
                  </CardContent>
              </Card>
         )}
 
-        {/* Placeholder for Challenge Test Creation */}
-       <Card className="text-center border-dashed border-amber-500 bg-amber-50 dark:bg-amber-950">
+        {/* Create Challenge Test Card */}
+       <Card className="text-center bg-card border hover:shadow-md transition-shadow">
          <CardHeader>
            <div className="mx-auto bg-primary/10 rounded-full p-3 w-fit">
-             <Construction className="h-8 w-8 text-primary" />
+             <Swords className="h-8 w-8 text-primary" />
            </div>
            <CardTitle className="mt-4">Create Challenge Test</CardTitle>
            <CardDescription>Challenge your friends with a custom test!</CardDescription>
          </CardHeader>
          <CardContent>
-           <p className="text-muted-foreground mb-4">
-             This premium feature allows you to create custom tests (e.g., 20 questions on a specific topic) and invite friends to compete. This feature is currently under development.
+           <p className="text-muted-foreground mb-4 text-sm">
+             Create custom tests (e.g., 20 questions on a specific topic) and invite friends to compete.
+             This is a premium feature.
            </p>
-           <Button disabled>Create Challenge (Coming Soon)</Button>
+           <Button onClick={handleCreateChallengeClick}>
+                <Swords className="mr-2 h-4 w-4"/> Create Challenge
+            </Button>
          </CardContent>
        </Card>
     </div>
