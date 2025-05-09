@@ -10,15 +10,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { getPlatformSettings, updatePlatformSettings } from '@/actions/settings-actions';
-import type { PlatformSettings } from '@/types';
-import { Skeleton } from "@/components/ui/skeleton"; // Added import for Skeleton
+import type { PlatformSettings, PricingType } from '@/types'; // Import PricingType
+import { pricingTypes } from '@/types'; // Import pricingTypes for Select options
+import { Skeleton } from "@/components/ui/skeleton"; 
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"; // Import Select components
 
 export default function AdminSettingsPage() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
     const [newRegistrationsOpen, setNewRegistrationsOpen] = useState(true);
-    const [defaultTestAccess, setDefaultTestAccess] = useState<'free' | 'paid'>('free');
+    const [defaultTestAccess, setDefaultTestAccess] = useState<PricingType>('FREE'); // Use PricingType
     const [enableEmailNotifications, setEnableEmailNotifications] = useState(true);
     const [enableInAppNotifications, setEnableInAppNotifications] = useState(true);
     const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
@@ -29,7 +31,7 @@ export default function AdminSettingsPage() {
             .then(settings => {
                 if (settings) {
                     setNewRegistrationsOpen(settings.newRegistrationsOpen ?? true);
-                    setDefaultTestAccess(settings.defaultTestAccess ?? 'free');
+                    setDefaultTestAccess(settings.defaultTestAccess ?? 'FREE'); // Default to FREE if undefined
                     setEnableEmailNotifications(settings.enableEmailNotifications ?? true);
                     setEnableInAppNotifications(settings.enableInAppNotifications ?? true);
                     setMaintenanceModeEnabled(settings.maintenanceModeEnabled ?? false);
@@ -136,12 +138,26 @@ export default function AdminSettingsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="space-y-2 p-4 border rounded-lg">
-                        <Label htmlFor="default-access">Default Test Pricing (Example)</Label>
+                        <Label htmlFor="default-access">Default Test Access Type</Label>
                          <p className="text-sm text-muted-foreground pb-2">
-                           Set the default pricing model for newly created tests (can be overridden per test).
+                           Set the default access type for newly created tests (can be overridden per test).
                          </p>
-                        <Input id="default-access" value={defaultTestAccess} disabled className="max-w-xs" />
-                         <Button variant="outline" size="sm" disabled>Change</Button>
+                        <Select 
+                            value={defaultTestAccess} 
+                            onValueChange={(value: PricingType) => setDefaultTestAccess(value)}
+                            disabled={isLoading}
+                        >
+                            <SelectTrigger className="w-full sm:w-[200px]">
+                                <SelectValue placeholder="Select Access Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {pricingTypes.map(type => (
+                                    <SelectItem key={type} value={type} className="capitalize">
+                                        {type.replace('_', ' ').toLowerCase()}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </CardContent>
             </Card>
@@ -171,7 +187,7 @@ export default function AdminSettingsPage() {
                         <Label htmlFor="in-app-notifications" className="flex flex-col space-y-1">
                             <span>In-App Notifications</span>
                             <span className="font-normal leading-snug text-muted-foreground">
-                                Show notifications within the platform. (Coming Soon)
+                                Show notifications within the EduNexus platform. (Coming Soon)
                             </span>
                         </Label>
                         <Switch

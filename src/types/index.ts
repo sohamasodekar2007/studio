@@ -400,7 +400,7 @@ export interface AppNotification {
 export interface PlatformSettings {
   maintenanceModeEnabled: boolean;
   newRegistrationsOpen: boolean;
-  defaultTestAccess: 'free' | 'paid'; // Example, can be expanded
+  defaultTestAccess: PricingType; // Changed from 'free' | 'paid' to PricingType
   enableEmailNotifications: boolean;
   enableInAppNotifications: boolean;
   // Add other platform-wide settings here

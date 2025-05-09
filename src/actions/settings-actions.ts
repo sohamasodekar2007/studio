@@ -28,7 +28,7 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
   const defaultSettings: PlatformSettings = {
     maintenanceModeEnabled: false,
     newRegistrationsOpen: true,
-    defaultTestAccess: 'free',
+    defaultTestAccess: 'FREE', // Changed to PricingType
     enableEmailNotifications: true,
     enableInAppNotifications: true,
   };
