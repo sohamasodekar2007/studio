@@ -5,9 +5,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  ClipboardList, LineChart, ListChecks, Wand2, MessageSquare, Activity, ArrowRight,
+  ClipboardList, LineChart, ListChecks, MessageSquare, Activity, ArrowRight,
   Sparkles, Trophy, Users, BarChartBig, UserCircle, Percent, Target, BrainCircuit, BookOpen, NotebookIcon, Flame
-} from "lucide-react";
+} from "lucide-react"; // Removed Wand2
 import Link from "next/link";
 import Image from 'next/image';
 import { useAuth } from '@/context/auth-context';
@@ -43,8 +43,8 @@ export default function DashboardPage() {
     testsTaken: 0,
     averageScorePercent: 0,
     highestScorePercent: 0,
-    dppsCompleted: 0, // Placeholder
-    questionsPracticed: 0, // Placeholder
+    dppsCompleted: 0, 
+    questionsPracticed: 0, 
   });
   const [userPointsData, setUserPointsData] = useState<UserPoints | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -59,7 +59,6 @@ export default function DashboardPage() {
 
   const totalLoading = authLoading || isLoadingStats || isLoadingLeaderboard;
 
-  // Fetch performance stats and recent history
   useEffect(() => {
     if (user && user.id) {
       setIsLoadingStats(true);
@@ -88,19 +87,17 @@ export default function DashboardPage() {
           testsTaken: testsTakenCount,
           averageScorePercent: parseFloat(averageScorePercent.toFixed(1)),
           highestScorePercent: parseFloat(highestScorePercent.toFixed(1)),
-          dppsCompleted: 25, // Placeholder
-          questionsPracticed: 350, // Placeholder
+          dppsCompleted: 25, 
+          questionsPracticed: 350, 
         });
         setUserPointsData(pointsData);
         setRecentHistory(history.slice(0, 3));
       }).catch(error => {
         console.error("Error fetching dashboard data:", error);
-        // Set default/error states
       }).finally(() => {
         setIsLoadingStats(false);
       });
     } else if (!authLoading) {
-      // Reset if no user
       setIsLoadingStats(false);
       setPerformanceStats({ testsTaken: 0, averageScorePercent: 0, highestScorePercent: 0, dppsCompleted: 0, questionsPracticed: 0 });
       setUserPointsData(null);
@@ -109,9 +106,8 @@ export default function DashboardPage() {
     }
   }, [user, authLoading]);
 
-  // Fetch leaderboard data
    useEffect(() => {
-    if (user || !authLoading) { // Fetch leaderboard even for non-logged in, but rank will be N/A
+    if (user || !authLoading) { 
         setIsLoadingLeaderboard(true);
         Promise.all([
             getAllUserPoints(),
@@ -128,7 +124,7 @@ export default function DashboardPage() {
                     rank: index + 1,
                     userProfile: userMap.get(pointsEntry.userId) || null,
                 }));
-            setLeaderboard(rankedData.slice(0, 3)); // Top 3 for snapshot
+            setLeaderboard(rankedData.slice(0, 3)); 
             setTotalRankedUsers(rankedData.length);
 
             if (user && user.id) {
@@ -225,9 +221,7 @@ export default function DashboardPage() {
             <CardTitle className="text-lg font-semibold flex items-center gap-2"><BrainCircuit className="text-accent"/>AI Powered Tools</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button variant="secondary" className="w-full justify-start text-sm py-3 h-auto bg-accent/10 hover:bg-accent/20 border border-accent/20" asChild>
-              <Link href="/study-tips"><Wand2 className="mr-2 h-4 w-4" /> AI Study Tips</Link>
-            </Button>
+            {/* AI Study Tips Card Removed */}
             <Button variant="secondary" className="w-full justify-start text-sm py-3 h-auto bg-accent/10 hover:bg-accent/20 border border-accent/20" asChild>
               <Link href="/doubt-solving"><MessageSquare className="mr-2 h-4 w-4" /> Ask EduNexus AI</Link>
             </Button>
@@ -332,5 +326,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

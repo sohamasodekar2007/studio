@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Predicts a user's rank range based on their test performance relative to others.
@@ -75,68 +76,74 @@ const predictRankFlow = ai.defineFlow<
     outputSchema: PredictRankOutputSchema,
   },
   async (input) => {
-    // 1. Fetch all reports for the test
-    const allAttempts = await getAllReportsForTest(input.testCode);
+    try {
+      // 1. Fetch all reports for the test
+      const allAttempts = await getAllReportsForTest(input.testCode);
 
-    if (allAttempts.length === 0) {
-        return {
-            predictedRankRange: "N/A (No comparison data)",
-            feedback: "Cannot predict rank as no other attempts have been recorded for this test yet."
-        }
-    }
-
-    // 2. Calculate statistics (handle potential null/undefined scores)
-    const validScores = allAttempts.map(a => a.score).filter(s => typeof s === 'number') as number[];
-    const totalAttempts = validScores.length;
-    let averageScore: number | undefined;
-    let medianScore: number | undefined;
-    let highestScore: number | undefined;
-    let scoreDistributionSummary: string | undefined;
-
-
-    if (totalAttempts > 0) {
-        const sum = validScores.reduce((acc, score) => acc + score, 0);
-        averageScore = sum / totalAttempts;
-        highestScore = Math.max(...validScores);
-
-        // Calculate median
-        const sortedScores = [...validScores].sort((a, b) => a - b);
-        const mid = Math.floor(totalAttempts / 2);
-        medianScore = totalAttempts % 2 !== 0 ? sortedScores[mid] : (sortedScores[mid - 1] + sortedScores[mid]) / 2;
-
-        // Basic distribution summary (can be enhanced)
-         const firstQuartile = sortedScores[Math.floor(totalAttempts * 0.25)];
-         const thirdQuartile = sortedScores[Math.floor(totalAttempts * 0.75)];
-          if (firstQuartile !== undefined && thirdQuartile !== undefined) {
-             scoreDistributionSummary = `50% of scores fall between ${firstQuartile.toFixed(1)} and ${thirdQuartile.toFixed(1)}.`;
+      if (allAttempts.length === 0) {
+          return {
+              predictedRankRange: "N/A (No comparison data)",
+              feedback: "Cannot predict rank as no other attempts have been recorded for this test yet."
           }
+      }
+
+      // 2. Calculate statistics (handle potential null/undefined scores)
+      const validScores = allAttempts.map(a => a.score).filter(s => typeof s === 'number') as number[];
+      const totalAttempts = validScores.length;
+      let averageScore: number | undefined;
+      let medianScore: number | undefined;
+      let highestScore: number | undefined;
+      let scoreDistributionSummary: string | undefined;
+
+
+      if (totalAttempts > 0) {
+          const sum = validScores.reduce((acc, score) => acc + score, 0);
+          averageScore = sum / totalAttempts;
+          highestScore = Math.max(...validScores);
+
+          // Calculate median
+          const sortedScores = [...validScores].sort((a, b) => a - b);
+          const mid = Math.floor(totalAttempts / 2);
+          medianScore = totalAttempts % 2 !== 0 ? sortedScores[mid] : (sortedScores[mid - 1] + sortedScores[mid]) / 2;
+
+          // Basic distribution summary (can be enhanced)
+          const firstQuartile = sortedScores[Math.floor(totalAttempts * 0.25)];
+          const thirdQuartile = sortedScores[Math.floor(totalAttempts * 0.75)];
+            if (firstQuartile !== undefined && thirdQuartile !== undefined) {
+              scoreDistributionSummary = `50% of scores fall between ${firstQuartile.toFixed(1)} and ${thirdQuartile.toFixed(1)}.`;
+            }
+      }
+
+
+      // 3. Prepare prompt input
+      const promptInput = {
+          userScore: input.userScore,
+          totalMarks: input.totalMarks,
+          timeTakenMinutes: input.timeTakenMinutes,
+          durationMinutes: input.durationMinutes,
+          totalAttempts: allAttempts.length, 
+          averageScore: averageScore ? parseFloat(averageScore.toFixed(1)) : undefined,
+          medianScore: medianScore ? parseFloat(medianScore.toFixed(1)): undefined,
+          highestScore: highestScore,
+          scoreDistributionSummary: scoreDistributionSummary
+      };
+
+      console.log("Prompt Input for Rank Prediction:", promptInput);
+
+      // 4. Call the prompt
+      const { output } = await predictRankPrompt(promptInput);
+
+      if (!output) {
+        throw new Error("AI failed to generate rank prediction.");
+      }
+      return output;
+
+    } catch (flowError: any) {
+        console.error(`Error in predictRankFlow for test ${input.testCode}:`, flowError);
+        // Re-throw the error so it can be caught by the wrapper function or the page calling it.
+        // This ensures the client gets a proper error state.
+        throw new Error(`Rank prediction failed internally: ${flowError.message}`);
     }
-
-
-    // 3. Prepare prompt input
-    const promptInput = {
-        userScore: input.userScore,
-        totalMarks: input.totalMarks,
-        timeTakenMinutes: input.timeTakenMinutes,
-        durationMinutes: input.durationMinutes,
-        totalAttempts: allAttempts.length, // Use total reports fetched before filtering scores
-        averageScore: averageScore ? parseFloat(averageScore.toFixed(1)) : undefined,
-        medianScore: medianScore ? parseFloat(medianScore.toFixed(1)): undefined,
-        highestScore: highestScore,
-        scoreDistributionSummary: scoreDistributionSummary
-    };
-
-     console.log("Prompt Input for Rank Prediction:", promptInput);
-
-
-    // 4. Call the prompt
-    const { output } = await predictRankPrompt(promptInput);
-
-    if (!output) {
-      throw new Error("AI failed to generate rank prediction.");
-    }
-
-    return output;
   }
 );
 
@@ -146,5 +153,15 @@ export async function predictRank(input: PredictRankInput): Promise<PredictRankO
    if (input.totalMarks <= 0) {
       return { predictedRankRange: "N/A", feedback: "Invalid test data (total marks <= 0)." };
    }
-  return predictRankFlow(input);
+  try {
+    // IMPORTANT: await the flow execution
+    return await predictRankFlow(input);
+  } catch (error: any) {
+    // This catch block handles errors thrown from within predictRankFlow
+    console.error("Error calling predictRankFlow from wrapper:", error);
+    return {
+        predictedRankRange: "Error",
+        feedback: `Could not predict rank: ${error.message || "An unexpected error occurred."}`
+    };
+  }
 }

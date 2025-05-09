@@ -14,14 +14,13 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
   useSidebar,
-  SidebarMenuBadge, // Correctly import SidebarMenuBadge from here
+  SidebarMenuBadge,
 } from '@/components/ui/sidebar';
 import {
   Home,
   ListChecks,
   Settings,
   HelpCircle,
-  Wand2,
   ShieldCheck,
   MessageSquare,
   Activity,
@@ -36,17 +35,15 @@ import {
   Target,
   Info,
   BookUser,
-  MoreVertical, // Icon for the dropdown trigger
-  Sun, // For Theme Toggle inside dropdown
-  Moon, // For Theme Toggle inside dropdown
-  Swords, // For Create Challenge
-  Bell, // For Challenge Invites
+  MoreVertical, 
+  Sun, 
+  Moon, 
+  Swords, 
+  Bell, 
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-// ThemeToggle is now part of the dropdown, direct import might not be needed here if not used elsewhere in this file.
-// import ThemeToggle from '@/components/theme-toggle';
 import Image from 'next/image';
 import TutorialGuide from './tutorial-guide';
 import { useState, useEffect, useCallback } from 'react';
@@ -60,7 +57,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useTheme } from 'next-themes'; // Import useTheme for dropdown theme toggle
+import { useTheme } from 'next-themes';
+import type { ChallengeInvite } from '@/types';
 
 // Define Tutorial Steps Configuration
 const tutorialSteps: Step[] = [
@@ -120,12 +118,12 @@ const tutorialSteps: Step[] = [
   },
   {
     target: '#tutorial-target-ai-tools-group',
-    content: 'Utilize AI features like Study Tips and Doubt Solving (Premium).',
+    content: 'Utilize AI features like Doubt Solving (Premium).', // Updated content
     placement: 'right',
     disableBeacon: true,
   },
   {
-    target: '#tutorial-target-more-dropdown', // Target the dropdown trigger
+    target: '#tutorial-target-more-dropdown', 
     content: 'Access Settings, Help, Tutorial and Theme options here.',
     placement: 'right',
     disableBeacon: true,
@@ -139,16 +137,14 @@ export function AppSidebar() {
   const [runTutorial, setRunTutorial] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const { setOpen: setSidebarOpen, state: sidebarState } = useSidebar();
-  const { theme, setTheme } = useTheme(); // For theme toggle in dropdown
+  const { theme, setTheme } = useTheme(); 
 
   const isAdmin = user?.role === 'Admin';
-  const [pendingInvitesCount, setPendingInvitesCount] = useState(0); // Example state
+  const [pendingInvitesCount, setPendingInvitesCount] = useState(0); 
 
-  // TODO: In a real app, fetch pendingInvitesCount for the user
   useEffect(() => {
     if (user) {
-      // Example: fetchUserChallengeInvites(user.id).then(invites => setPendingInvitesCount(invites.filter(i => i.status === 'pending').length));
-      setPendingInvitesCount(0); // Placeholder for demo - set to 0 as challenges are not fully implemented
+      setPendingInvitesCount(0); 
     } else {
       setPendingInvitesCount(0);
     }
@@ -160,7 +156,7 @@ export function AppSidebar() {
         '/',
         '/settings',
         '/help',
-        '/study-tips',
+        // '/study-tips', // Removed
         '/doubt-solving',
         '/progress',
         '/notebooks',
@@ -171,18 +167,15 @@ export function AppSidebar() {
         '/friends-compare',
         '/pyq-mock-tests',
         '/pyq-dpps',
-        '/challenge/create', // Added
-        '/challenges/invites', // Added
+        '/challenge/create', 
+        '/challenges/invites', 
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    // For routes like /tests, /dpp, etc., check if pathname starts with href
-    // and also handle potential dynamic child routes correctly.
-    if (href.endsWith('/')) { // if href is a base path like /tests/
+    if (href.endsWith('/')) { 
         return pathname.startsWith(href);
     }
-    // For exact match or start match for non-index routes
     return pathname === href || pathname.startsWith(href + '/');
   };
 
@@ -196,18 +189,15 @@ export function AppSidebar() {
     } else if (type === EVENTS.STEP_AFTER || type === EVENTS.TARGET_NOT_FOUND) {
        const nextStepIndex = index + (action === ACTIONS.PREV ? -1 : 1);
        const nextStep = tutorialSteps[nextStepIndex];
-       // If sidebar is collapsed and the next step is a sidebar item, expand sidebar
        if (nextStep && typeof nextStep.target === 'string' && nextStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
            setSidebarOpen(true);
-           // Delay setting step index to allow sidebar to open
            setTimeout(() => {
                setStepIndex(nextStepIndex);
-           }, 300); // Adjust delay as needed for sidebar transition
+           }, 300); 
        } else {
            setStepIndex(index + (action === ACTIONS.PREV ? -1 : 1));
        }
     } else if (type === EVENTS.TOUR_START) {
-        // Ensure sidebar is open if the first step targets a sidebar item and sidebar is collapsed
         const firstStep = tutorialSteps[0];
          if (firstStep && typeof firstStep.target === 'string' && firstStep.target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
             setSidebarOpen(true);
@@ -217,14 +207,12 @@ export function AppSidebar() {
 
 
   const startTutorial = useCallback(() => {
-    // If sidebar is collapsed and first step is in sidebar, open it first
     if (tutorialSteps[0]?.target && typeof tutorialSteps[0].target === 'string' && tutorialSteps[0].target.startsWith('#tutorial-target-') && sidebarState === 'collapsed') {
        setSidebarOpen(true);
-       // Wait for sidebar to open, then start tutorial
        setTimeout(() => {
           setStepIndex(0);
           setRunTutorial(true);
-       }, 350); // Adjust delay based on sidebar animation
+       }, 350); 
     } else {
        setStepIndex(0);
        setRunTutorial(true);
@@ -234,27 +222,26 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
-        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
+        <SidebarHeader className="flex items-center justify-between p-4"> 
           <Link
             href="/"
             className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
             aria-label="EduNexus Home"
           >
-            {/* EduNexus Logo */}
             <Image
-                src="/EduNexus-logo-black.jpg" // Use black for light theme
+                src="/EduNexus-logo-black.jpg" 
                 alt="EduNexus Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 dark:hidden" // Hide on dark mode
+                className="h-8 w-8 dark:hidden" 
                 unoptimized
             />
              <Image
-                src="/EduNexus-logo-white.jpg" // Use white for dark theme
+                src="/EduNexus-logo-white.jpg" 
                 alt="EduNexus Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 hidden dark:block" // Show on dark mode
+                className="h-8 w-8 hidden dark:block" 
                 unoptimized
             />
             <h1 className="text-lg font-semibold">EduNexus</h1>
@@ -395,14 +382,7 @@ export function AppSidebar() {
 
             <SidebarGroup id="tutorial-target-ai-tools-group">
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">AI Tools</SidebarGroupLabel>
-              <SidebarMenuItem>
-                <Link href="/study-tips" passHref legacyBehavior>
-                  <SidebarMenuButton as="a" isActive={isActive('/study-tips')} tooltip="AI Study Tips" id="tutorial-target-study-tips">
-                    <Wand2 />
-                    <span className="group-data-[state=collapsed]:hidden">AI Study Tips</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
+              {/* AI Study Tips link removed */}
               <SidebarMenuItem>
                 <Link href="/doubt-solving" passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive('/doubt-solving')} tooltip="Doubt Solving" id="tutorial-target-doubt-solving">
@@ -446,9 +426,9 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                    side="top" // Change side to top
-                    align="center" // Align to center
-                    sideOffset={10} // Adjust offset as needed
+                    side="top" 
+                    align="center" 
+                    sideOffset={10} 
                     className="w-56 mb-2"
                 >
                     <DropdownMenuLabel>Options</DropdownMenuLabel>
