@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214379_4bad0d",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Agriculture"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe is used as a biofertilizer for soybean?",
+    "image": null
+  },
+  "options": {
+    "A": "Azospirillum",
+    "B": "Rhizobium",
+    "C": "Azotobacter",
+    "D": "Nostoc"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Rhizobium** forms root nodules in legumes (e.g., soybean) for nitrogen fixation.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.379Z",
+  "modified": "2025-05-09T16:30:14.379Z"
+}

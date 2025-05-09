@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214359_b5c25e",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which fungus is used to produce statins?",
+    "image": null
+  },
+  "options": {
+    "A": "Aspergillus terreus",
+    "B": "Penicillium chrysogenum",
+    "C": "Saccharomyces boulardii",
+    "D": "Mucor"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Statins** (cholesterol-lowering drugs) are produced by *Aspergillus terreus* and *Monascus purpureus*.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.360Z",
+  "modified": "2025-05-09T16:30:14.360Z"
+}

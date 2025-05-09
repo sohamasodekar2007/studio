@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214368_cd7e86",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'starter' in idli/dosa fermentation is:",
+    "image": null
+  },
+  "options": {
+    "A": "Yeast",
+    "B": "Lactic acid bacteria",
+    "C": "Both yeast and LAB",
+    "D": "Acetobacter"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Yeast** (CO<sub>2</sub> production) and **LAB** (souring) together ferment idli/dosa batter.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.368Z",
+  "modified": "2025-05-09T16:30:14.368Z"
+}

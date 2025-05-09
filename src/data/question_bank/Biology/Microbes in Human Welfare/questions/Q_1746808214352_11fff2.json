@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214352_11fff2",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Microbiology",
+    "Pharmaceuticals"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microbe produces cyclosporin A?",
+    "image": null
+  },
+  "options": {
+    "A": "Trichoderma polysporum",
+    "B": "Monascus purpureus",
+    "C": "Bacillus thuringiensis",
+    "D": "Streptococcus"
+  },
+  "correct": "A",
+  "explanation": {
+    "text": "**Cyclosporin A** (immunosuppressant) is derived from the fungus *Trichoderma polysporum*.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.353Z",
+  "modified": "2025-05-09T16:30:14.353Z"
+}

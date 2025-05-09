@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214347_4133d7",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Biotechnology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which bacterium converts milk into curd?",
+    "image": null
+  },
+  "options": {
+    "A": "Clostridium butyricum",
+    "B": "Lactobacillus acidophilus",
+    "C": "Rhizobium",
+    "D": "Methanobacterium"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Lactobacillus** spp. ferment lactose to lactic acid, coagulating milk proteins to form curd.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.347Z",
+  "modified": "2025-05-09T16:30:14.347Z"
+}

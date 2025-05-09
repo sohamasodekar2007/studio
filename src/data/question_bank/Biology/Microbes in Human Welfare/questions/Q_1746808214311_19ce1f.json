@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214311_19ce1f",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Easy",
+  "tags": [
+    "Microbiology",
+    "Industrial Applications"
+  ],
+  "type": "text",
+  "question": {
+    "text": "Which microorganism is used in the production of Swiss cheese?",
+    "image": null
+  },
+  "options": {
+    "A": "Lactobacillus",
+    "B": "Propionibacterium shermanii",
+    "C": "Saccharomyces cerevisiae",
+    "D": "Aspergillus niger"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Propionibacterium shermanii** produces CO<sub>2</sub> holes and propionic acid in Swiss cheese.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.311Z",
+  "modified": "2025-05-09T16:30:14.311Z"
+}

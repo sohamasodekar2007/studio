@@ -20,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from '@/hooks/use-toast';
-import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon, FileJson, FileUp, AlignLeft, FileType } from "lucide-react";
+import { ClipboardList, Loader2, ImagePlus, X, FileText, Upload, ClipboardPaste, Check, ChevronsUpDown, CalendarIcon, TagIcon, FileJson, FileUp, AlignLeft, FileType, Eye } from "lucide-react";
 import {
     type QuestionBankItem, questionTypes, difficultyLevels, exams, classLevels, type QuestionType,
     pyqShifts, type PyqShift, type ExamOption
@@ -31,6 +31,7 @@ import { getSubjects, getLessonsForSubject } from '@/actions/question-bank-query
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import Script from 'next/script';
+import JsonEditorDialog from '@/components/admin/json-editor-dialog'; // Import the new dialog
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -136,6 +137,10 @@ export default function AdminQuestionBankPage() {
 
   const [uploadMode, setUploadMode] = useState<'single' | 'bulk'>('single');
   const [jsonInputText, setJsonInputText] = useState(''); // State for JSON textarea
+  
+  const [isJsonEditorOpen, setIsJsonEditorOpen] = useState(false);
+  const [sampleJsonContent, setSampleJsonContent] = useState('');
+  const [isLoadingSampleJson, setIsLoadingSampleJson] = useState(false);
 
   const singleForm = useForm<SingleQuestionFormValues>({
     resolver: zodResolver(singleQuestionSchema),
@@ -184,7 +189,7 @@ export default function AdminQuestionBankPage() {
     setIsLoadingSubjects(true);
     getSubjects()
       .then(fetchedSubjects => {
-        const coreSubjects = ["Physics", "Chemistry", "Maths", "Biology"];
+        const coreSubjects = ["Physics", "Chemistry", "Mathematics", "Biology"]; // Added Maths and Bio
         const allSubjectsSet = new Set([...fetchedSubjects, ...coreSubjects]);
         setSubjects(Array.from(allSubjectsSet).sort());
       })
@@ -419,6 +424,25 @@ export default function AdminQuestionBankPage() {
     }
   };
 
+  const handleViewSampleJson = async () => {
+    setIsLoadingSampleJson(true);
+    try {
+      const response = await fetch('/sample-bulk-text-questions.json');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const jsonData = await response.json();
+      setSampleJsonContent(JSON.stringify(jsonData, null, 2)); // Prettify
+      setIsJsonEditorOpen(true);
+    } catch (error) {
+      console.error("Failed to fetch sample JSON:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load sample JSON." });
+    } finally {
+      setIsLoadingSampleJson(false);
+    }
+  };
+
+
   return (
     <>
       <Script
@@ -476,7 +500,7 @@ export default function AdminQuestionBankPage() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <FormField control={singleForm.control} name="subject" render={({ field }) => (<FormItem><FormLabel>Subject *</FormLabel><Select onValueChange={(value) => { field.onChange(value); }} value={field.value} disabled={isLoading || isLoadingSubjects}><FormControl><SelectTrigger><SelectValue placeholder={isLoadingSubjects ? "Loading..." : "Select Subject"} /></SelectTrigger></FormControl><SelectContent>{subjects.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                  <FormField control={singleForm.control} name="class" render={({ field }) => (<FormItem><FormLabel>Class Level *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger></FormControl><SelectContent>{classLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                  <FormField control={singleForm.control} name="class" render={({ field }) => (<FormItem><FormLabel>Class Level *</FormLabel><Select onValueChange={field.onChange} value={field.value ?? undefined} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger></FormControl><SelectContent>{classLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                   <FormField control={singleForm.control} name="lesson" render={({ field }) => (<FormItem className="flex flex-col"><FormLabel>Lesson Name *</FormLabel><Popover open={lessonPopoverOpen} onOpenChange={setLessonPopoverOpen}><PopoverTrigger asChild><FormControl><Button variant="outline" role="combobox" className={cn("w-full justify-between", !field.value && "text-muted-foreground")} disabled={isLoading || isLoadingLessons || !selectedSubject}><FileText className="mr-2 h-4 w-4 opacity-50" />{field.value ? lessons.find(l => l === field.value) || field.value : (isLoadingLessons ? "Loading..." : "Select or type Lesson")}<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command shouldFilter={false}><CommandInput placeholder="Search or type new lesson..." value={field.value ?? ''} onValueChange={field.onChange} disabled={isLoadingLessons || !selectedSubject} /><CommandList>{isLoadingLessons ? (<CommandItem disabled>Loading...</CommandItem>) : lessons.length === 0 && selectedSubject ? (<CommandEmpty>No existing lessons. Type to create new.</CommandEmpty>) : !selectedSubject ? (<CommandEmpty>Select Subject first.</CommandEmpty>) : null}<CommandGroup>{lessons.map((lesson) => (<CommandItem value={lesson} key={lesson} onSelect={() => { singleForm.setValue("lesson", lesson); setLessonPopoverOpen(false); }}><Check className={cn("mr-2 h-4 w-4", lesson === field.value ? "opacity-100" : "opacity-0")} />{lesson}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover><FormMessage /></FormItem>)} />
                   <FormField control={singleForm.control} name="examType" render={({ field }) => (<FormItem><FormLabel>Exam Type Tag *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl><SelectContent>{exams.map((exam) => <SelectItem key={exam} value={exam}>{exam}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                   <FormField control={singleForm.control} name="difficulty" render={({ field }) => (<FormItem><FormLabel>Difficulty *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Difficulty" /></SelectTrigger></FormControl><SelectContent>{difficultyLevels.map((level) => <SelectItem key={level} value={level}>{level}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -514,7 +538,18 @@ export default function AdminQuestionBankPage() {
                             <CardTitle className="flex items-center gap-2"><FileType className="h-5 w-5 text-primary"/> Bulk Question Upload</CardTitle>
                             <CardDescription>
                                 Upload multiple text-based questions using a JSON file or paste JSON content.
-                                Download sample JSON for text questions <a href="/sample-bulk-text-questions.json" download className="text-primary underline hover:text-primary/80">here</a>.
+                                View sample JSON for text questions {' '}
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  className="p-0 h-auto text-primary hover:text-primary/80"
+                                  onClick={handleViewSampleJson}
+                                  disabled={isLoadingSampleJson}
+                                >
+                                  {isLoadingSampleJson ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                                  here
+                                </Button>
+                                .
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -574,6 +609,19 @@ export default function AdminQuestionBankPage() {
             </Form>
         )}
       </div>
+      {isJsonEditorOpen && (
+        <JsonEditorDialog
+          isOpen={isJsonEditorOpen}
+          onClose={() => setIsJsonEditorOpen(false)}
+          jsonString={sampleJsonContent}
+          onSave={(editedJson) => {
+            // Handle saving the edited JSON if needed, e.g., update state or send to backend
+            setJsonInputText(editedJson); // Example: update the textarea for bulk upload
+            setIsJsonEditorOpen(false);
+            toast({title: "JSON Content Updated", description: "Pasted into the text area."});
+          }}
+        />
+      )}
     </>
   );
 }

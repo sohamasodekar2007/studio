@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214312_3734a5",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Microbiology",
+    "Food Technology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'Roquefort cheese' is ripened by:",
+    "image": null
+  },
+  "options": {
+    "A": "Bacteria",
+    "B": "Viruses",
+    "C": "Fungi",
+    "D": "Algae"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Penicillium roqueforti** (fungus) gives Roquefort cheese its characteristic blue veins and flavor.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.312Z",
+  "modified": "2025-05-09T16:30:14.312Z"
+}

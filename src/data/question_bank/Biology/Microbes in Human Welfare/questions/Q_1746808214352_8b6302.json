@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214352_8b6302",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Medium",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'BOD' test measures:",
+    "image": null
+  },
+  "options": {
+    "A": "Bacterial count in water",
+    "B": "Organic matter in water",
+    "C": "Oxygen demand by microbes",
+    "D": "Pesticide residues"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Biochemical Oxygen Demand (BOD)** estimates organic pollution by measuring O<sub>2</sub> consumed by microbes in 5 days.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.352Z",
+  "modified": "2025-05-09T16:30:14.352Z"
+}

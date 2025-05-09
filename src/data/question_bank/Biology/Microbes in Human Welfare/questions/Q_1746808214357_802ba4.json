@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214357_802ba4",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'activated sludge' in sewage treatment contains:",
+    "image": null
+  },
+  "options": {
+    "A": "Viruses",
+    "B": "Protozoans",
+    "C": "Aerobic bacteria",
+    "D": "Anaerobic bacteria"
+  },
+  "correct": "C",
+  "explanation": {
+    "text": "**Aerobic bacteria** in activated sludge digest organic matter during secondary sewage treatment.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.357Z",
+  "modified": "2025-05-09T16:30:14.357Z"
+}

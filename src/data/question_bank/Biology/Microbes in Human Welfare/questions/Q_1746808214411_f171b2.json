@@ -1,0 +1,33 @@
+{
+  "id": "Q_1746808214411_f171b2",
+  "subject": "Biology",
+  "lesson": "Microbes in Human Welfare",
+  "class": "12",
+  "examType": "MHT-CET",
+  "difficulty": "Hard",
+  "tags": [
+    "Environmental Science",
+    "Microbiology"
+  ],
+  "type": "text",
+  "question": {
+    "text": "The 'flocs' in sewage treatment are:",
+    "image": null
+  },
+  "options": {
+    "A": "Masses of algae",
+    "B": "Bacterial + fungal aggregates",
+    "C": "Virus clusters",
+    "D": "Protozoan cysts"
+  },
+  "correct": "B",
+  "explanation": {
+    "text": "**Flocs** are mesh-like structures of bacteria/fungi that digest organic matter in sewage.",
+    "image": null
+  },
+  "marks": 1,
+  "isPyq": false,
+  "pyqDetails": null,
+  "created": "2025-05-09T16:30:14.411Z",
+  "modified": "2025-05-09T16:30:14.411Z"
+}
