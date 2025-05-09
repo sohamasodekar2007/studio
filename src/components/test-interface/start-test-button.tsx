@@ -88,12 +88,20 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
     showUpgradePrompt = true; 
   }
 
-  // For non-chapterwise tests where interface might not be ready (as per previous logic)
-  // This logic can be adjusted if full_length and other interfaces are implemented.
-  if (test.testType !== 'chapterwise') {
-     buttonText = 'Interface Coming Soon'; // Or direct to the specific interface if ready
-     isDisabled = true;
-     buttonIcon = <AlertTriangle className="mr-2 h-4 w-4" />;
+  // Determine which interface to link to based on testType
+  let testInterfacePath = '#'; // Default to '#' if interface not ready
+  if (test.testType === 'chapterwise') {
+    testInterfacePath = `/chapterwise-test/${test.test_code}?userId=${user?.id}`;
+  } else if (test.testType === 'full_length') {
+    // Currently, full_length test interface is not fully implemented.
+    // We can point to chapterwise for now or disable.
+    // For demonstration, let's assume it also points to chapterwise if no specific FL interface exists
+    // testInterfacePath = `/full-length-test/${test.test_code}?userId=${user?.id}`; // Ideal
+    testInterfacePath = `/chapterwise-test/${test.test_code}?userId=${user?.id}`; // Temporary
+    buttonText = 'Start Full Test (Demo)';
+    if (hasAccess && user) { // Only enable if user has access
+        isDisabled = false; // Keep enabled if accessible
+    }
   }
 
 
@@ -112,25 +120,17 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
          </Button>
       );
   }
-
-  // Construct the correct URL based on the test type
-  const testUrl = (user && user.id)
-    ? test.testType === 'chapterwise'
-      ? `/chapterwise-test/${test.test_code}?userId=${user.id}`
-      // Assuming full_length tests also use test_code and might have a different route
-      : test.testType === 'full_length'
-        ? `/full-length-test/${test.test_code}?userId=${user.id}` // Update if route is different
-        : '#' // Fallback for other types
-    : '#'; 
+  
+  const finalTestUrl = (user && user.id) ? testInterfacePath : '#';
 
   return (
     <Link
-        href={testUrl}
+        href={finalTestUrl}
         passHref
-        target={!isDisabled && testUrl !== '#' ? "_blank" : undefined} 
+        target={!isDisabled && finalTestUrl !== '#' ? "_blank" : undefined} 
         rel="noopener noreferrer"
         onClick={handleStartClick} 
-        className={`w-full sm:w-auto ${isDisabled || testUrl === '#' ? 'pointer-events-none' : ''}`} 
+        className={`w-full sm:w-auto ${isDisabled || finalTestUrl === '#' ? 'pointer-events-none' : ''}`} 
         aria-disabled={isDisabled}
     >
       <Button size="lg" className="w-full" variant={buttonVariant || "default"} disabled={isDisabled || authLoading}>

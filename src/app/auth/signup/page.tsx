@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GraduationCap, Loader2, Phone } from "lucide-react";
+import { Loader2, Phone } from "lucide-react"; // Removed GraduationCap
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { academicStatuses, type AcademicStatus, type UserProfile } from '@/types';
@@ -28,7 +28,7 @@ const signupSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
   phoneNumber: z.string().min(10, { message: "Please enter a valid 10-digit phone number." }).max(10, { message: "Phone number must be 10 digits." }).regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
   academicStatus: z.enum(academicStatuses, { required_error: "Please select your current academic status." }),
-  targetYear: z.string().min(4, { message: "Please select your target exam year." }), // Added targetYear
+  targetYear: z.string().min(4, { message: "Please select your target exam year." }), 
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -51,7 +51,7 @@ export default function SignupPage() {
       email: "",
       phoneNumber: "",
       academicStatus: undefined,
-      targetYear: "", // Default to empty string for placeholder
+      targetYear: "", 
       password: "",
       confirmPassword: "",
     },
@@ -74,7 +74,7 @@ export default function SignupPage() {
         data.name,
         data.phoneNumber,
         data.academicStatus,
-        data.targetYear // Pass targetYear
+        data.targetYear 
       );
       // Success toast and redirection handled by AuthContext
     } catch (error: any) {
@@ -86,7 +86,7 @@ export default function SignupPage() {
   };
 
   // Update combinedLoading
-  const combinedLoading = isLoading || authLoading; // Removed isOtpLoading
+  const combinedLoading = isLoading || authLoading; 
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -95,23 +95,23 @@ export default function SignupPage() {
           <div className="flex justify-center mb-4">
              {/* EduNexus Logo */}
               <Image
-                  src="/EduNexus-logo-black.jpg" // Assuming black logo for light theme
+                  src="/EduNexus-logo-black.jpg" 
                   alt="EduNexus Logo"
                   width={48}
                   height={48}
-                  className="h-12 w-12 dark:hidden" // Hide on dark mode
+                  className="h-12 w-12 dark:hidden" 
                   unoptimized
               />
              <Image
-                src="/EduNexus-logo-white.jpg" // White logo for dark theme
+                src="/EduNexus-logo-white.jpg" 
                 alt="EduNexus Logo"
-                width={48} // Adjust size as needed
+                width={48} 
                 height={48}
-                className="h-12 w-12 hidden dark:block" // Show only on dark mode
-                unoptimized // Good for local images
+                className="h-12 w-12 hidden dark:block" 
+                unoptimized 
             />
           </div>
-          <CardTitle className="text-2xl font-bold">Join EduNexus</CardTitle> {/* Updated Title */}
+          <CardTitle className="text-2xl font-bold">Join EduNexus</CardTitle> 
           <CardDescription>Create your account to start practicing.</CardDescription>
         </CardHeader>
         <Form {...form}>

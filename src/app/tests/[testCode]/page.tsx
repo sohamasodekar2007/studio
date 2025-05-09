@@ -38,7 +38,7 @@ const getPricingBadgeClasses = (pricing: PricingType): string => {
 };
 
 export default async function TestDetailPage({ params }: { params: { testCode: string } }) {
-  const testCode = params.testCode; // Changed from testId to testCode
+  const testCode = params.testCode; 
   const testData = await getGeneratedTestByCode(testCode);
 
   if (!testData) {
