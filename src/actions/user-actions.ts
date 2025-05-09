@@ -10,18 +10,13 @@ import crypto from 'crypto'; // Import crypto for hashing
 
 const SALT_ROUNDS = 10;
 const usersFilePath = path.join(process.cwd(), 'src', 'data', 'users.json');
-const dataAvatarsPath = path.join(process.cwd(), 'src', 'data', 'avatars'); // For storing uploaded avatars
-const dataBasePath = path.join(process.cwd(), 'src', 'data'); // Base data directory
-
-// --- IMPORTANT NOTE ON users.json PERSISTENCE ---
-// See README.md for notes on data persistence in serverless environments.
-// ---
+// Avatars are now stored in public/avatars for direct serving
+const publicAvatarsPath = path.join(process.cwd(), 'public', 'avatars');
+const dataBasePath = path.join(process.cwd(), 'src', 'data');
 
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
-const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234';
-
-// --- Helper Functions ---
+const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234'; // Default password for primary admin
 
 async function ensureDirExists(dirPath: string): Promise<boolean> {
   try {
@@ -30,10 +25,9 @@ async function ensureDirExists(dirPath: string): Promise<boolean> {
   } catch (error: any) {
     if (error.code !== 'EEXIST') {
         console.error(`Error creating directory ${dirPath}:`, error);
-        // Instead of throwing, return false to indicate failure
         return false;
     }
-    return true; // Directory already exists
+    return true; 
   }
 }
 
@@ -63,12 +57,13 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
     let users: UserProfile[] = [];
     let writeNeeded = false;
 
-    try { // Wrap entire function logic
+    try { 
         if (!await ensureDirExists(dataBasePath)) {
              throw new Error(`Failed to create base data directory: ${dataBasePath}`);
         }
-        if (!await ensureDirExists(dataAvatarsPath)) {
-            throw new Error(`Failed to create avatars directory: ${dataAvatarsPath}`);
+        // Ensure public/avatars directory exists
+        if (!await ensureDirExists(publicAvatarsPath)) { 
+            throw new Error(`Failed to create public avatars directory: ${publicAvatarsPath}`);
         }
 
         try {
@@ -77,7 +72,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             const parsedUsers = JSON.parse(fileContent);
             if (!Array.isArray(parsedUsers)) {
                 console.error('users.json does not contain a valid array. Re-initializing.');
-                users = []; // Initialize as empty array
+                users = []; 
                 writeNeeded = true;
             } else {
                 users = parsedUsers as UserProfile[];
@@ -86,14 +81,11 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             if (error.code === 'ENOENT') {
                 console.warn('users.json not found. Creating file with default admin.');
                 writeNeeded = true;
-                users = []; // Initialize as empty array
+                users = []; 
             } else {
                 console.error('Error reading or parsing users.json:', error);
-                // Initialize as empty to allow admin creation, but mark for write
                 users = [];
                 writeNeeded = true;
-                 // Optionally, rethrow a more specific error if parsing fails critically
-                // throw new Error(`Failed to read or parse users.json: ${error.message}`);
             }
         }
 
@@ -150,14 +142,14 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             if (currentUser.class === undefined) { currentUser.class = null; userModified = true; }
             if (currentUser.phone === undefined) { currentUser.phone = null; userModified = true; }
             if (currentUser.referral === undefined) { currentUser.referral = ''; userModified = true; }
-             if (currentUser.totalPoints === undefined) { currentUser.totalPoints = 0; userModified = true; }
-             if (currentUser.targetYear === undefined) { currentUser.targetYear = null; userModified = true; } // Initialize targetYear
+            if (currentUser.totalPoints === undefined) { currentUser.totalPoints = 0; userModified = true; }
+            if (currentUser.targetYear === undefined) { currentUser.targetYear = null; userModified = true; }
 
 
             processedUsers.push(currentUser);
             if (userModified) writeNeeded = true;
         }
-        users = processedUsers; // Use the processed list from now on
+        users = processedUsers; 
 
         const primaryAdminEffectiveEmail = primaryAdminEmail.toLowerCase();
         let adminUserIndex = users.findIndex(u => u.email?.toLowerCase() === primaryAdminEffectiveEmail);
@@ -165,7 +157,7 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
 
         if (!adminPasswordHash || typeof adminPasswordHash !== 'string' || (!adminPasswordHash.startsWith('$2a$') && !adminPasswordHash.startsWith('$2b$'))) {
             try { adminPasswordHash = await bcrypt.hash(defaultAdminPassword, SALT_ROUNDS); writeNeeded = true; }
-            catch (hashError) { console.error("CRITICAL: Failed to hash default admin password:", hashError); adminPasswordHash = defaultAdminPassword; } // Fallback, though not ideal
+            catch (hashError) { console.error("CRITICAL: Failed to hash default admin password:", hashError); adminPasswordHash = defaultAdminPassword; } 
         } else {
              try {
                 const passwordMatch = await bcrypt.compare(defaultAdminPassword, adminPasswordHash);
@@ -186,9 +178,9 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
             if (currentAdmin.expiry_date !== '2099-12-31T00:00:00.000Z') { currentAdmin.expiry_date = '2099-12-31T00:00:00.000Z'; adminModified = true; }
             if (adminModified) writeNeeded = true;
         } else {
-            if (!adminPasswordHash) { // Should be hashed by now, but double check
+            if (!adminPasswordHash) { 
                 try { adminPasswordHash = await bcrypt.hash(defaultAdminPassword, SALT_ROUNDS); }
-                catch { adminPasswordHash = defaultAdminPassword; } // Fallback
+                catch { adminPasswordHash = defaultAdminPassword; } 
             }
             users.push({
                 id: uuidv4(), email: primaryAdminEmail, password: adminPasswordHash, name: 'Admin User (Primary)',
@@ -208,7 +200,6 @@ async function readAndInitializeUsersInternal(): Promise<UserProfile[]> {
         return users;
     } catch (initError: any) {
         console.error("FATAL: Unrecoverable error during user data initialization process:", initError);
-        // This error will propagate. Server actions calling this should catch it.
         throw new Error(`User data system initialization failed: ${initError.message}`);
     }
 }
@@ -221,8 +212,6 @@ export async function readUsers(): Promise<Array<Omit<UserProfile, 'password'>>>
     return usersWithData.map(({ password, ...user }) => user);
   } catch (error: any) {
     console.error("Error in readUsers:", error.message);
-    // Depending on how critical this is, you might rethrow or return empty array
-    // For now, returning empty array if initialization fails at a high level
     return [];
   }
 }
@@ -239,41 +228,42 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
   }
 }
 
-
+// Updated to save to public/avatars
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
-        if (!await ensureDirExists(dataAvatarsPath)) {
-             console.error(`Failed to ensure avatars directory exists: ${dataAvatarsPath}`);
+        if (!await ensureDirExists(publicAvatarsPath)) { // Save to public path
+             console.error(`Failed to ensure public avatars directory exists: ${publicAvatarsPath}`);
              return null;
         }
         const fileBuffer = Buffer.from(await avatarFile.arrayBuffer());
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         const extension = path.extname(avatarFile.name).substring(1) || 'png';
         const filename = `avatar-${userId}-${uniqueSuffix}.${extension}`;
-        const filePath = path.join(dataAvatarsPath, filename);
+        const filePath = path.join(publicAvatarsPath, filename); // Path within public
 
         await fs.writeFile(filePath, fileBuffer);
-        console.log(`Avatar saved locally for user ${userId}: ${filePath}`);
-        return filename;
+        console.log(`Avatar saved to public path for user ${userId}: ${filePath}`);
+        return filename; // Return only the filename
     } catch (error) {
         console.error(`Error saving avatar locally for user ${userId}:`, error);
         return null;
     }
 }
 
+// Updated to delete from public/avatars
 async function deleteAvatarLocally(filename: string): Promise<boolean> {
     try {
-        const filePath = path.join(dataAvatarsPath, filename);
-        await fs.access(filePath); // Check if file exists before unlinking
+        const filePath = path.join(publicAvatarsPath, filename); // Path within public
+        await fs.access(filePath); 
         await fs.unlink(filePath);
-        console.log(`Deleted local avatar: ${filePath}`);
+        console.log(`Deleted local public avatar: ${filePath}`);
         return true;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            console.warn(`Avatar file not found for deletion (local): ${filename}`);
-            return true; // Still success if file doesn't exist
+            console.warn(`Public avatar file not found for deletion: ${filename}`);
+            return true; 
         }
-        console.error(`Error deleting local avatar ${filename}:`, error);
+        console.error(`Error deleting local public avatar ${filename}:`, error);
         return false;
     }
 }
@@ -304,7 +294,7 @@ export async function addUserToJson(
             expiryDate = '2099-12-31T00:00:00.000Z';
         } else if (userModel === 'free') {
             expiryDate = null;
-        } else if (!expiryDate) { // Check if expiry date is provided for paid models
+        } else if (!expiryDate) { 
             return { success: false, message: "Expiry date is required for paid models." };
         }
 
@@ -316,13 +306,13 @@ export async function addUserToJson(
             phone: newUserProfileData.phone || null,
             class: newUserProfileData.class || null,
             model: userModel,
-            role: assignedRole, // Store the role
+            role: assignedRole, 
             expiry_date: expiryDate,
             createdAt: new Date().toISOString(),
             avatarUrl: null,
             referral: '',
             totalPoints: 0,
-            targetYear: newUserProfileData.targetYear || null, // Add targetYear
+            targetYear: newUserProfileData.targetYear || null,
         };
 
         let users = await readAndInitializeUsersInternal();
@@ -347,7 +337,7 @@ export async function addUserToJson(
 
 export async function updateUserInJson(
     userId: string,
-    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'totalPoints'>> & { avatarFile?: File | null, removeAvatar?: boolean }
+    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'totalPoints' | 'email' | 'role'>> & { avatarFile?: File | null, removeAvatar?: boolean }
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
         if (!userId || typeof userId !== 'string') {
@@ -362,7 +352,8 @@ export async function updateUserInJson(
         }
 
         const existingUser = users[userIndex];
-        const currentRole = existingUser.role; 
+        // Email and role cannot be changed through this function
+        // They are managed by updateUserRole and specific email change logic (if implemented)
 
         const { avatarFile, removeAvatar, ...otherUpdates } = updatedData;
         let newAvatarFilename = existingUser.avatarUrl || null;
@@ -375,53 +366,32 @@ export async function updateUserInJson(
             await deleteAvatarLocally(existingUser.avatarUrl);
             newAvatarFilename = null;
         }
-
-        const newEmail = otherUpdates.email?.trim().toLowerCase() || existingUser.email?.trim().toLowerCase();
-        const isEmailChanged = newEmail !== existingUser.email?.trim().toLowerCase();
-
-        if (existingUser.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && isEmailChanged) {
-            return { success: false, message: "Cannot change the email of the primary admin account." };
-        }
-
-        const newRoleDerivedByNewEmail = getRoleFromEmail(newEmail);
-        if (currentRole === 'User' && newRoleDerivedByNewEmail === 'Admin') {
-            return { success: false, message: `Cannot change email to an admin format ('${newEmail}') for a User role unless role is also changed to Admin.` };
-        }
-        if (currentRole === 'Admin' && newRoleDerivedByNewEmail === 'User') {
-            return { success: false, message: `Cannot change email to a non-admin format for an Admin role unless role is also changed to User.` };
-        }
-        if (isEmailChanged) {
-            const conflictingUser = users.find(u => u.email?.toLowerCase() === newEmail && u.id !== userId);
-            if (conflictingUser) {
-                return { success: false, message: `Email ${newEmail} is already in use by another account.` };
+        
+        // Apply other updatable fields
+        const userWithUpdatesApplied: UserProfile = {
+            ...existingUser,
+            name: otherUpdates.name !== undefined ? otherUpdates.name : existingUser.name,
+            phone: otherUpdates.phone !== undefined ? otherUpdates.phone : existingUser.phone, // Phone is now NOT editable via settings page
+            class: otherUpdates.class !== undefined ? otherUpdates.class : existingUser.class,
+            model: otherUpdates.model !== undefined ? otherUpdates.model : existingUser.model,
+            expiry_date: otherUpdates.expiry_date !== undefined 
+                            ? (otherUpdates.expiry_date instanceof Date ? otherUpdates.expiry_date.toISOString() : otherUpdates.expiry_date) 
+                            : existingUser.expiry_date,
+            targetYear: otherUpdates.targetYear !== undefined ? otherUpdates.targetYear : existingUser.targetYear,
+            avatarUrl: newAvatarFilename,
+            // Preserve existing email and role
+            email: existingUser.email,
+            role: existingUser.role,
+        };
+         // Validate model and expiry for non-admin users
+         if (userWithUpdatesApplied.role === 'User') {
+            if (userWithUpdatesApplied.model === 'free') {
+                userWithUpdatesApplied.expiry_date = null;
+            } else if (!userWithUpdatesApplied.expiry_date) {
+                 return { success: false, message: "Expiry date is required for paid models." };
             }
         }
 
-        let finalModel = otherUpdates.model ?? existingUser.model;
-        let finalExpiryDate = otherUpdates.expiry_date !== undefined
-                               ? (otherUpdates.expiry_date instanceof Date ? otherUpdates.expiry_date : (otherUpdates.expiry_date ? new Date(otherUpdates.expiry_date) : null))
-                               : (existingUser.expiry_date ? new Date(existingUser.expiry_date) : null);
-
-        if (currentRole === 'Admin') {
-            finalModel = 'combo';
-            finalExpiryDate = new Date('2099-12-31T00:00:00.000Z');
-        } else if (finalModel === 'free') {
-            finalExpiryDate = null;
-        } else if (!finalExpiryDate) {
-           return { success: false, message: "Expiry date is required for paid models." };
-        }
-        const finalExpiryDateString = finalExpiryDate ? finalExpiryDate.toISOString() : null;
-
-        const userWithUpdatesApplied: UserProfile = {
-            ...existingUser,
-            ...otherUpdates,
-            email: newEmail,
-            avatarUrl: newAvatarFilename,
-            model: finalModel,
-            expiry_date: finalExpiryDateString,
-            role: currentRole, // Ensure existing role is maintained
-            targetYear: otherUpdates.targetYear !== undefined ? otherUpdates.targetYear : existingUser.targetYear, // Update targetYear
-        };
 
         users[userIndex] = userWithUpdatesApplied;
         const success = await writeUsers(users);
@@ -436,6 +406,7 @@ export async function updateUserInJson(
         return { success: false, message: `Server error: ${error.message || 'Could not update user.'}` };
     }
 }
+
 
 export async function updateUserRole(
     userId: string,
@@ -474,8 +445,11 @@ export async function updateUserRole(
         if (newRole === 'Admin') {
             userToUpdate.model = 'combo';
             userToUpdate.expiry_date = '2099-12-31T00:00:00.000Z';
-        } else {
-            if (userToUpdate.model === 'combo') {
+        } else { 
+            // When demoting to User, revert to 'free' if they were 'combo'
+            // Or keep their existing plan if it was 'chapterwise' or 'full_length'
+            // For simplicity, we'll set to 'free' here. More complex logic can be added.
+            if (userToUpdate.model === 'combo' || userToUpdate.model === 'Admin') { // 'Admin' model type is legacy, ensure it's handled
                 userToUpdate.model = 'free';
                 userToUpdate.expiry_date = null;
             }
@@ -495,6 +469,7 @@ export async function updateUserRole(
         return { success: false, message: `Server error: ${error.message || 'Could not update role.'}` };
     }
 }
+
 
 export async function deleteUserFromJson(userId: string): Promise<{ success: boolean; message?: string }> {
     try {
@@ -571,7 +546,7 @@ export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanVa
         if (!userId) {
             return { isPlanValid: false, message: "User ID not provided." };
         }
-        const currentUser = await getUserById(userId); // This now correctly handles potential errors
+        const currentUser = await getUserById(userId); 
         if (!currentUser) {
             return { isPlanValid: false, message: "User not found." };
         }
@@ -611,12 +586,12 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
       users[userIndex] = {
           ...existingUser,
           ...userData,
-          password: newPasswordHash, // Use potentially re-hashed password
+          password: newPasswordHash, 
           role: userData.role ?? existingUser.role ?? getRoleFromEmail(userData.email),
           totalPoints: userData.totalPoints ?? existingUser.totalPoints ?? 0,
           createdAt: userData.createdAt ?? existingUser.createdAt ?? new Date().toISOString(),
           id: userData.id ?? existingUser.id ?? uuidv4(),
-          targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear, // Update targetYear
+          targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear, 
       };
     } else {
       const assignedRole = userData.role || getRoleFromEmail(userData.email);
@@ -634,14 +609,12 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
         role: assignedRole,
         password: hashedPassword,
         totalPoints: userData.totalPoints ?? 0,
-        targetYear: userData.targetYear !== undefined ? userData.targetYear : null, // Add targetYear with default
+        targetYear: userData.targetYear !== undefined ? userData.targetYear : null,
       });
     }
     return await writeUsers(users);
   } catch (error: any) {
     console.error('Error in saveUserToJson:', error);
-    // Consider the implications of returning false vs. throwing
-    // For a generic "save" operation, returning false might be acceptable if the caller handles it.
     return false;
   }
 }

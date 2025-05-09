@@ -13,160 +13,143 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2, ShieldCheck, AlertTriangle, Phone, Edit, KeyRound, UserCheck, User } from "lucide-react"; // Added missing icons
+import { CalendarIcon, Loader2, ShieldCheck, AlertTriangle, Phone, Edit, KeyRound, UserCheck, User } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
-import { type UserProfile, userModels, academicStatuses, type AcademicStatus } from '@/types';
-import { updateUserInJson, findUserByEmailInternal } from '@/actions/user-actions'; // Import necessary actions
+import { type UserProfile, userModels, academicStatuses, type AcademicStatus, type UserModel } from '@/types';
+import { updateUserInJson, findUserByEmailInternal } from '@/actions/user-actions';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Added Avatar imports
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-// Define the allowed admin email pattern and primary admin email
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 
-// Generate year options for target year
-const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: 6 }, (_, i) => (currentYear + i).toString());
+// Generate dynamic year options for Target Year
+const getCurrentAndFutureYears = (count = 3) => {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: count }, (_, i) => (currentYear + i).toString());
+};
 
 
-// Schema for editing user profile, including email
-// Validation for email format related to role is handled in the server action (`updateUserInJson`)
 const editUserSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Invalid email address." }),
-  phone: z.string()
-           .min(10, { message: "Please enter a valid 10-digit phone number." })
-           .max(10, { message: "Phone number must be 10 digits." })
-           .regex(/^\d{10}$/, { message: "Please enter a valid 10-digit phone number." }),
-  class: z.enum(academicStatuses).nullable().optional(), // Allow null or value
+  phone: z.string().optional(), // Phone is now disabled for editing
+  class: z.enum(academicStatuses, { required_error: "Academic Status is required." }).nullable(),
   model: z.enum(userModels, { required_error: "Please select a user model." }),
   expiry_date: z.date().nullable().optional(),
-  targetYear: z.string().optional().nullable(), // Added targetYear
+  targetYear: z.string({required_error: "Target year is required."}).min(4, "Target year is required.").nullable(),
 }).refine(data => data.model === 'free' || (data.model !== 'free' && data.expiry_date), {
   message: "Expiry date is required for paid models.",
   path: ["expiry_date"],
 });
 
-// Define separate types for form values and the user prop for clarity
 type EditUserFormValues = z.infer<typeof editUserSchema>;
 type UserProfileWithRole = UserProfile & { role?: 'Admin' | 'User' };
 
 interface EditUserDialogProps {
-  user: UserProfileWithRole; // Accept user with optional role
+  user: UserProfileWithRole;
   isOpen: boolean;
   onClose: () => void;
-  onUserUpdate: (updatedUser: UserProfileWithRole) => void; // Pass back user with role
+  onUserUpdate: (updatedUser: UserProfileWithRole) => void;
 }
 
 export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: EditUserDialogProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [yearOptions, setYearOptions] = useState<string[]>([]);
 
-  // Determine if the current user IS the primary admin based on email
+  useEffect(() => {
+    setYearOptions(getCurrentAndFutureYears());
+  }, []);
+
   const isPrimaryAdminAccount = user.email === primaryAdminEmail;
-  // Determine the user's *current* role from the passed prop or default to User
   const currentUserRole = user.role || 'User';
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
-    defaultValues: {
-      name: user.name || '',
-      email: user.email || '', // Add email
-      phone: user.phone || '',
-      class: user.class || null, // Add class
-      model: currentUserRole === 'Admin' ? 'combo' : (user.model || 'free'), // Admins have combo
-      expiry_date: currentUserRole === 'Admin' ? new Date('2099-12-31T00:00:00.000Z') : (user.expiry_date && isValid(parseISO(user.expiry_date)) ? parseISO(user.expiry_date) : null),
-      targetYear: user.targetYear || null, // Set targetYear
-    },
+    defaultValues: {}, // Default values set in useEffect
   });
 
-  // Watch the selected model for conditional rendering
   const currentModel = form.watch("model");
 
-  // Effect to reset form when user prop changes (e.g., opening dialog for different user)
   useEffect(() => {
-      if (user) {
-          const effectiveRole = user.role || 'User'; // Use stored role or default
+      if (user && isOpen) { // Reset form when dialog opens or user changes
+          const effectiveRole = user.role || 'User';
           form.reset({
              name: user.name || '',
              email: user.email || '',
-             phone: user.phone || '',
+             phone: user.phone || '', // Keep phone value for display even if disabled
              class: user.class || null,
-             model: effectiveRole === 'Admin' ? 'combo' : (user.model || 'free'), // Enforce combo for admins
+             model: effectiveRole === 'Admin' ? 'combo' : (user.model || 'free'),
              expiry_date: effectiveRole === 'Admin' ? new Date('2099-12-31T00:00:00.000Z') : (user.expiry_date && isValid(parseISO(user.expiry_date)) ? parseISO(user.expiry_date) : null),
              targetYear: user.targetYear || null,
           });
       }
-  }, [user, form]);
+  }, [user, isOpen, form]);
 
 
   const onSubmit = async (data: EditUserFormValues) => {
     setIsLoading(true);
     try {
-        // --- Email Validation ---
         const newEmail = data.email.trim().toLowerCase();
         const originalEmail = user.email?.trim().toLowerCase();
 
-        // 1. Prevent changing primary admin's email
         if (isPrimaryAdminAccount && newEmail !== originalEmail) {
              throw new Error("Cannot change the email of the primary admin account.");
         }
 
-        // 2. Check if the new email is already taken (only if email changed)
         if (newEmail !== originalEmail) {
-            const existingUser = await findUserByEmailInternal(newEmail);
-            if (existingUser && existingUser.id !== user.id) {
+            const existingUserByNewEmail = await findUserByEmailInternal(newEmail);
+            if (existingUserByNewEmail && existingUserByNewEmail.id !== user.id) {
                  form.setError("email", { message: "This email address is already in use." });
                  throw new Error("Email address already in use.");
             }
         }
 
-         // 3. Ensure model/expiry constraints based on the *EXISTING* user role
-         const userRole = user.role || 'User'; // Use the role passed in props
+         const userRole = user.role || 'User';
          let finalModel = data.model;
          let finalExpiryDate = data.expiry_date;
 
          if (userRole === 'Admin') {
-             finalModel = 'combo'; // Admins always get combo
-             finalExpiryDate = new Date('2099-12-31T00:00:00.000Z'); // Admins get long expiry
+             finalModel = 'combo';
+             finalExpiryDate = new Date('2099-12-31T00:00:00.000Z');
          } else if (finalModel === 'free') {
-             finalExpiryDate = null; // Free users have null expiry
+             finalExpiryDate = null;
          } else if (!finalExpiryDate) {
               form.setError("expiry_date", { message: "Expiry date is required for paid models." });
              throw new Error("Expiry date missing for paid plan.");
          }
 
-
-       // Format expiry_date to ISO string or null BEFORE updating
        const expiryDateString = finalExpiryDate ? finalExpiryDate.toISOString() : null;
 
-       // Prepare the data payload specifically for the update action
-       // IMPORTANT: Do NOT include 'role' here. Role changes happen via `updateUserRole`.
-       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'referral' | 'avatarUrl' | 'role'>> = {
+       // Only send fields that are meant to be updated.
+       // Phone is not editable here. Email is conditionally editable.
+       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'referral' | 'avatarUrl' | 'role' | 'phone'>> & {email?: string} = {
          name: data.name,
-         email: newEmail, // Update email
-         phone: data.phone,
          class: data.class,
-         model: finalModel, // Pass the validated model
-         expiry_date: expiryDateString, // Pass the validated expiry
-         targetYear: data.targetYear || null, // Pass targetYear
+         model: finalModel,
+         expiry_date: expiryDateString,
+         targetYear: data.targetYear || null,
        };
 
-       // Save the updated UserProfile data via Server Action
+       if (newEmail !== originalEmail && !isPrimaryAdminAccount) {
+         updatedDataPayload.email = newEmail;
+       }
+
+
        const result = await updateUserInJson(user.id, updatedDataPayload);
 
-       if (!result.success || !result.user) { // Check if the updated user is returned
+       if (!result.success || !result.user) {
          throw new Error(result.message || 'Failed to update user.');
        }
 
        toast({
          title: 'User Updated',
-         description: `${newEmail}'s details have been successfully updated.`,
+         description: `${result.user.email}'s details have been successfully updated.`,
        });
 
-       // Pass back the updated user data (including the PRESERVED role)
-       onUserUpdate({ ...result.user, role: userRole }); // Pass original role back
-       onClose(); // Close dialog
+       onUserUpdate({ ...result.user, role: userRole });
+       onClose();
 
     } catch (error: any) {
       console.error('Failed to update user:', error);
@@ -188,69 +171,42 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg"> {/* Increased width */}
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-4">
-            <Avatar className="h-10 w-10">
-                <AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email}.png`} alt={user.name || 'User Avatar'} />
-                <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
-            </Avatar>
-            <div>
-                <DialogTitle>Edit User: {user.email}</DialogTitle>
-                <DialogDescription>
-                    Update the user's details and plan. Role changes are handled separately.
-                </DialogDescription>
-            </div>
-            <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'} className="ml-auto text-xs">
-                 {user.role || 'User'} {/* Display current role */}
-            </Badge>
+            <Avatar className="h-10 w-10"><AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email}.png`} alt={user.name || 'User Avatar'} /><AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback></Avatar>
+            <div><DialogTitle>Edit User: {user.email}</DialogTitle><DialogDescription>Update details and plan. Role changes via 'Change Role'.</DialogDescription></div>
+            <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'} className="ml-auto text-xs">{user.role || 'User'}</Badge>
           </div>
-           {isPrimaryAdminAccount && (
-                <Badge variant="destructive" className="w-fit text-xs mt-2">Primary Admin (Email/Plan/Role Locked)</Badge>
-           )}
+           {isPrimaryAdminAccount && (<Badge variant="destructive" className="w-fit text-xs mt-2">Primary Admin (Limited Edit)</Badge>)}
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-
             <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Full Name *</FormLabel><FormControl><Input {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
             <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email Address *</FormLabel><FormControl><Input type="email" {...field} disabled={isLoading || isPrimaryAdminAccount} /></FormControl><FormMessage /> {isPrimaryAdminAccount && <p className="text-xs text-muted-foreground pt-1">Primary admin email cannot be changed.</p>} </FormItem> )} />
-            <FormField control={form.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number *</FormLabel><FormControl><Input type="tel" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select status (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{academicStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+            <FormField control={form.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} disabled={true} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">Phone number cannot be edited here.</p></FormItem> )} />
             
-            <FormField
-              control={form.control}
-              name="targetYear"
-              render={({ field }) => (
+            <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status *</FormLabel><Select onValueChange={(value) => field.onChange(value as AcademicStatus | null)} value={field.value || ""} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{academicStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+            <FormField control={form.control} name="targetYear" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Target Year</FormLabel>
-                  <Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : field.value ?? '_none_'} disabled={isLoading}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select target year (Optional)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                       <SelectItem value="_none_">-- None --</SelectItem>
-                      {yearOptions.map((year) => (
-                        <SelectItem key={year} value={year}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                  <FormLabel>Target Exam Year *</FormLabel>
+                  <Select onValueChange={(value) => field.onChange(value)} value={field.value || ""} disabled={isLoading}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select target year" /></SelectTrigger></FormControl>
+                    <SelectContent>{yearOptions.map(year => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
+            )} />
 
-
-            {/* User Model Select - Disabled for Admins */}
             <FormField control={form.control} name="model" render={({ field }) => ( <FormItem><FormLabel>Subscription Model *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading || currentUserRole === 'Admin'}><FormControl><SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger></FormControl><SelectContent>{userModels.map((model) => (<SelectItem key={model} value={model} className="capitalize">{model.replace('_', ' ')}</SelectItem>))}</SelectContent></Select><FormMessage /> {currentUserRole === 'Admin' && <p className="text-xs text-muted-foreground pt-1">Admin accounts automatically have 'Combo' plan.</p>}</FormItem>)}/>
-
-            {/* Expiry Date Picker (Conditional and Disabled for Admins) */}
-            {currentModel !== 'free' && (
-                 <FormField control={form.control} name="expiry_date" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>Expiry Date {currentModel !== 'free' && currentUserRole !== 'Admin' ? '*' : ''}</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isLoading || currentUserRole === 'Admin'}><CalendarIcon className="ml-auto h-4 w-4 opacity-50" />{field.value ? format(field.value, "PPP") : <span>Pick expiry date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading || currentUserRole === 'Admin'} initialFocus /></PopoverContent></Popover><FormMessage /> {currentUserRole === 'Admin' && <p className="text-xs text-muted-foreground pt-1">Admin expiry date is fixed.</p>}</FormItem>)}/>
+            
+            {(currentModel !== 'free' && currentUserRole !== 'Admin') && (
+                 <FormField control={form.control} name="expiry_date" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>Expiry Date *</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")} disabled={isLoading || currentUserRole === 'Admin'}><CalendarIcon className="ml-auto h-4 w-4 opacity-50" />{field.value ? format(field.value, "PPP") : <span>Pick expiry date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading || currentUserRole === 'Admin'} initialFocus /></PopoverContent></Popover><FormMessage /></FormItem>)}/>
             )}
+            {currentUserRole === 'Admin' && currentModel !== 'free' && ( // Show fixed expiry for admin if not free (always combo)
+                <FormItem className="flex flex-col"><FormLabel>Expiry Date</FormLabel><Input value={format(new Date('2099-12-31T00:00:00.000Z'), "PPP")} disabled /><p className="text-xs text-muted-foreground pt-1">Admin expiry date is fixed.</p></FormItem>
+            )}
+
 
             <DialogFooter className="sm:col-span-2 mt-4">
                 <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>

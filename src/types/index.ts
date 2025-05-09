@@ -29,13 +29,13 @@ export interface UserProfile {
   phone: string | null;
   avatarUrl?: string | null; 
   referral?: string; 
-  class: AcademicStatus | null;
+  class: AcademicStatus | null; // This is the academic status
   model: UserModel; 
   role: 'Admin' | 'User'; 
   expiry_date: string | null; 
   createdAt?: string; 
   totalPoints?: number; 
-  targetYear?: string | null; // Added targetYear
+  targetYear?: string | null; 
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
