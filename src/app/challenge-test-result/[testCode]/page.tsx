@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, AlertTriangle, Trophy, Award, Medal, ListOrdered, Clock } from 'lucide-react'; // Removed Eye, BarChartBig
+import { Loader2, AlertTriangle, Trophy, Award, Medal, ListOrdered, Clock } from 'lucide-react';
 import type { Challenge, ChallengeParticipant } from '@/types';
 import { getChallengeResults } from '@/actions/challenge-actions';
 import Link from 'next/link';
@@ -20,7 +20,7 @@ export default function ChallengeTestResultPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
-  const testCode = params.testCode as string; 
+  const testCode = params.testCode as string; // Changed from challengeCode to testCode
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function ChallengeTestResultPage() {
         setError("Challenge results are not yet available or challenge has expired without completion.");
         setChallenge(data);
         if (data && (data.testStatus === 'waiting' || data?.testStatus === 'started')) {
-           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); 
+           setTimeout(() => router.push(`/challenge/lobby/${testCode}`), 3000); // Use testCode
         }
       } else {
         setChallenge(data);
@@ -53,7 +53,7 @@ export default function ChallengeTestResultPage() {
   useEffect(() => {
      if (!authLoading) {
         if (!user) {
-            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); 
+            router.push(`/auth/login?redirect=/challenge-test-result/${testCode}`); // Use testCode
             return;
         }
         fetchResults();

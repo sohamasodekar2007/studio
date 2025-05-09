@@ -1,4 +1,4 @@
-// src/app/challenge/lobby/[challengeCode]/page.tsx
+// src/app/challenge/lobby/[testCode]/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21,21 +21,21 @@ export default function ChallengeLobbyPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const challengeCode = params.challengeCode as string;
+  const testCode = params.testCode as string; // Changed from challengeCode to testCode
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
   const fetchChallenge = useCallback(async () => {
-    if (!challengeCode) {
+    if (!testCode) {
       setError("Invalid challenge link.");
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await getChallengeDetails(challengeCode);
+      const data = await getChallengeDetails(testCode);
       if (!data) {
         setError("Challenge not found or has expired.");
         setChallenge(null);
@@ -54,23 +54,23 @@ export default function ChallengeLobbyPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [challengeCode, router, user]);
+  }, [testCode, router, user]);
 
   useEffect(() => {
     if (!authLoading) {
         if (!user) {
-            router.push(`/auth/login?redirect=/challenge/lobby/${challengeCode}`);
+            router.push(`/auth/login?redirect=/challenge/lobby/${testCode}`);
             return;
         }
         fetchChallenge();
     }
-  }, [authLoading, user, challengeCode, fetchChallenge, router]);
+  }, [authLoading, user, testCode, fetchChallenge, router]);
 
   // Basic polling for demo "real-time" participant status updates
   useEffect(() => {
     if (challenge && challenge.testStatus === 'waiting' && user?.id !== challenge.creatorId) {
       const intervalId = setInterval(() => {
-        getChallengeDetails(challengeCode).then(data => {
+        getChallengeDetails(testCode).then(data => { // Use testCode here
           if (data) {
             setChallenge(currentChallenge => {
               if (JSON.stringify(currentChallenge?.participants) !== JSON.stringify(data.participants) || currentChallenge?.testStatus !== data.testStatus) {
@@ -80,7 +80,7 @@ export default function ChallengeLobbyPage() {
             });
             if (data.testStatus === 'started') {
               clearInterval(intervalId);
-              // Use data.challengeCode for navigation
+              // Use data.challengeCode for navigation as it's the actual test code stored in the challenge object
               router.replace(`/challenge-test/${data.challengeCode}?userId=${user!.id}`);
             }
           }
@@ -88,14 +88,14 @@ export default function ChallengeLobbyPage() {
       }, 5000); 
       return () => clearInterval(intervalId);
     }
-  }, [challenge, user, challengeCode, router]);
+  }, [challenge, user, testCode, router]);
 
 
   const handleStartChallenge = async () => {
     if (!challenge || !user || user.id !== challenge.creatorId) return;
     setIsStarting(true);
     try {
-      const result = await startChallenge(challengeCode, user.id);
+      const result = await startChallenge(testCode, user.id); // Use testCode here
       if (result.success) {
         toast({ title: "Challenge Started!", description: "The test is now live for all participants." });
         // Use challenge.challengeCode for navigation

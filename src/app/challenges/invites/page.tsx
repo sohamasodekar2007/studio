@@ -92,7 +92,7 @@ export default function ChallengeInvitesPage() {
         toast({ title: `Challenge ${action === 'accept' ? 'Accepted' : 'Rejected'}!` });
         fetchInvites(); 
         if (action === 'accept' && result.challenge) {
-          router.push(`/challenge/lobby/${result.challenge.challengeCode}`);
+          router.push(`/challenge/lobby/${result.challenge.challengeCode}`); // Use challengeCode from result (which is the testCode)
         }
       } else {
         throw new Error(result.message || `Failed to ${action} challenge.`);
@@ -255,7 +255,7 @@ export default function ChallengeInvitesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {getInviteStatusBadge(invite)}
-                   {invite.status === 'accepted' && ( 
+                   {invite.status === 'accepted' && ( // This should ideally check if the challenge itself is completed/started
                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
                         <Link href={`/challenge-test-result/${invite.challengeCode}`}>View Result</Link>
                      </Button>

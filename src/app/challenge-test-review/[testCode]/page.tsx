@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Loader2, XCircle, Bookmark, Tag } from 'lucide-react'; // Removed Eye, Timer, FileText, ImageIcon
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, HelpCircle, Info, Loader2, XCircle, Eye, Bookmark, Timer, Tag, FileText, ImageIcon } from 'lucide-react';
 import type { Challenge, TestQuestion, UserAnswer, QuestionStatus, Notebook, BookmarkedQuestion, DetailedAnswer } from '@/types';
 import { QuestionStatus as QuestionStatusEnum } from '@/types';
 import { getChallengeDetails } from '@/actions/challenge-actions';
@@ -54,7 +54,7 @@ export default function ChallengeTestReviewPage() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const testCode = params.testCode as string; 
+  const testCode = params.testCode as string; // Changed from challengeCode to testCode
   const viewingUserId = searchParams.get('userId'); 
 
   const [challengeData, setChallengeData] = useState<Challenge | null>(null);
@@ -112,12 +112,8 @@ export default function ChallengeTestReviewPage() {
       if (!user) {
         router.push(`/auth/login?redirect=/challenge-test-review/${testCode}?userId=${viewingUserId}`); 
       } else if (user.id !== viewingUserId) {
-        // Allow viewing if it's a public review link or admin, for now assume only self-review
         console.warn("Attempting to view another user's challenge review. Current implementation might restrict this.");
-        // setError("You are not authorized to view this review.");
-        // setIsLoading(false);
-        // return;
-        fetchChallengeData(); // Or proceed if logic allows viewing others'
+        fetchChallengeData();
       } else {
         fetchChallengeData();
       }
@@ -225,7 +221,6 @@ export default function ChallengeTestReviewPage() {
   const handleCloseNotebookModal = () => setIsNotebookModalOpen(false);
   const handleSaveToNotebooks = async (selectedNotebookIds: string[], tags: string[]) => { 
      if (!user?.id || !currentQuestionFromChallenge?.id || !challengeData ) return;
-     // Subject and lesson for challenge tests come from testConfig
      const subject = challengeData.testConfig.subject;
      const lesson = challengeData.testConfig.lesson;
      const questionData: BookmarkedQuestion = { questionId: currentQuestionFromChallenge.id, subject, lesson, addedAt: Date.now(), tags };
