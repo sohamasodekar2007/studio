@@ -28,7 +28,7 @@ type DifficultyFilter = DifficultyLevel | 'All';
 
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
-    const basePath = '/question_bank_images';
+    const basePath = '/question_bank_images'; 
     return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
 };
 
@@ -271,7 +271,7 @@ export default function DppLessonPage() {
                 {Object.entries(q.options).map(([key, value]) => {
                     const isSelected = selectedOption === key;
                     const isCorrectOption = key === correctOption;
-                    let optionStyle = "border-border hover:border-primary bg-card";
+                    let optionStyle = "border-border hover:border-primary bg-card hover:scale-[1.01] hover:border-primary/50 transition-all duration-150";
 
                     if (isAnswerChecked) {
                         if (isSelected && isCorrectOption) {
@@ -282,7 +282,7 @@ export default function DppLessonPage() {
                              optionStyle = "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
                         }
                     } else if (isSelected) {
-                         optionStyle = "border-primary ring-2 ring-primary bg-primary/10";
+                         optionStyle = "border-primary ring-2 ring-primary bg-primary/10 scale-[1.01]";
                     }
 
                     return (
@@ -290,7 +290,7 @@ export default function DppLessonPage() {
                             key={key}
                             htmlFor={`${questionId}-${key}`}
                             className={cn(
-                                "flex items-start space-x-3 p-4 border rounded-lg transition-all shadow-sm hover:shadow-md",
+                                "flex items-start space-x-3 p-4 border rounded-lg transition-all shadow-sm",
                                 optionStyle,
                                 (showSolution || isSaving) ? "cursor-default opacity-80" : "cursor-pointer"
                             )}
@@ -371,7 +371,7 @@ export default function DppLessonPage() {
             addedAt: Date.now(),
             tags: tags,
         };
-        setIsSaving(true);
+        setIsSaving(true); 
         try {
             const result = await addQuestionToNotebooks(user.id, selectedNotebookIds, questionData);
             if (result.success) {
@@ -386,7 +386,7 @@ export default function DppLessonPage() {
              setIsSaving(false);
         }
     };
-
+    
     const handleCreateNotebookCallback = useCallback(async (name: string) => {
       if (!user?.id) return null;
       const result = await createNotebook(user.id, name);
@@ -410,7 +410,10 @@ export default function DppLessonPage() {
             <Card className="shadow-lg">
             <CardHeader className="p-6"><Skeleton className="h-7 w-1/3 mb-2" /><Skeleton className="h-4 w-2/3" /></CardHeader>
             <CardContent className="p-6"><Skeleton className="h-48 w-full mb-4" /><Skeleton className="h-12 w-full mb-3" /><Skeleton className="h-12 w-full" /></CardContent>
-            <CardFooter className="p-6 flex justify-between items-center"><Skeleton className="h-10 w-32" /><Skeleton className="h-10 w-32" /></CardFooter>
+            <CardFooter className="p-6 flex justify-between items-center">
+                 <Button variant="outline" className="transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95"><Skeleton className="h-full w-full" /></Button>
+                 <Button className="transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95"><Skeleton className="h-full w-full" /></Button>
+            </CardFooter>
             </Card>
         </div>
      );
@@ -429,7 +432,20 @@ export default function DppLessonPage() {
              <div className="mb-4"><Link href="/dpp" className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to DPP List</Link></div>
              <h1 className="text-3xl font-bold tracking-tight">DPP: {lesson}</h1>
              <p className="text-muted-foreground">Subject: {subject}</p>
-              <div className="flex flex-wrap items-center gap-2 mb-6 border-b pb-4"> <Filter className="h-5 w-5 text-muted-foreground" /> <span className="font-medium mr-2 text-sm">Difficulty:</span> {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (<Button key={diff} variant="ghost" size="sm" onClick={() => handleDifficultyFilter(diff)} className={cn("text-xs h-8 px-3", selectedDifficulty === diff ? difficultyButtonVariants[diff] : 'text-muted-foreground hover:bg-accent')}>{diff}</Button>))} </div>
+              <div className="flex flex-wrap items-center gap-2 mb-6 border-b pb-4"> <Filter className="h-5 w-5 text-muted-foreground" /> <span className="font-medium mr-2 text-sm">Difficulty:</span> 
+                {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
+                    <Button 
+                        key={diff} 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDifficultyFilter(diff)} 
+                        className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md", 
+                        selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-1 ring-current` : 'text-muted-foreground hover:bg-accent/80')}
+                    >
+                        {diff}
+                    </Button>
+                ))} 
+              </div>
              <Card className="shadow-md"><CardContent className="p-10 text-center text-muted-foreground">No questions found matching the '{selectedDifficulty}' filter for this lesson.</CardContent></Card>
           </div>
      ); }
@@ -457,14 +473,21 @@ export default function DppLessonPage() {
             <Filter className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium mr-2 text-sm">Difficulty:</span>
             {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (
-                <Button key={diff} variant="ghost" size="sm" onClick={() => handleDifficultyFilter(diff)} className={cn("text-xs h-8 px-3", selectedDifficulty === diff ? difficultyButtonVariants[diff] : 'text-muted-foreground hover:bg-accent')}>
+                <Button 
+                    key={diff} 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleDifficultyFilter(diff)} 
+                    className={cn("text-xs h-8 px-3 transform transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md", 
+                    selectedDifficulty === diff ? `${difficultyButtonVariants[diff]} scale-105 shadow-lg ring-2 ring-offset-1 ring-current` : 'text-muted-foreground hover:bg-accent/80')}
+                >
                     {diff}
                 </Button>
             ))}
          </div>
 
          {currentQuestion ? (
-             <Card className="shadow-lg border-border overflow-hidden">
+             <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-border overflow-hidden">
              <CardHeader className="p-4 md:p-6 bg-card">
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <div className="flex items-center gap-2">
@@ -479,26 +502,38 @@ export default function DppLessonPage() {
              <CardContent className="p-4 md:p-6">
                 {renderQuestionContent(currentQuestion)}
                 {renderOptions(currentQuestion)}
-                {showSolution && isCorrect !== null && (
-                    <Alert variant={isCorrect ? "default" : "destructive"} className={cn("mt-6 text-sm", isCorrect ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700" : "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700")}>
-                        {isCorrect ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                        <AlertTitle className={cn(isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
-                        {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
-                    </Alert>
-                )}
-                {showSolution && renderExplanation(currentQuestion)}
+                
+                <div className={cn(
+                    "transition-all duration-300 ease-in-out mt-6",
+                    showSolution && isCorrect !== null ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+                )}>
+                    {showSolution && isCorrect !== null && (
+                        <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm", isCorrect ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700" : "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700")}>
+                            {isCorrect ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                            <AlertTitle className={cn(isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
+                            {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
+                        </Alert>
+                    )}
+                </div>
+
+                <div className={cn(
+                    "transition-all duration-500 ease-in-out delay-100",
+                    showSolution && (currentQuestion.explanation.text || currentQuestion.explanation.image) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                )}>
+                    {showSolution && renderExplanation(currentQuestion)}
+                </div>
              </CardContent>
              <CardFooter className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-3 bg-muted/30 border-t">
-                 <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto">
+                 <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
                     <Bookmark className="mr-2 h-4 w-4" />{isSaving && notebooks.length === 0 ? "Saving..." : "Bookmark"}
                  </Button>
                  <div className="flex gap-2 w-full sm:w-auto">
                     {!showSolution ? (
-                        <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90">
+                        <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer
                         </Button>
                     ) : (
-                         <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90">
+                         <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95">
                             {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'} <ChevronRight className="ml-1 h-4 w-4"/>
                          </Button>
                     )}
