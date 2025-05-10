@@ -1,6 +1,10 @@
 {
   "userId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "following": [],
+  "following": [
+    "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "f3dd65c6-008b-4b1a-8697-938fcc9844f7",
+    "2d4574fb-c2a8-477f-8807-f01d15555cdd"
+  ],
   "followers": [
     "a1b2c3d4-e5f6-7890-1234-567890abcdef"
   ]
