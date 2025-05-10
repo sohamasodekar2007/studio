@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from 'react';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useForm, Controller, useFieldArray, FieldError, Merge, FieldErrorsImpl } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"; // Added FormDescription
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Trash2, Eye, ListFilter, Settings2, BookOpen, Brain, Sigma, FlaskConical, Atom, Leaf, Palette, FileText, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus, ChapterwiseTestJson, FullLengthTestJson as FullLengthTestJsonType } from '@/types';
-import { pricingTypes, academicStatuses, testStreams, exams } from '@/types';
+import { pricingTypes, academicStatuses, testStreams, exams } from '@/types'; // Changed examOptions to exams
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -28,6 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
 import { Badge } from '@/components/ui/badge';
 
+
 // --- Zod Schemas ---
 
 const BasePropsSchema = z.object({
@@ -37,13 +38,15 @@ const BasePropsSchema = z.object({
   audience: z.enum(academicStatuses, { required_error: "Target Audience is required." }).nullable().default(null),
 });
 
-const ChapterwiseSchema = BasePropsSchema.extend({
-  testType: z.literal('chapterwise'), // Added discriminator field
+const ChapterwiseSpecificSchema = z.object({
+  testType: z.literal('chapterwise'),
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
   questionCount: z.coerce.number().min(1, "Min 1 question").max(100, "Max 100 questions for chapterwise."),
 });
+const ChapterwiseSchema = BasePropsSchema.merge(ChapterwiseSpecificSchema);
+
 
 const SubjectConfigSchema = z.object({
   subjectName: z.string(),
@@ -55,16 +58,20 @@ const SubjectConfigSchema = z.object({
   totalSubjectWeightage: z.coerce.number().min(0).max(100).default(0),
   totalSubjectQuestions: z.coerce.number().min(0).default(0),
 });
+type SubjectConfigForm = z.infer<typeof SubjectConfigSchema>;
 
-const FullLengthSchema = BasePropsSchema.extend({
-  testType: z.literal('full_length'), // Added discriminator field
+
+const FullLengthSpecificSchema = z.object({
+  testType: z.literal('full_length'),
   exam: z.enum(exams, { required_error: "Target Exam is required."}),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
-}).superRefine((data, ctx) => {
+});
+
+const FullLengthSchema = BasePropsSchema.merge(FullLengthSpecificSchema).superRefine((data, ctx) => {
     if (data.subjectsConfig && data.subjectsConfig.length > 0) {
-        const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
+        const totalWeightageSum = data.subjectsConfig.reduce((sum: number, subj: SubjectConfigForm) => sum + (subj.totalSubjectWeightage || 0), 0);
         if (Math.abs(totalWeightageSum - 100) >= 0.01 && totalWeightageSum !== 0 && totalWeightageSum !== 100) { // Allow sum of 100
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
@@ -74,9 +81,9 @@ const FullLengthSchema = BasePropsSchema.extend({
         }
     }
     if (data.subjectsConfig) {
-        data.subjectsConfig.forEach((subject, subjectIndex) => {
-            if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
-                const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
+        data.subjectsConfig.forEach((subject: SubjectConfigForm, subjectIndex: number) => {
+            if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some((l) => (l.weightage || 0) > 0)) {
+                const lessonWeightageSum = subject.lessons.reduce((sum: number, lesson) => sum + (lesson.weightage || 0), 0);
                 if (Math.abs(lessonWeightageSum - 100) >= 0.01 && lessonWeightageSum !== 0 && lessonWeightageSum !== 100) { // Allow sum of 100
                     ctx.addIssue({
                         code: z.ZodIssueCode.custom,
@@ -135,12 +142,12 @@ export default function CreateTestPage() {
       duration: 60,
       accessType: 'FREE',
       audience: null, 
-      // Chapterwise defaults
+      // Chapterwise defaults (will be overridden by form.reset if testType changes)
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
-      // FullLength defaults
+      // FullLength defaults (will be overridden by form.reset if testType changes)
       exam: 'MHT-CET', 
       stream: null,
       overallTotalQuestions: 50,
@@ -148,7 +155,7 @@ export default function CreateTestPage() {
     },
   });
 
-  const { fields: subjectConfigFields, replace: replaceSubjectConfigs } = useFieldArray({
+  const { fields: subjectConfigFields, replace: replaceSubjectConfigs } = useFieldArray<TestCreationFormValues, "subjectsConfig", "id">({
     control: form.control,
     name: "subjectsConfig",
   });
@@ -223,18 +230,18 @@ export default function CreateTestPage() {
       }
 
       const currentConfigs = form.getValues('subjectsConfig') || [];
-      const newConfigs = subjectsForStream
+      const newConfigs: SubjectConfigForm[] = subjectsForStream
         .filter(subjectName => dbSubjects.includes(subjectName)) 
-        .map(subjectName => {
+        .map((subjectName): SubjectConfigForm => {
             const existingConfig = currentConfigs.find(sc => sc.subjectName === subjectName);
             return {
             subjectName,
-            lessons: lessonsBySubject[subjectName]?.map(ln => ({ lessonName: ln, weightage: 0, questionCount:0 })) || [],
+            lessons: (lessonsBySubject[subjectName] || []).map(ln => ({ lessonName: ln, weightage: 0, questionCount:0 })),
             totalSubjectWeightage: existingConfig?.totalSubjectWeightage || 0,
             totalSubjectQuestions: existingConfig?.totalSubjectQuestions || 0,
             };
       });
-      replaceSubjectConfigs(newConfigs as any); 
+      replaceSubjectConfigs(newConfigs); 
     } else {
       replaceSubjectConfigs([]);
     }
@@ -243,12 +250,12 @@ export default function CreateTestPage() {
 
   useEffect(() => {
     if (testType === 'full_length' && subjectsConfigValues && subjectsConfigValues.length > 0 && overallTotalQuestions > 0) {
-        const totalWeightageSum = subjectsConfigValues.reduce((sum, config) => sum + (config.totalSubjectWeightage || 0), 0);
+        const totalWeightageSum = subjectsConfigValues.reduce((sum: number, config: SubjectConfigForm) => sum + (config.totalSubjectWeightage || 0), 0);
         
         let distributedQuestionsSum = 0;
-        const newConfigs = subjectsConfigValues.map((config, subjectIndex) => {
+        const newConfigs = subjectsConfigValues.map((config: SubjectConfigForm, subjectIndex: number) => {
             let questionsForSubject = 0;
-            if (totalWeightageSum > 0 && (config.totalSubjectWeightage || 0) > 0) { // Check if config.totalSubjectWeightage is defined
+            if (totalWeightageSum > 0 && (config.totalSubjectWeightage || 0) > 0) { 
                  questionsForSubject = Math.round(((config.totalSubjectWeightage || 0) / totalWeightageSum) * overallTotalQuestions);
             } else if (totalWeightageSum === 0 && subjectsConfigValues.length > 0) { 
                 questionsForSubject = Math.floor(overallTotalQuestions / subjectsConfigValues.length);
@@ -259,9 +266,9 @@ export default function CreateTestPage() {
 
             let lessonsQuestionsSumInSubject = 0;
             if (config.lessons && config.lessons.length > 0 && questionsForSubject > 0) {
-                const totalLessonWeightage = config.lessons.reduce((s, l) => s + (l.weightage || 0), 0);
+                const totalLessonWeightage = config.lessons.reduce((s: number, l) => s + (l.weightage || 0), 0);
                 if (totalLessonWeightage > 0) { 
-                    config.lessons.forEach((lesson, lessonIndex) => {
+                    config.lessons.forEach((lesson, lessonIndex: number) => {
                         const lessonProportion = (lesson.weightage || 0) / totalLessonWeightage;
                         const questionsForLesson = Math.round(questionsForSubject * lessonProportion);
                         form.setValue(`subjectsConfig.${subjectIndex}.lessons.${lessonIndex}.questionCount`, questionsForLesson);
@@ -270,7 +277,7 @@ export default function CreateTestPage() {
                 } else { 
                      const questionsPerLesson = Math.floor(questionsForSubject / config.lessons.length);
                      let remainder = questionsForSubject % config.lessons.length;
-                     config.lessons.forEach((lesson, lessonIndex) => {
+                     config.lessons.forEach((lesson, lessonIndex: number) => {
                          let qCount = questionsPerLesson + (remainder > 0 ? 1 : 0);
                          form.setValue(`subjectsConfig.${subjectIndex}.lessons.${lessonIndex}.questionCount`, qCount);
                          lessonsQuestionsSumInSubject += qCount;
@@ -299,7 +306,7 @@ export default function CreateTestPage() {
                 const questionsForLastSubject = form.getValues(`subjectsConfig.${lastConfigIndex}.totalSubjectQuestions`) || 0;
                  const questionsPerLesson = Math.floor(questionsForLastSubject / lastSubjectConfig.lessons.length);
                  let remainder = questionsForLastSubject % lastSubjectConfig.lessons.length;
-                 lastSubjectConfig.lessons.forEach((_, lessonIdx) => {
+                 lastSubjectConfig.lessons.forEach((_, lessonIdx: number) => {
                      let qCount = questionsPerLesson + (remainder > 0 ? 1 : 0);
                      form.setValue(`subjectsConfig.${lastConfigIndex}.lessons.${lessonIdx}.questionCount`, qCount);
                      if (remainder > 0) remainder--;
@@ -425,17 +432,17 @@ export default function CreateTestPage() {
           total_questions: allSelectedQuestionsForFLT.length, 
           type: fullLengthData.accessType,
           audience: finalAudience,
-          test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
+          test_subject: fullLengthData.subjectsConfig?.map((s: SubjectConfigForm) => s.subjectName) || [], 
           stream: fullLengthData.stream!, 
           examTypeTarget: fullLengthData.exam, 
           physics_questions: physicsQs.length > 0 ? physicsQs : undefined,
           chemistry_questions: chemistryQs.length > 0 ? chemistryQs : undefined,
           maths_questions: mathsQs.length > 0 && (fullLengthData.stream === 'PCM' || fullLengthData.exam === 'BITSAT') ? mathsQs : undefined, 
           biology_questions: biologyQs.length > 0 && fullLengthData.stream === 'PCB' ? biologyQs : undefined,
-          weightage: fullLengthData.subjectsConfig?.reduce((acc, curr) => { 
+          weightage: fullLengthData.subjectsConfig?.reduce((acc: Record<string, Record<string, number>>, curr: SubjectConfigForm) => { 
             if (curr.lessons) { 
-                 acc[curr.subjectName] = curr.lessons.reduce((lessonAcc, lesson) => {
-                    lessonAcc[lesson.lessonName] = lesson.weightage || 0; // Ensure weightage is a number
+                 acc[curr.subjectName] = curr.lessons.reduce((lessonAcc: Record<string, number>, lesson) => {
+                    lessonAcc[lesson.lessonName] = lesson.weightage || 0;
                     return lessonAcc;
                 }, {} as Record<string, number>);
             }
@@ -558,7 +565,7 @@ export default function CreateTestPage() {
                                 <FormItem>
                                     <FormLabel>Target Audience</FormLabel>
                                     <Select
-                                        onValueChange={(value) => field.onChange(value === '_any_' ? null : value as AcademicStatus | null)}
+                                        onValueChange={(value: string) => field.onChange(value === '_any_' ? null : value as AcademicStatus | null)}
                                         value={field.value === null ? '_any_' : field.value || "_any_"} 
                                     >
                                     <FormControl><SelectTrigger><SelectValue placeholder="Select audience" /></SelectTrigger></FormControl>
@@ -608,7 +615,7 @@ export default function CreateTestPage() {
                                         </FormItem>
                                     )}
                                 />
-                                <FormField control={form.control} name="questionCount" render={({ field }) => (<FormItem><FormLabel>Number of Questions to Select *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || 0)} min="1" max={totalAvailableCount > 0 ? totalAvailableCount : 100} /></FormControl><FormMessage>{`Selected ${form.watch('selectedQuestionIds')?.length || 0} of ${field.value || 0}. Available: ${totalAvailableCount}`}</FormMessage></FormItem>)} />
+                                <FormField control={form.control} name="questionCount" render={({ field }) => (<FormItem><FormLabel>Number of Questions to Select *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || 0)} min="1" max={totalAvailableCount > 0 ? totalAvailableCount : 100} /></FormControl><FormMessage>{form.formState.errors.questionCount?.message || `Selected ${form.watch('selectedQuestionIds')?.length || 0} of ${field.value || 0}. Available: ${totalAvailableCount}`}</FormMessage></FormItem>)} />
                                 
                                 {availableQuestions.length > 0 && (
                                     <div className="space-y-2">
@@ -641,7 +648,7 @@ export default function CreateTestPage() {
                                                 />
                                             ))}
                                         </ScrollArea>
-                                        <FormMessage>{form.formState.errors.selectedQuestionIds?.message}</FormMessage>
+                                        <FormMessage>{(form.formState.errors.selectedQuestionIds as FieldError | Merge<FieldError, FieldErrorsImpl<any>> | undefined)?.message}</FormMessage>
                                     </div>
                                 )}
                             </CardContent>
@@ -652,7 +659,7 @@ export default function CreateTestPage() {
                         <Card>
                             <CardHeader><CardTitle>Full-Length Setup</CardTitle></CardHeader>
                             <CardContent className="space-y-6">
-                                <FormField control={form.control} name="exam" render={({ field }) => (<FormItem><FormLabel>Target Exam *</FormLabel><Select onValueChange={(val) => {field.onChange(val); form.setValue('stream', null);}} value={field.value || 'MHT-CET'}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl><SelectContent>{exams.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="exam" render={({ field }) => (<FormItem><FormLabel>Target Exam *</FormLabel><Select onValueChange={(val: string) => {field.onChange(val as ExamOption); form.setValue('stream', null);}} value={field.value || 'MHT-CET'}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl><SelectContent>{exams.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 {(fullLengthExam === 'MHT-CET' || fullLengthExam === 'KCET' || fullLengthExam === 'VITEEE' || fullLengthExam === 'CUET') && (
                                     <FormField control={form.control} name="stream" render={({ field }) => (<FormItem><FormLabel>Stream *</FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger></FormControl><SelectContent>{testStreams.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 )}
@@ -680,7 +687,7 @@ export default function CreateTestPage() {
                                         {subjectField.lessons && subjectField.lessons.length > 0 && (
                                             <ScrollArea className="h-32 border rounded p-2 bg-muted/20">
                                                 <FormDescription className="text-xs px-1 pb-1">{`Set lesson weightages for ${subjectField.subjectName} (must sum to 100% if used). If not set, questions are picked equally from lessons.`}</FormDescription>
-                                                {subjectField.lessons.map((lessonItem, lessonIndex) => (
+                                                {subjectField.lessons.map((lessonItem, lessonIndex: number) => (
                                                      <FormField
                                                         key={`${subjectField.subjectName}-${lessonItem.lessonName}-${lessonIndex}`} 
                                                         control={form.control}
@@ -699,11 +706,11 @@ export default function CreateTestPage() {
                                             </ScrollArea>
                                         )}
                                         <p className="text-xs text-muted-foreground">Est. Questions for {subjectField.subjectName}: {form.watch(`subjectsConfig.${subjectIndex}.totalSubjectQuestions`)}</p>
-                                        {form.formState.errors.subjectsConfig?.[subjectIndex]?.totalSubjectWeightage?.message && <FormMessage>{form.formState.errors.subjectsConfig?.[subjectIndex]?.totalSubjectWeightage?.message}</FormMessage>}
-                                        {form.formState.errors.subjectsConfig?.[subjectIndex]?.lessons?.message && <FormMessage>{form.formState.errors.subjectsConfig?.[subjectIndex]?.lessons?.message}</FormMessage>}
+                                        <FormMessage>{(form.formState.errors.subjectsConfig as any)?.[subjectIndex]?.totalSubjectWeightage?.message}</FormMessage>
+                                        <FormMessage>{(form.formState.errors.subjectsConfig as any)?.[subjectIndex]?.lessons?.message}</FormMessage>
                                     </div>
                                 ))}
-                                <FormMessage>{(form.formState.errors.subjectsConfig as any)?.root?.message || (form.formState.errors.subjectsConfig as any)?.message}</FormMessage>
+                                <FormMessage>{(form.formState.errors.subjectsConfig as FieldError | Merge<FieldError, FieldErrorsImpl<any>> | undefined)?.message}</FormMessage>
                             </CardContent>
                         </Card>
                     )}
