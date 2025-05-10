@@ -34,6 +34,7 @@ const BaseTestSchema = z.object({
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(audienceTypes).nullable(),
+  testType: z.string(), // Placeholder for discriminator
 });
 
 const ChapterwiseDetailsSchema = z.object({
@@ -43,9 +44,11 @@ const ChapterwiseDetailsSchema = z.object({
   questionCount: z.number().min(1, "Min 1 question").max(100, "Max 100 questions for chapterwise."),
 });
 
+// Explicitly ensure testType is a literal for discriminated union
 const ChapterwiseSchema = BaseTestSchema.merge(ChapterwiseDetailsSchema).extend({
   testType: z.literal('chapterwise'),
 });
+
 
 const SubjectConfigSchema = z.object({
   subjectName: z.string(),
@@ -58,6 +61,7 @@ const SubjectConfigSchema = z.object({
   totalSubjectQuestions: z.number().min(0).default(0),
 });
 
+
 const FullLengthDetailsSchema = z.object({
   exam: z.enum(allExams),
   stream: z.enum(testStreams).optional(),
@@ -65,6 +69,8 @@ const FullLengthDetailsSchema = z.object({
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
 });
 
+
+// Explicitly ensure testType is a literal for discriminated union
 const FullLengthSchema = BaseTestSchema.merge(FullLengthDetailsSchema).extend({
   testType: z.literal('full_length'),
 }).refine(data => {
@@ -104,9 +110,9 @@ const examSubjectMap: Record<ExamOption, string[]> = {
     "KCET": ["Physics", "Chemistry", "Mathematics", "Biology"],
     "BITSAT": ["Physics", "Chemistry", "Mathematics", "English Proficiency", "Logical Reasoning"],
     "VITEEE": ["Physics", "Chemistry", "Mathematics", "Biology", "English"],
-    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"],
-    "AIEEE": ["Physics", "Chemistry", "Mathematics"],
-    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"],
+    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"], // Example, CUET subjects vary widely
+    "AIEEE": ["Physics", "Chemistry", "Mathematics"], // AIEEE is now JEE Main
+    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"], // Generic
 };
 
 
@@ -405,6 +411,7 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
+            // Optionally adjust overallTotalQuestions to match actual count or show error
         }
 
         testToSave = {
@@ -707,3 +714,5 @@ export default function CreateTestPage() {
     </>
   );
 }
+
+    
