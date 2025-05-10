@@ -30,16 +30,15 @@ import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
-// Base properties shared by both test types
-const BaseTestProps = {
+// Base properties shared by both test types, defined as a Zod schema
+const BasePropsSchema = z.object({
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(academicStatuses).nullable().default(null),
-};
+});
 
-const ChapterwiseSchema = z.object({
-  ...BaseTestProps,
+const ChapterwiseSchema = BasePropsSchema.extend({
   testType: z.literal('chapterwise'), // Discriminator
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
@@ -58,10 +57,9 @@ const SubjectConfigSchema = z.object({
   totalSubjectQuestions: z.coerce.number().min(0).default(0),
 });
 
-const FullLengthSchema = z.object({
-  ...BaseTestProps,
+const FullLengthSchema = BasePropsSchema.extend({
   testType: z.literal('full_length'), // Discriminator
-  exam: z.enum(exams), // Use imported 'exams'
+  exam: z.enum(exams),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
@@ -418,14 +416,13 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
-            // Potentially show a toast warning here if counts don't match exactly
         }
 
         testToSave = {
           testType: 'full_length',
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length, // Use actual selected count
+          total_questions: allSelectedQuestionsForFLT.length, 
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
