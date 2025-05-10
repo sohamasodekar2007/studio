@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Trash2, Eye, ListFilter, Settings2, BookOpen, Brain, Sigma, FlaskConical, Atom, Leaf, Palette, FileText, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
-import { pricingTypes, academicStatuses as audienceTypes, testStreams, exams as allExams } from '@/types';
+import { pricingTypes, academicStatuses, testStreams, exams as allExams } from '@/types'; // audienceTypes removed, using academicStatuses directly
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -26,42 +26,42 @@ import Script from 'next/script';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge'; // Added Badge import
 
 // --- Zod Schemas ---
 
 const ChapterwiseSchema = z.object({
-  testType: z.literal('chapterwise'), // Added discriminator
+  testType: z.literal('chapterwise'),
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
-  duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
+  duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
-  audience: z.enum(audienceTypes).nullable().or(z.literal("_any_")),
+  audience: z.enum(academicStatuses).nullable().default(null), // Simplified: Directly use academicStatuses or null
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
-  questionCount: z.number().min(1, "Min 1 question").max(100, "Max 100 questions for chapterwise."),
+  questionCount: z.coerce.number().min(1, "Min 1 question").max(100, "Max 100 questions for chapterwise."),
 });
 
 const SubjectConfigSchema = z.object({
   subjectName: z.string(),
   lessons: z.array(z.object({
     lessonName: z.string(),
-    weightage: z.number().min(0).max(100).default(0),
-    questionCount: z.number().min(0).default(0),
+    weightage: z.coerce.number().min(0).max(100).default(0),
+    questionCount: z.coerce.number().min(0).default(0),
   })).default([]),
-  totalSubjectWeightage: z.number().min(0).max(100).default(0),
-  totalSubjectQuestions: z.number().min(0).default(0),
+  totalSubjectWeightage: z.coerce.number().min(0).max(100).default(0),
+  totalSubjectQuestions: z.coerce.number().min(0).default(0),
 });
 
 const FullLengthSchema = z.object({
-  testType: z.literal('full_length'), // Added discriminator
+  testType: z.literal('full_length'),
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
-  duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
+  duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
-  audience: z.enum(audienceTypes).nullable().or(z.literal("_any_")),
+  audience: z.enum(academicStatuses).nullable().default(null), // Simplified
   exam: z.enum(allExams),
-  stream: z.enum(testStreams).optional(),
-  overallTotalQuestions: z.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
+  stream: z.enum(testStreams).optional().nullable().default(null), // Allow null for optional stream
+  overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
 }).superRefine((data, ctx) => {
     if (data.subjectsConfig && data.subjectsConfig.length > 0) {
@@ -89,7 +89,6 @@ const FullLengthSchema = z.object({
         });
     }
 });
-
 
 // Discriminated union schema
 const TestCreationSchema = z.discriminatedUnion("testType", [
@@ -135,15 +134,13 @@ export default function CreateTestPage() {
       testName: '',
       duration: 60,
       accessType: 'FREE',
-      audience: "_any_", 
-      // Chapterwise defaults
+      audience: null, 
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
-      // Full-length defaults
       exam: 'MHT-CET',
-      stream: undefined,
+      stream: null,
       overallTotalQuestions: 50,
       subjectsConfig: [],
     },
@@ -342,7 +339,7 @@ export default function CreateTestPage() {
     let testToSave: Omit<GeneratedTest, 'test_code' | 'createdAt'>;
 
     try {
-      const finalAudience = data.audience === '_any_' ? null : data.audience;
+      const finalAudience = data.audience === "_any_" ? null : data.audience;
 
       if (data.testType === 'chapterwise') {
         const chapterwiseData = data; 
@@ -382,7 +379,6 @@ export default function CreateTestPage() {
           lessons: chapterwiseData.lessons,
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '),
           questions: finalQuestions,
-          // ChapterwiseSchema does not define examFilter, ensure it's not expected unless added
         };
       } else { // Full Length
         const fullLengthData = data; 
@@ -425,7 +421,7 @@ export default function CreateTestPage() {
           testType: 'full_length',
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length,
+          total_questions: allSelectedQuestionsForFLT.length, // Use actual count of selected questions
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
@@ -453,9 +449,9 @@ export default function CreateTestPage() {
         toast({ title: 'Test Created!', description: `Test "${testToSave.name}" (Code: ${result.test_code}) saved.` });
         form.reset({
             testType: data.testType, 
-            testName: '', duration: 60, accessType: 'FREE', audience: '_any_',
+            testName: '', duration: 60, accessType: 'FREE', audience: null,
             subject: '', lessons: [], selectedQuestionIds: [], questionCount: 20,
-            exam: 'MHT-CET', stream: undefined, overallTotalQuestions: 50, subjectsConfig: [],
+            exam: 'MHT-CET', stream: null, overallTotalQuestions: 50, subjectsConfig: [],
         });
         setAvailableQuestions([]);
         setLessonsBySubject({});
@@ -521,13 +517,13 @@ export default function CreateTestPage() {
                                             form.reset(prev => ({
                                                 ...prev,
                                                 testType: newTestType,
-                                                audience: '_any_', 
+                                                audience: null, 
                                                 subject: newTestType === 'chapterwise' ? '' : undefined,
                                                 lessons: newTestType === 'chapterwise' ? [] : undefined,
                                                 selectedQuestionIds: newTestType === 'chapterwise' ? [] : undefined,
                                                 questionCount: newTestType === 'chapterwise' ? 20 : undefined,
                                                 exam: newTestType === 'full_length' ? 'MHT-CET' : undefined,
-                                                stream: newTestType === 'full_length' ? undefined : undefined,
+                                                stream: newTestType === 'full_length' ? null : undefined,
                                                 overallTotalQuestions: newTestType === 'full_length' ? 50 : undefined,
                                                 subjectsConfig: newTestType === 'full_length' ? [] : undefined,
                                             }));
@@ -563,12 +559,12 @@ export default function CreateTestPage() {
                                     <FormLabel>Target Audience</FormLabel>
                                     <Select
                                         onValueChange={(value) => field.onChange(value === '_any_' ? null : value as AcademicStatus | null)}
-                                        value={field.value || "_any_"} 
+                                        value={field.value === null ? '_any_' : field.value || "_any_"} 
                                     >
                                     <FormControl><SelectTrigger><SelectValue placeholder="Select audience" /></SelectTrigger></FormControl>
                                     <SelectContent>
                                         <SelectItem value="_any_">Any</SelectItem> 
-                                        {audienceTypes.map(aud => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}
+                                        {academicStatuses.map(aud => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}
                                     </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -656,9 +652,9 @@ export default function CreateTestPage() {
                         <Card>
                             <CardHeader><CardTitle>Full-Length Setup</CardTitle></CardHeader>
                             <CardContent className="space-y-6">
-                                <FormField control={form.control} name="exam" render={({ field }) => (<FormItem><FormLabel>Target Exam *</FormLabel><Select onValueChange={(val) => {field.onChange(val); form.setValue('stream', undefined);}} value={field.value || 'MHT-CET'}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl><SelectContent>{allExams.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="exam" render={({ field }) => (<FormItem><FormLabel>Target Exam *</FormLabel><Select onValueChange={(val) => {field.onChange(val); form.setValue('stream', null);}} value={field.value || 'MHT-CET'}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam" /></SelectTrigger></FormControl><SelectContent>{allExams.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 {(fullLengthExam === 'MHT-CET' || fullLengthExam === 'KCET' || fullLengthExam === 'VITEEE' || fullLengthExam === 'CUET') && (
-                                    <FormField control={form.control} name="stream" render={({ field }) => (<FormItem><FormLabel>Stream *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger></FormControl><SelectContent>{testStreams.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                    <FormField control={form.control} name="stream" render={({ field }) => (<FormItem><FormLabel>Stream *</FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger></FormControl><SelectContent>{testStreams.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 )}
                                 <FormField control={form.control} name="overallTotalQuestions" render={({ field }) => (<FormItem><FormLabel>Total Questions in Test *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || 0)} min="1" max="200" /></FormControl><FormMessage /></FormItem>)} />
                                 
