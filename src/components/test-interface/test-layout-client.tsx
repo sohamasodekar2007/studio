@@ -44,8 +44,8 @@ interface InProgressTestState {
   currentGlobalIndex: number;
   currentSection: string;
   currentQuestionIndexInSection: number;
-  userAnswers: Record<string, string | null>; // questionId -> selectedOption
-  questionStatuses: Record<string, QuestionStatus>; // questionId -> status
+  userAnswers: Record<string, string | null>; // question.id -> selectedOption
+  questionStatuses: Record<string, QuestionStatus>; // question.id -> status
 }
 
 export default function TestLayoutClient({ initialTestData }: TestLayoutClientProps) {
@@ -70,7 +70,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
         if (initialTestData.maths_questions && initialTestData.maths_questions.length > 0) return 'Mathematics';
         if (initialTestData.biology_questions && initialTestData.biology_questions.length > 0) return 'Biology';
     }
-    // For chapterwise or if no subjects above, use the first subject or 'Overall'
     return initialTestData.test_subject[0] || 'Overall'; 
   }, [initialTestData]);
 
@@ -87,6 +86,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const [isResuming, setIsResuming] = useState(true); 
 
   const allQuestionsInOrder = useMemo(() => {
+    if (!testData) return [];
     if (testData.testType === 'chapterwise') {
       return testData.questions || [];
     } else if (testData.testType === 'full_length') {
@@ -101,9 +101,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   }, [testData]);
 
   const questionsBySection = useMemo(() => {
+    if (!testData) return {};
     const sections: Record<string, TestQuestion[]> = {};
     if (testData.testType === 'chapterwise' && testData.questions) {
-        // For chapterwise, if there's a primary subject, use it. Otherwise, default.
         const sectionName = testData.test_subject[0] || 'Questions';
         sections[sectionName] = testData.questions;
     } else if (testData.testType === 'full_length') {
@@ -124,16 +124,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   }, [currentSectionQuestions, currentQuestionIndexInSection]);
 
   const globalQuestionIndex = useMemo(() => {
-    let globalIdx = 0;
-    for (const sectionName in questionsBySection) {
-      if (sectionName === currentSection) {
-        globalIdx += currentQuestionIndexInSection;
-        break;
-      }
-      globalIdx += questionsBySection[sectionName].length;
-    }
-    return globalIdx;
-  }, [questionsBySection, currentSection, currentQuestionIndexInSection]);
+    if (!currentQuestion) return -1;
+    return allQuestionsInOrder.findIndex(q => q.id === currentQuestion.id);
+  }, [allQuestionsInOrder, currentQuestion]);
 
 
   const typesetMathJax = useCallback(() => {
@@ -149,13 +142,19 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     }
   }, [currentQuestion, showInstructions, typesetMathJax, isLoading]);
 
-
   // Load from local storage on mount
   useEffect(() => {
     if (!user?.id || !testCode || authLoading || !isResuming) return;
 
     const savedSessionKey = `test-session-${user.id}-${testCode}`;
     const savedSessionJson = localStorage.getItem(savedSessionKey);
+
+    let initialStatuses: Record<string, QuestionStatus> = {};
+    allQuestionsInOrder.forEach((q, index) => {
+        if (q.id) { // Ensure question ID exists
+            initialStatuses[q.id] = index === 0 ? QuestionStatusEnum.Unanswered : QuestionStatusEnum.NotVisited;
+        }
+    });
 
     if (savedSessionJson) {
         try {
@@ -166,31 +165,21 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
                 setCurrentSection(savedState.currentSection || initialSection);
                 setCurrentQuestionIndexInSection(savedState.currentQuestionIndexInSection || 0);
                 setUserAnswers(savedState.userAnswers || {});
-                setQuestionStatuses(savedState.questionStatuses || {});
+                // Merge saved statuses with initial ones to ensure all questions have a status
+                setQuestionStatuses({...initialStatuses, ...(savedState.questionStatuses || {})});
                 setShowInstructions(false); 
                 toast({ title: "Test Resumed", description: "Your previous progress has been loaded." });
+            } else {
+                 localStorage.removeItem(savedSessionKey); // Invalid saved state for this test/user
+                 setQuestionStatuses(initialStatuses);
             }
         } catch (e) {
             console.error("Failed to parse saved session, starting fresh:", e);
             localStorage.removeItem(savedSessionKey); 
-            if (allQuestionsInOrder.length > 0 && allQuestionsInOrder[0]?.id) { // Check if first question ID exists
-                const initialStatuses: Record<string, QuestionStatus> = {};
-                allQuestionsInOrder.forEach(q => {
-                    if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
-                });
-                initialStatuses[allQuestionsInOrder[0].id] = QuestionStatusEnum.Unanswered;
-                setQuestionStatuses(initialStatuses);
-            }
-        }
-    } else {
-        if (allQuestionsInOrder.length > 0 && allQuestionsInOrder[0]?.id && !showInstructions) {
-            const initialStatuses: Record<string, QuestionStatus> = {};
-            allQuestionsInOrder.forEach(q => {
-                if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
-            });
-            initialStatuses[allQuestionsInOrder[0].id] = QuestionStatusEnum.Unanswered; 
             setQuestionStatuses(initialStatuses);
         }
+    } else {
+        setQuestionStatuses(initialStatuses);
     }
     setIsResuming(false); 
   }, [user?.id, testCode, authLoading, isResuming, allQuestionsInOrder, initialSection, toast]);
@@ -199,12 +188,14 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   useEffect(() => {
     if (!user?.id || !testCode || showInstructions || startTime === null || authLoading || isResuming) return;
 
+    const currentGlobalIdx = globalQuestionIndex; // Recalculate based on current section and index
+    
     const sessionState: InProgressTestState = {
       testCode,
       userId: user.id,
       startTime,
       timeLeft,
-      currentGlobalIndex: globalQuestionIndex, 
+      currentGlobalIndex: currentGlobalIdx, 
       currentSection,
       currentQuestionIndexInSection,
       userAnswers,
@@ -236,10 +227,10 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     setShowInstructions(false);
     setStartTime(Date.now());
     const firstQuestionId = allQuestionsInOrder[0]?.id;
-    if (firstQuestionId) {
+    if (firstQuestionId && (!questionStatuses[firstQuestionId] || questionStatuses[firstQuestionId] === QuestionStatusEnum.NotVisited)) {
         setQuestionStatuses(prev => ({...prev, [firstQuestionId]: QuestionStatusEnum.Unanswered}));
     }
-  }, [allQuestionsInOrder]);
+  }, [allQuestionsInOrder, questionStatuses]);
 
   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!user || !queryUserId || isSubmitting || !startTime) return;
@@ -265,10 +256,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
       if (result.success && result.results) {
         localStorage.removeItem(`test-session-${user.id}-${testCode}`); 
         toast({ title: "Test Submitted!", description: "Your responses have been saved." });
-        // Determine redirect path based on test type
-        const resultPath = testData.testType === 'chapterwise' 
-            ? `/chapterwise-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`
-            : `/full-length-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`; // Placeholder for full-length
+        const resultPath = `/chapterwise-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`;
         router.push(resultPath);
       } else {
         throw new Error(result.message || "Failed to save test report.");
@@ -296,6 +284,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
 
   const handleOptionChange = (questionId: string, optionKey: string) => {
+    if (!questionId) return;
     setUserAnswers(prev => ({ ...prev, [questionId]: optionKey }));
     setQuestionStatuses(prev => ({
       ...prev,
@@ -308,9 +297,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const navigateToQuestion = (globalIdx: number) => {
     if (globalIdx < 0 || globalIdx >= allQuestionsInOrder.length) return;
 
-    const currentQ = allQuestionsInOrder[globalQuestionIndex];
-    if (currentQ?.id && questionStatuses[currentQ.id] === QuestionStatusEnum.NotVisited && !userAnswers[currentQ.id]){
-         setQuestionStatuses(prev => ({...prev, [currentQ.id!]: QuestionStatusEnum.Unanswered}));
+    const currentQId = allQuestionsInOrder[globalQuestionIndex]?.id;
+    if (currentQId && questionStatuses[currentQId] === QuestionStatusEnum.NotVisited && !userAnswers[currentQId]){
+         setQuestionStatuses(prev => ({...prev, [currentQId]: QuestionStatusEnum.Unanswered}));
     }
 
     let cumulativeIndex = 0;
@@ -320,9 +309,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
             const indexInSection = globalIdx - cumulativeIndex;
             setCurrentSection(sectionName);
             setCurrentQuestionIndexInSection(indexInSection);
-            const newQ = sectionQuestionsList[indexInSection];
-            if (newQ?.id && (questionStatuses[newQ.id] === QuestionStatusEnum.NotVisited || !questionStatuses[newQ.id])) { // Also check if status is undefined
-                setQuestionStatuses(prev => ({...prev, [newQ.id!]: QuestionStatusEnum.Unanswered}));
+            const newQId = sectionQuestionsList[indexInSection]?.id;
+            if (newQId && (questionStatuses[newQId] === QuestionStatusEnum.NotVisited || !questionStatuses[newQId])) {
+                setQuestionStatuses(prev => ({...prev, [newQId]: QuestionStatusEnum.Unanswered}));
             }
             return;
         }
@@ -331,8 +320,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   };
 
   const handleSaveAndNext = () => {
-    if (currentQuestion?.id && (questionStatuses[currentQuestion.id] === QuestionStatusEnum.NotVisited || !questionStatuses[currentQuestion.id]) && !userAnswers[currentQuestion.id]){
-         setQuestionStatuses(prev => ({...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered}));
+    const currentQId = currentQuestion?.id;
+    if (currentQId && (questionStatuses[currentQId] === QuestionStatusEnum.NotVisited || !questionStatuses[currentQId]) && !userAnswers[currentQId]){
+         setQuestionStatuses(prev => ({...prev, [currentQId]: QuestionStatusEnum.Unanswered}));
     }
     if (globalQuestionIndex < allQuestionsInOrder.length - 1) {
       navigateToQuestion(globalQuestionIndex + 1);
@@ -343,26 +333,30 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
   const handleMarkForReview = () => {
     if (!currentQuestion?.id) return;
-    const currentStatus = questionStatuses[currentQuestion.id];
+    const currentQId = currentQuestion.id;
+    const currentStatus = questionStatuses[currentQId];
+    
     if (currentStatus === QuestionStatusEnum.Answered) {
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.AnsweredAndMarked }));
+      setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.AnsweredAndMarked }));
     } else if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.Answered }));
+        setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
-         setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered }));
-    } else { 
-      setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.MarkedForReview }));
+         setQuestionStatuses(prev => ({ ...prev, [currentQId]: userAnswers[currentQId] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
+    } else { // Unanswered or NotVisited
+      setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.MarkedForReview }));
     }
   };
 
   const handleClearResponse = () => {
     if (!currentQuestion?.id) return;
-    setUserAnswers(prev => ({ ...prev, [currentQuestion.id!]: null }));
-    const currentStatus = questionStatuses[currentQuestion.id];
+    const currentQId = currentQuestion.id;
+    setUserAnswers(prev => ({ ...prev, [currentQId]: null }));
+    const currentStatus = questionStatuses[currentQId];
+
     if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.MarkedForReview }));
-    } else {
-        setQuestionStatuses(prev => ({ ...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered }));
+        setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.MarkedForReview }));
+    } else { // Answered, MarkedForReview, NotVisited, Unanswered
+        setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.Unanswered }));
     }
   };
 
@@ -447,8 +441,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
           testName={testData.name}
           timeLeft={timeLeft}
           user={user}
-          onFullScreenToggle={toggleFullScreen}
-          isFullScreen={isFullScreen}
         />}
         
         {testData.testType === 'full_length' && Object.keys(questionsBySection).length > 1 && (
