@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress, getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -184,7 +184,7 @@ export default function DppLessonPage() {
       setShowSolution(false);
   };
 
-  const checkDailyGoalAndNotify = async () => {
+  const checkDailyGoalAndNotify = useCallback(async () => {
     if (!user || !user.id) return;
     const today = new Date().toISOString().split('T')[0]; 
     const goalAchievedKey = `dailyGoalAchieved_${user.id}_${today}`;
@@ -202,8 +202,6 @@ export default function DppLessonPage() {
         todayProgressData.forEach(lessonProg => {
             Object.values(lessonProg.questionAttempts).forEach(attemptsArray => {
                 if (attemptsArray.length > 0) { 
-                    // Consider a question solved if it has any attempt today
-                    // More refined logic could check if *new* distinct questions were solved today
                     solvedTodayCount++;
                 }
             });
@@ -220,7 +218,7 @@ export default function DppLessonPage() {
     } catch (error) {
         console.error("Error checking daily goal:", error);
     }
-  };
+  }, [user, toast]);
 
 
    const checkAnswer = async () => {
@@ -273,15 +271,20 @@ export default function DppLessonPage() {
   const navigateToQuestion = (newIndex: number) => {
     if (newIndex >= 0 && newIndex < filteredQuestions.length) {
         const newQuestionId = filteredQuestions[newIndex]?.id;
-
-        if (newQuestionId) {
-            // Clear the user's current session answer for the question being navigated to.
-            setUserAnswers(prev => ({
-                ...prev,
-                [newQuestionId]: null 
-            }));
-        }
         
+        // Do NOT clear previous answer for the new question if it exists in userAnswers from a prior session in this DPP.
+        // Only clear the *current* question's user selection from this *session* if needed.
+        // For DPP, we want to allow users to see their previous correct/incorrect state if they've answered it.
+        // The userAnswers state is for the current interaction *before* checkAnswer.
+
+        // If we were to reset:
+        // setUserAnswers(prev => ({ ...prev, [currentQuestion.id]: null })); // Reset current
+        // if (newQuestionId && userAnswers[newQuestionId] === undefined) { // Only if truly unattempted in this session
+        //   setUserAnswers(prev => ({ ...prev, [newQuestionId]: null }));
+        // }
+        // For now, we'll persist the selected answer locally until "Check Answer"
+        // and let the fetched dppProgress handle display of past attempts.
+
         setCurrentQuestionIndex(newIndex);
         setShowSolution(false); 
         setIsCorrect(null);     
@@ -307,8 +310,8 @@ export default function DppLessonPage() {
                     <Image
                        src={imagePath}
                        alt={`Question Image: ${q.id}`}
-                       layout="fill"
-                       objectFit="contain"
+                       fill
+                       style={{objectFit:"contain"}}
                        className="rounded-lg border-2 border-border group-hover:border-primary shadow-md"
                        data-ai-hint="question diagram"
                        priority={currentQuestionIndex < 2}
@@ -399,7 +402,7 @@ export default function DppLessonPage() {
                       {hasText && (
                           <div className="prose dark:prose-invert max-w-none mathjax-content text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
                       )}
-                      {hasImage && <div className="relative w-full max-w-md h-56 mx-auto mt-4 group hover:scale-105 transition-transform duration-300"><Image src={explanationImagePath!}  alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded-md border shadow-sm group-hover:shadow-lg" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
+                      {hasImage && <div className="relative w-full max-w-md h-56 mx-auto mt-4 group hover:scale-105 transition-transform duration-300"><Image src={explanationImagePath!}  alt={`Explanation Image`} fill style={{objectFit:"contain"}} className="rounded-md border shadow-sm group-hover:shadow-lg" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
                   </CardContent>
               </Card>
          );
