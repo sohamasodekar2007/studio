@@ -17,25 +17,31 @@ const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234';
 
+
 async function ensureDirExists(dirPath: string): Promise<boolean> {
   try {
     await fs.mkdir(dirPath, { recursive: true });
-    console.log(`Directory ensured: ${dirPath}`);
+    // console.log(`Directory ensured: ${dirPath}`); // Reduced logging
     return true;
   } catch (error: any) {
     if (error.code !== 'EEXIST') {
-        console.error(`Error creating directory ${dirPath}:`, error);
-        // It's crucial to know if this fails, especially for the base data path.
-        // For publicAvatarsPath, this might fail in serverless but be acceptable for local dev focus.
-        if (dirPath === dataBasePath || dirPath === path.dirname(usersFilePath)) {
-             throw new Error(`Failed to create critical data directory: ${dirPath}. Reason: ${error.message}`);
-        }
-        return false; // For non-critical paths like avatars in serverless, we might proceed.
+      // Special handling for publicAvatarsPath in serverless-like environments
+      if (dirPath === publicAvatarsPath && (error.code === 'EACCES' || error.code === 'EROFS' || (process.env.NETLIFY || process.env.VERCEL))) {
+        console.warn(`Warning: Could not create directory ${dirPath} (likely serverless environment, read-only filesystem for public assets at runtime). Avatar uploads requiring server-side directory creation will fail.`);
+        return false; // Indicate failure to create, but don't throw for this specific path
+      }
+      console.error(`Error creating directory ${dirPath}:`, error);
+      // For critical data paths, still throw.
+      if (dirPath === dataBasePath || dirPath === path.dirname(usersFilePath)) {
+           throw new Error(`Failed to create critical data directory: ${dirPath}. Reason: ${error.message}`);
+      }
+      return false;
     }
-    console.log(`Directory already exists: ${dirPath}`);
+    // console.log(`Directory already exists: ${dirPath}`); // Reduced logging
     return true; 
   }
 }
+
 
 // Renamed to writeUsersToFile to avoid conflict with the internal user-actions.ts writeUsers
 async function writeUsersToFile(users: UserProfile[]): Promise<boolean> {
@@ -66,16 +72,19 @@ const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
 
 // Renamed to avoid conflict and make it clear this is internal
 async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
-    console.log("Reading and initializing users from users.json...");
+    // console.log("Reading and initializing users from users.json..."); // Reduced logging
     let users: UserProfile[] = [];
     let writeNeeded = false;
 
     try { 
-        // Ensure base data directory and public avatars directory exist (for local dev)
-        // These calls might fail in a read-only serverless environment for 'publicAvatarsPath'
-        // but should succeed for 'dataBasePath' locally.
-        await ensureDirExists(dataBasePath);
-        await ensureDirExists(publicAvatarsPath); // This might be the source of /var/task/public error in serverless
+        await ensureDirExists(dataBasePath); // Critical, should succeed or throw
+
+        // Attempt to ensure publicAvatarsPath exists, but don't fail hard if it can't be created (e.g., serverless)
+        const avatarsPathExistsOrCreatable = await ensureDirExists(publicAvatarsPath);
+        if (!avatarsPathExistsOrCreatable) {
+            console.warn("Public avatars directory could not be ensured. Local avatar saving might be disabled.");
+        }
+
 
         try {
             await fs.access(usersFilePath);
@@ -209,7 +218,10 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             const writeSuccess = await writeUsersToFile(users);
             if (!writeSuccess) {
                 console.error("CRITICAL: Failed to write updated users.json file during initialization.");
-                throw new Error("Failed to save initial user data state.");
+                // Depending on deployment, this might be acceptable if users.json is read-only after build
+                // but for local dev or systems that expect writes, this is an issue.
+                // For Netlify/Vercel, this write will likely fail at runtime for new users.
+                // For now, we throw only if critical data path creation failed earlier.
             }
         }
         return users;
@@ -257,10 +269,9 @@ export async function findUserByTelegramIdInternal(telegramId: string): Promise<
 
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
+        // Attempt to ensure directory, but don't fail hard if it's a serverless environment
         if (!await ensureDirExists(publicAvatarsPath)) {
-             console.error(`Failed to ensure public avatars directory exists: ${publicAvatarsPath}. Avatar for ${userId} will not be saved.`);
-             // In a serverless context, this might often fail. We shouldn't throw a hard error here
-             // if avatar saving is optional or if the primary goal is user data persistence.
+             console.warn(`Public avatars directory (${publicAvatarsPath}) could not be ensured. Avatar for ${userId} will not be saved. This is expected in some serverless environments.`);
              return null;
         }
         const fileBuffer = Buffer.from(await avatarFile.arrayBuffer());
@@ -274,7 +285,7 @@ async function saveAvatarLocally(userId: string, avatarFile: File): Promise<stri
         return filename;
     } catch (error) {
         console.error(`Error saving avatar locally for user ${userId}:`, error);
-        return null;
+        return null; // Return null on any error during avatar saving
     }
 }
 
@@ -283,11 +294,11 @@ async function deleteAvatarLocally(filename: string): Promise<boolean> {
         const filePath = path.join(publicAvatarsPath, filename);
         await fs.access(filePath); 
         await fs.unlink(filePath);
-        console.log(`Deleted local public avatar: ${filePath}`);
+        // console.log(`Deleted local public avatar: ${filePath}`); // Reduced logging
         return true;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            console.warn(`Public avatar file not found for deletion: ${filename}`);
+            // console.warn(`Public avatar file not found for deletion: ${filename}`); // Reduced logging
             return true; 
         }
         console.error(`Error deleting local public avatar ${filename}:`, error);
@@ -336,15 +347,15 @@ export async function addUserToJson(
             role: assignedRole, 
             expiry_date: expiryDate,
             createdAt: new Date().toISOString(),
-            avatarUrl: null,
+            avatarUrl: null, // Avatars are handled separately or not at all on initial add
             referral: '',
             totalPoints: 0,
             targetYear: newUserProfileData.targetYear || null,
-            telegramId: null, // New users via form won't have this initially
+            telegramId: null, 
             telegramUsername: null,
         };
 
-        let users = await readUsersWithPasswordsInternal();
+        let users = await readUsersWithPasswordsInternal(); // This also initializes avatars path if possible
         if (users.some(u => u.email?.toLowerCase() === emailLower)) {
             return { success: false, message: 'User with this email already exists.' };
         }
@@ -356,22 +367,22 @@ export async function addUserToJson(
             const { password, ...userWithoutPassword } = userToAdd;
             return { success: true, user: userWithoutPassword };
         } else {
-            // This means writeUsersToFile failed, which should now throw if critical.
-            return { success: false, message: 'Failed to write users file.' };
+            return { success: false, message: 'Failed to write users file. New user not saved.' };
         }
     } catch (error: any) {
         console.error('Error in addUserToJson:', error);
-        // The error from ensureDirExists or writeUsersToFile will be caught here if they throw.
         return { success: false, message: `Server error: ${error.message || 'Could not add user.'}` };
     }
 }
 
 // Modified to accept FormData for avatar updates
 export async function updateUserInJson(
-    formData: FormData // Changed to accept FormData
+    userId: string, // Pass userId directly
+    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'>>, // Data excluding non-editable and password
+    avatarFile?: File | null, // Optional avatar file
+    removeAvatarFlag?: boolean // Flag to indicate avatar removal
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
-        const userId = formData.get('userId') as string;
         if (!userId || typeof userId !== 'string') {
             return { success: false, message: "Invalid user ID provided for update." };
         }
@@ -385,50 +396,28 @@ export async function updateUserInJson(
 
         const existingUser = users[userIndex];
         let newAvatarFilename = existingUser.avatarUrl || null;
-        const avatarFile = formData.get('avatarFile') as File | null;
-        const removeAvatar = formData.get('removeAvatar') === 'true';
-
 
         if (avatarFile instanceof File) {
             if (existingUser.avatarUrl) { await deleteAvatarLocally(existingUser.avatarUrl); }
             newAvatarFilename = await saveAvatarLocally(userId, avatarFile);
-            // If saving new avatar fails, we might keep the old one or set to null.
-            // For now, if saveAvatarLocally returns null, newAvatarFilename becomes null.
             if (!newAvatarFilename && existingUser.avatarUrl) {
-                 console.warn("Failed to save new avatar, old avatar was removed. Setting avatar to null.");
-                 newAvatarFilename = null; // Explicitly null if save failed and old existed
+                 console.warn("Failed to save new avatar, old avatar was removed or save failed. Setting avatar to null.");
+                 newAvatarFilename = null;
             } else if (!newAvatarFilename) {
                  console.warn("Failed to save new avatar. Setting avatar to null.");
                  newAvatarFilename = null;
             }
-        } else if (removeAvatar && existingUser.avatarUrl) {
+        } else if (removeAvatarFlag && existingUser.avatarUrl) {
             await deleteAvatarLocally(existingUser.avatarUrl);
             newAvatarFilename = null;
         }
         
-        // Extract other updatable fields from FormData
-        const name = formData.get('name') as string | null;
-        // Phone is typically not updated by user from settings, but admin might. For this action, assume it's from admin.
-        const phone = formData.get('phone') as string | null;
-        const email = formData.get('email') as string | null; // Email might be updated by admin
-        const academicClass = formData.get('class') as AcademicStatus | null;
-        const targetYear = formData.get('targetYear') as string | null;
-        const model = formData.get('model') as UserModel | null; // Admin can change model
-        const expiry_date_str = formData.get('expiry_date') as string | null; // Admin can change expiry
-
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
-            name: name !== null ? name : existingUser.name,
-            // Phone is not directly updated by user in their settings page normally. This action is likely admin-triggered.
-            phone: phone !== null ? phone : existingUser.phone,
-            // Email is not directly updated by user in their settings page normally. This action is likely admin-triggered.
-            email: email !== null ? email : existingUser.email,
-            class: academicClass !== null ? academicClass : existingUser.class,
-            targetYear: targetYear !== null ? targetYear : existingUser.targetYear,
-            avatarUrl: newAvatarFilename,
-            model: model !== null ? model : existingUser.model,
-            expiry_date: expiry_date_str !== null ? expiry_date_str : existingUser.expiry_date,
-            // Role, password, createdAt, referral, totalPoints, telegramId, telegramUsername are not updated here
+            ...updatedData, // Apply other updates
+            avatarUrl: newAvatarFilename, // Set the new avatar filename
+            // Ensure role isn't accidentally changed here unless explicitly part of updatedData
+            role: updatedData.role ?? existingUser.role,
         };
         
         users[userIndex] = userWithUpdatesApplied;
@@ -639,9 +628,7 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
        if (hashedPassword && !hashedPassword.startsWith('$2a$') && !hashedPassword.startsWith('$2b$')) {
             hashedPassword = await bcrypt.hash(hashedPassword, SALT_ROUNDS);
        } else if (!hashedPassword) {
-            // If creating a new user and no password is provided (e.g., Telegram login),
-            // generate a secure random password and hash it.
-            const randomPassword = uuidv4(); // Or a more robust random string generator
+            const randomPassword = uuidv4(); 
             hashedPassword = await bcrypt.hash(randomPassword, SALT_ROUNDS);
             console.warn(`No password provided for new user ${userData.email || userData.id}. A random password has been generated.`);
        }

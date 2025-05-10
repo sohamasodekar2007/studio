@@ -22,7 +22,7 @@ import { getUserById, updateUserInJson, updateUserPasswordInJson, findUserByEmai
 import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/types';
 import { academicStatuses } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from "@/components/ui/badge";
+import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import bcrypt from 'bcryptjs';
 
@@ -30,7 +30,7 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit for profile pictures
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 // Generate dynamic year options for Target Year
-const getCurrentAndFutureYears = (count = 5) => { // Increased count to 5 for more options
+const getCurrentAndFutureYears = (count = 5) => { 
   const currentYear = new Date().getFullYear();
   return Array.from({ length: count }, (_, i) => (currentYear + i).toString());
 };
@@ -39,7 +39,7 @@ const getCurrentAndFutureYears = (count = 5) => { // Increased count to 5 for mo
 // --- Profile Form Schema ---
 const profileSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().optional(), // Phone is disabled, validation might not be strictly needed if not sent
+  phone: z.string().optional(), 
   academicStatus: z.enum(academicStatuses, { required_error: "Academic status is required." }).nullable(),
   targetYear: z.string({ required_error: "Target year is required." }).min(4, "Target year is required.").nullable(),
   avatarFile: z.any()
@@ -165,7 +165,6 @@ export default function SettingsPage() {
     setAvatarPreview(null); // Clear preview
     if (avatarInputRef.current) avatarInputRef.current.value = ""; // Reset file input
     profileForm.clearErrors("avatarFile");
-    // No need to call profileForm.setValue('removeAvatar', true) here, this flag will be set in FormData
     toast({ title: "Avatar Marked for Removal", description: "Click 'Save Profile Changes' to confirm." });
   };
 
@@ -178,33 +177,37 @@ export default function SettingsPage() {
     }
     setIsLoadingProfile(true);
 
-    const formData = new FormData();
-    formData.append('userId', user.id); // Pass userId separately or include in formData
-    formData.append('name', data.name);
-    // Phone is disabled and not intended to be updated by the user from this form
-    // If it were editable: formData.append('phone', data.phone || ''); 
-    if (data.academicStatus) formData.append('class', data.academicStatus);
-    if (data.targetYear) formData.append('targetYear', data.targetYear);
+    const updatedDataForAction: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername' | 'avatarUrl'>> & {email?:string} = {
+      name: data.name,
+      // phone: data.phone || '', // Phone is disabled for user edit
+      class: data.academicStatus,
+      targetYear: data.targetYear || null,
+      // model and expiry_date are not updated by user in this form
+    };
 
+    let avatarFileToSend: File | null = null;
     if (data.avatarFile instanceof File) {
-      formData.append('avatarFile', data.avatarFile);
-    } else if (avatarPreview === null && fullUserProfile.avatarUrl) {
-      // This means the user explicitly removed the avatar without uploading a new one
-      formData.append('removeAvatar', 'true');
+      avatarFileToSend = data.avatarFile;
     }
-    // Note: model and expiry_date are not part of this form, they are managed by admin
+    
+    const removeAvatarFlag = avatarPreview === null && !!fullUserProfile.avatarUrl && !data.avatarFile;
+
 
     try {
-      // Pass FormData directly to the server action
-      const updateResult = await updateUserInJson(formData);
+      const updateResult = await updateUserInJson(
+        user.id,
+        updatedDataForAction,
+        avatarFileToSend,
+        removeAvatarFlag
+      );
 
       if (!updateResult.success || !updateResult.user) {
         throw new Error(updateResult.message || "Failed to save profile updates.");
       }
 
       await refreshUser();
-      updateContextUserData(updateResult.user);
-      setFullUserProfile(updateResult.user);
+      updateContextUserData(updateResult.user); // Update context
+      setFullUserProfile(updateResult.user); // Update local full profile state
       toast({ title: "Profile Updated", description: "Your profile info has been saved." });
       profileForm.reset({
         name: updateResult.user.name || "",
@@ -218,7 +221,6 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error("Profile update failed:", error);
       toast({ variant: 'destructive', title: "Update Failed", description: error.message });
-      // Revert preview if upload failed but an image was selected
       if (data.avatarFile && !(avatarPreview === null && fullUserProfile?.avatarUrl)) {
            setAvatarPreview(fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : null);
       }
@@ -288,7 +290,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (!user) return null;
+  if (!user) return null; // Should be handled by loading state or redirect
 
   const displayAvatarSrc = avatarPreview ?? (fullUserProfile?.avatarUrl ? `/avatars/${fullUserProfile.avatarUrl}` : (user.email ? `https://avatar.vercel.sh/${user.email}.png` : undefined));
   const avatarKey = avatarPreview || fullUserProfile?.avatarUrl || user.email || user.id;
@@ -316,7 +318,7 @@ export default function SettingsPage() {
               )} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                 <FormField control={profileForm.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} disabled={isLoadingProfile} /></FormControl><FormMessage /></FormItem> )} />
-                <FormField control={profileForm.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} disabled={true} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground">Contact support to change phone number.</p></FormItem> )} />
+                <FormField control={profileForm.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} disabled={true} /></FormControl><FormMessage /><p className="text-xs text-muted-foreground pt-1">Contact support to change phone number.</p></FormItem> )} />
                 <div className="space-y-2"> <Label htmlFor="email">Email Address</Label> <Input id="email" type="email" value={user.email || ""} disabled /> <p className="text-xs text-muted-foreground">Email cannot be changed.</p> </div>
                 
                 <FormField control={profileForm.control} name="academicStatus" render={({ field }) => (
@@ -354,3 +356,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+
