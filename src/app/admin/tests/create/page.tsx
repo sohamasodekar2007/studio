@@ -1,3 +1,4 @@
+// src/app/admin/tests/create/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from 'react';
@@ -7,7 +8,7 @@ import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Corrected import
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -15,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Trash2, Eye, ListFilter, Settings2, BookOpen, Brain, Sigma, FlaskConical, Atom, Leaf, Palette, FileText, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
+import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus, ChapterwiseTestJson, FullLengthTestJson as FullLengthTestJsonType } from '@/types';
 import { pricingTypes, academicStatuses, testStreams, exams } from '@/types';
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
@@ -32,8 +33,8 @@ import { Badge } from '@/components/ui/badge';
 const BasePropsSchema = z.object({
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
-  accessType: z.enum(pricingTypes),
-  audience: z.enum(academicStatuses).nullable().default(null),
+  accessType: z.enum(pricingTypes, { required_error: "Access Type is required."}),
+  audience: z.enum(academicStatuses, { required_error: "Target Audience is required." }).nullable().default(null),
 });
 
 const ChapterwiseSchema = BasePropsSchema.extend({
@@ -57,14 +58,14 @@ const SubjectConfigSchema = z.object({
 
 const FullLengthSchema = BasePropsSchema.extend({
   testType: z.literal('full_length'),
-  exam: z.enum(exams),
+  exam: z.enum(exams, { required_error: "Target Exam is required."}),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
 }).superRefine((data, ctx) => {
     if (data.subjectsConfig && data.subjectsConfig.length > 0) {
         const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
-        if (Math.abs(totalWeightageSum - 100) >= 0.01 && totalWeightageSum !== 0) {
+        if (Math.abs(totalWeightageSum - 100) >= 0.01 && totalWeightageSum !== 0 && totalWeightageSum !== 100) { // Allow sum of 100
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: `Total subject weightages must sum to 100% or all be 0 if distributing equally. Current sum: ${totalWeightageSum.toFixed(1)}%`,
@@ -76,7 +77,7 @@ const FullLengthSchema = BasePropsSchema.extend({
         data.subjectsConfig.forEach((subject, subjectIndex) => {
             if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
                 const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
-                if (Math.abs(lessonWeightageSum - 100) >= 0.01 && lessonWeightageSum !== 0) {
+                if (Math.abs(lessonWeightageSum - 100) >= 0.01 && lessonWeightageSum !== 0 && lessonWeightageSum !== 100) { // Allow sum of 100
                     ctx.addIssue({
                         code: z.ZodIssueCode.custom,
                         message: `Lesson weightages for ${subject.subjectName} must sum to 100% or all be 0. Current sum: ${lessonWeightageSum.toFixed(1)}%`,
@@ -87,6 +88,7 @@ const FullLengthSchema = BasePropsSchema.extend({
         });
     }
 });
+
 
 // Discriminated union schema
 const TestCreationSchema = z.discriminatedUnion("testType", [
@@ -133,10 +135,12 @@ export default function CreateTestPage() {
       duration: 60,
       accessType: 'FREE',
       audience: null, 
+      // Chapterwise defaults
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
+      // FullLength defaults
       exam: 'MHT-CET', 
       stream: null,
       overallTotalQuestions: 50,
@@ -244,8 +248,8 @@ export default function CreateTestPage() {
         let distributedQuestionsSum = 0;
         const newConfigs = subjectsConfigValues.map((config, subjectIndex) => {
             let questionsForSubject = 0;
-            if (totalWeightageSum > 0 && config.totalSubjectWeightage > 0) { 
-                 questionsForSubject = Math.round((config.totalSubjectWeightage / totalWeightageSum) * overallTotalQuestions);
+            if (totalWeightageSum > 0 && (config.totalSubjectWeightage || 0) > 0) { // Check if config.totalSubjectWeightage is defined
+                 questionsForSubject = Math.round(((config.totalSubjectWeightage || 0) / totalWeightageSum) * overallTotalQuestions);
             } else if (totalWeightageSum === 0 && subjectsConfigValues.length > 0) { 
                 questionsForSubject = Math.floor(overallTotalQuestions / subjectsConfigValues.length);
             }
@@ -377,7 +381,7 @@ export default function CreateTestPage() {
           lessons: chapterwiseData.lessons,
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '), 
           questions: finalQuestions,
-        };
+        } as Omit<ChapterwiseTestJson, 'test_code' | 'createdAt'>;
       } else { 
         const fullLengthData = data; 
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
@@ -412,7 +416,6 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
-            // Potentially show a toast here or adjust logic if this mismatch is critical
         }
 
         testToSave = {
@@ -432,13 +435,13 @@ export default function CreateTestPage() {
           weightage: fullLengthData.subjectsConfig?.reduce((acc, curr) => { 
             if (curr.lessons) { 
                  acc[curr.subjectName] = curr.lessons.reduce((lessonAcc, lesson) => {
-                    lessonAcc[lesson.lessonName] = lesson.weightage;
+                    lessonAcc[lesson.lessonName] = lesson.weightage || 0; // Ensure weightage is a number
                     return lessonAcc;
                 }, {} as Record<string, number>);
             }
             return acc;
           }, {} as Record<string, Record<string, number>>)
-        };
+        } as Omit<FullLengthTestJsonType, 'test_code' | 'createdAt'>;
       }
 
       const result = await saveGeneratedTest(testToSave as Omit<GeneratedTest, 'test_code' | 'createdAt'>); 
@@ -527,7 +530,7 @@ export default function CreateTestPage() {
                                             setAvailableQuestions([]); 
                                             setLessonsBySubject({}); 
                                         }}
-                                        value={field.value}
+                                        value={field.value || 'chapterwise'}
                                         className="flex space-x-4"
                                     >
                                         <FormItem className="flex items-center space-x-2">
