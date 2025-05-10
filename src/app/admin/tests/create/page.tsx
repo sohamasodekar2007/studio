@@ -22,8 +22,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Loader2, Filter, BookOpen, Check, ChevronsUpDown, AlertTriangle, Eye, FileText, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus, TestQuestionType } from '@/types';
-import { pricingTypes, academicStatuses as resolvedAudienceTypes, testStreams, exams } from '@/types';
+import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
+import { pricingTypes, academicStatuses as audienceTypes, testStreams, exams } from '@/types';
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,14 +36,14 @@ const commonTestFieldsSchema = z.object({
     name: z.string().min(3, "Test name must be at least 3 characters long."),
     duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be a positive number."),
     type: z.enum(pricingTypes, { required_error: "Access type is required." }),
-    audience: z.enum(resolvedAudienceTypes, { required_error: "Target audience is required." }),
+    audience: z.enum(audienceTypes, { required_error: "Target audience is required." }),
 });
 
 const ChapterwiseSchema = commonTestFieldsSchema.extend({
     testType: z.literal('chapterwise'),
     subject: z.string().min(1, "Subject is required."),
     lesson: z.string().min(1, "Lesson name is required."),
-    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[]]).default('all'), // Default to 'all'
+    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[], 'all'], {invalid_type_error: "Please select an exam filter."}).default('all'),
     selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question."),
     count: z.number().min(1, "Must select at least 1 question.").max(50, "Max 50 questions per chapterwise test."),
 });
@@ -52,7 +52,7 @@ const ChapterwiseSchema = commonTestFieldsSchema.extend({
 const FullLengthSchema = commonTestFieldsSchema.extend({
     testType: z.literal('full_length'),
     stream: z.enum(testStreams, { required_error: "Stream selection is required." }),
-    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[]]).default('all'),
+    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[], 'all'], {invalid_type_error: "Please select an exam filter."}).default('all'),
     totalQuestions: z.number().min(10, "Must select at least 10 total questions.").positive("Total questions must be positive."),
     weightagePhysics: z.number().min(0).max(100).optional(),
     weightageChemistry: z.number().min(0).max(100).optional(),
@@ -60,19 +60,19 @@ const FullLengthSchema = commonTestFieldsSchema.extend({
     weightageBiology: z.number().min(0).max(100).optional(),
 })
 .refine(data => {
-    if (data.testType !== 'full_length') return true; // Skip if not full length
+    if (data.testType !== 'full_length') return true;
+    let sum = 0;
     if (data.stream === 'PCM') {
-        const sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageMaths ?? 0);
-        return sum === 100;
+        sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageMaths ?? 0);
+    } else if (data.stream === 'PCB') {
+        sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageBiology ?? 0);
+    } else {
+        return true; // No weightage for other streams or if stream undefined
     }
-    if (data.stream === 'PCB') {
-        const sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageBiology ?? 0);
-        return sum === 100;
-    }
-    return true;
+    return sum === 100;
 }, {
-    message: "Weightages must add up to 100% for the selected stream.",
-    path: ["weightagePhysics"], // Can point to any of the weightage fields
+    message: "Weightages must add up to 100% for the selected stream (PCM/PCB).",
+    path: ["weightagePhysics"], // Or a more general path like ["stream"] or form root
 });
 
 
@@ -110,12 +110,11 @@ export default function CreateTestPage() {
   const form = useForm<TestCreationFormValues>({
     resolver: zodResolver(TestCreationSchema),
     defaultValues: {
-        testType: 'chapterwise', // Default to chapterwise
+        testType: 'chapterwise',
         name: '',
         duration: 60,
         type: 'FREE',
         audience: 'Dropper',
-        // Chapterwise specific defaults
         subject: '',
         lesson: '',
         examFilter: 'all',
@@ -125,11 +124,11 @@ export default function CreateTestPage() {
   });
 
   const selectedTestType = form.watch('testType');
-  const selectedSubjectWatch = form.watch('subject'); // This might be undefined if testType is 'full_length'
-  const selectedLessonWatch = form.watch('lesson');   // This might be undefined
-  const selectedQuestionIdsWatch = form.watch('selectedQuestionIds'); // This might be undefined
-  const chapterwiseCountWatch = form.watch('count'); // This might be undefined
-  const fullLengthStreamWatch = form.watch('stream'); // This might be undefined
+  const selectedSubjectWatch = form.watch('subject' as any); // Cast to any to avoid TS errors with discriminated union
+  const selectedLessonWatch = form.watch('lesson' as any);
+  const selectedQuestionIdsWatch = form.watch('selectedQuestionIds' as any);
+  const chapterwiseCountWatch = form.watch('count' as any);
+  const fullLengthStreamWatch = form.watch('stream' as any);
 
 
   const typesetMathJax = useCallback(() => {
@@ -153,26 +152,26 @@ export default function CreateTestPage() {
 
 
   useEffect(() => {
-    // Store common values before reset
     const currentValues = form.getValues();
-    const commonValues = {
+    const commonValuesToPreserve = {
       name: currentValues.name,
-      duration: currentValues.duration || 60, // Default if undefined
-      type: currentValues.type || 'FREE',
-      audience: currentValues.audience || 'Dropper',
-      examFilter: currentValues.examFilter || 'all',
+      duration: currentValues.duration,
+      type: currentValues.type,
+      audience: currentValues.audience,
+      examFilter: (currentValues as any).examFilter || 'all',
     };
 
     if (selectedTestType === 'full_length') {
       form.reset({
-        ...commonValues,
+        ...commonValuesToPreserve,
         testType: 'full_length',
-        stream: 'PCM', // Default stream
+        stream: 'PCM',
         totalQuestions: 50,
-        weightagePhysics: 34, // Example defaults
+        weightagePhysics: 34,
         weightageChemistry: 33,
         weightageMaths: 33,
-        // Fields for chapterwise should be explicitly undefined
+        weightageBiology: undefined, // Reset biology for PCM
+        // Chapterwise fields to undefined
         subject: undefined,
         lesson: undefined,
         selectedQuestionIds: undefined,
@@ -180,13 +179,13 @@ export default function CreateTestPage() {
       });
     } else if (selectedTestType === 'chapterwise') {
       form.reset({
-        ...commonValues,
+        ...commonValuesToPreserve,
         testType: 'chapterwise',
-        subject: '', // Reset subject and lesson for chapterwise
+        subject: '',
         lesson: '',
         selectedQuestionIds: [],
         count: 20,
-        // Fields for full_length should be explicitly undefined
+        // Full_length fields to undefined
         stream: undefined,
         totalQuestions: undefined,
         weightagePhysics: undefined,
@@ -196,7 +195,7 @@ export default function CreateTestPage() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTestType]); // form.reset can cause infinite loops if not managed correctly with its dependencies
+  }, [selectedTestType]); // Removed form.reset, form is stable
 
 
     useEffect(() => {
@@ -244,7 +243,7 @@ export default function CreateTestPage() {
         } else {
             setAvailableQuestions([]);
         }
-    }, [selectedTestType, selectedSubjectWatch, selectedLessonWatch, form, toast, form.watch('examFilter')]);
+    }, [selectedTestType, selectedSubjectWatch, selectedLessonWatch, form, toast, form.watch('examFilter' as any)]);
 
 
      useEffect(() => {
@@ -316,7 +315,7 @@ export default function CreateTestPage() {
 
                 finalQuestions = selectedQsData.map(q => ({
                     id: q.id,
-                    type: q.type as TestQuestionType, // Ensure type matches TestQuestionType
+                    type: q.type,
                     question_text: q.question.text || null,
                     question_image_url: q.question.image ? constructImagePath(q.subject, q.lesson, q.question.image) : null,
                     options: [q.options.A, q.options.B, q.options.C, q.options.D],
@@ -331,7 +330,7 @@ export default function CreateTestPage() {
                 testDefinition = {
                     ...baseData,
                     testType: 'chapterwise',
-                    count: actualTotalQuestions,
+                    count: actualTotalQuestions, // Use actual selected count
                     total_questions: actualTotalQuestions,
                     test_subject: subjectsInTest,
                     lesson: chapterwiseData.lesson,
@@ -349,7 +348,7 @@ export default function CreateTestPage() {
                 const allSubjectQuestions: { [key: string]: QuestionBankItem[] } = {};
                 let totalAvailableBankQuestions = 0;
 
-                setIsLoadingQuestions(true);
+                setIsLoadingQuestions(true); // Indicate loading
                 try {
                     await Promise.all(subjectsInTest.map(async (subject) => {
                         const lessonsInSubject = await getLessonsForSubject(subject);
@@ -362,8 +361,9 @@ export default function CreateTestPage() {
                         totalAvailableBankQuestions += subjectQuestions.length;
                     }));
                 } finally {
-                    setIsLoadingQuestions(false);
+                    setIsLoadingQuestions(false); // Stop loading
                 }
+
 
                 if (totalAvailableBankQuestions < fullLengthData.totalQuestions) {
                     throw new Error(`Not enough questions in bank (${totalAvailableBankQuestions}) for requested total (${fullLengthData.totalQuestions}). Try broader filters.`);
@@ -371,12 +371,13 @@ export default function CreateTestPage() {
 
                 const totalQuestionsNeeded = fullLengthData.totalQuestions;
                  const weightages: Record<string, number> = {
-                    Physics: fullLengthData.weightagePhysics ?? (fullLengthData.stream === 'PCM' ? 34 : 33),
+                    Physics: fullLengthData.weightagePhysics ?? (fullLengthData.stream === 'PCM' ? 34 : 33), // Default if undefined
                     Chemistry: fullLengthData.weightageChemistry ?? 33,
                     Maths: fullLengthData.stream === 'PCM' ? (fullLengthData.weightageMaths ?? 33) : 0,
                     Biology: fullLengthData.stream === 'PCB' ? (fullLengthData.weightageBiology ?? 34) : 0,
                  };
 
+                // Distribute questions according to weightage
                 const targetCounts: { [key: string]: number } = {};
                 let calculatedSum = 0;
                 subjectsInTest.forEach(subject => {
@@ -384,14 +385,16 @@ export default function CreateTestPage() {
                     calculatedSum += targetCounts[subject];
                 });
 
+                 // Adjust if sum doesn't match totalQuestionsNeeded due to rounding
                  let diff = totalQuestionsNeeded - calculatedSum;
                  while (diff !== 0) {
                     const adjustableSubjects = subjectsInTest.filter(s => (diff > 0) || (targetCounts[s] > 0));
-                    if (adjustableSubjects.length === 0) break;
+                    if (adjustableSubjects.length === 0) break; // Safety break
                     const adjustSubject = adjustableSubjects[Math.floor(Math.random() * adjustableSubjects.length)];
                     if (diff > 0) { targetCounts[adjustSubject]++; diff--; }
                     else if (targetCounts[adjustSubject] > 0) { targetCounts[adjustSubject]--; diff++; }
                  }
+
 
                 const physicsQs: TestQuestion[] = [];
                 const chemistryQs: TestQuestion[] = [];
@@ -405,7 +408,7 @@ export default function CreateTestPage() {
 
                     selectedForSubject.forEach(q => {
                         const questionObj: TestQuestion = {
-                            id: q.id, type: q.type as TestQuestionType,
+                            id: q.id, type: q.type,
                             question_text: q.question.text || null,
                             question_image_url: q.question.image ? constructImagePath(q.subject, q.lesson, q.question.image) : null,
                             options: [q.options.A, q.options.B, q.options.C, q.options.D],
@@ -433,8 +436,8 @@ export default function CreateTestPage() {
                         maths: fullLengthData.stream === 'PCM' ? weightages.Maths : undefined,
                         biology: fullLengthData.stream === 'PCB' ? weightages.Biology : undefined,
                     },
-                    count: totalQuestionsNeeded,
-                    total_questions: actualTotalQuestions,
+                    count: totalQuestionsNeeded, // Requested count
+                    total_questions: actualTotalQuestions, // Actual count
                     physics: physicsQs.length > 0 ? physicsQs : undefined,
                     chemistry: chemistryQs.length > 0 ? chemistryQs : undefined,
                     maths: mathsQs.length > 0 ? mathsQs : undefined,
@@ -446,31 +449,32 @@ export default function CreateTestPage() {
                 const result = await saveGeneratedTest(testDefinition);
                 if (!result.success) throw new Error(result.message || "Failed to save test.");
                 toast({ title: "Test Created!", description: `Test "${data.name}" (${testCode}) saved successfully.` });
-                form.reset( {
+                form.reset( { // Reset to default chapterwise form
                     testType: 'chapterwise', name: '', duration: 60, type: 'FREE', audience: 'Dropper',
                     subject: '', lesson: '', examFilter: 'all', selectedQuestionIds: [], count: 20,
                 });
-                setAvailableQuestions([]);
-                setSelectedQuestionObjects([]);
+                setAvailableQuestions([]); // Clear question list
+                setSelectedQuestionObjects([]); // Clear selected objects
             } else {
                  throw new Error("Invalid test type or configuration error.");
             }
 
         } catch (error: any) {
+            console.error("Error in onSubmit:", error);
             toast({ variant: "destructive", title: "Creation Failed", description: error.message });
         } finally {
             setIsLoading(false);
         }
     };
 
-  const totalSelectedCount = form.watch('selectedQuestionIds', []).length;
+  const totalSelectedCount = form.watch('selectedQuestionIds' as any, []).length;
   const totalAvailableCount = useMemo(() => availableQuestions.length, [availableQuestions]);
 
-  const handleMathJaxLoad = () => {
+  const handleMathJaxLoad = useCallback(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax) {
       typesetMathJax();
     }
-  };
+  }, [typesetMathJax]);
     
   return (
     <>
@@ -517,7 +521,7 @@ export default function CreateTestPage() {
                             <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Test Name *</FormLabel><FormControl><Input placeholder="e.g., Physics Mock Test 1" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="duration" render={({ field }) => (<FormItem><FormLabel>Duration (Minutes) *</FormLabel><FormControl><Input type="number" placeholder="e.g., 60" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} disabled={isLoading} min="1" /></FormControl><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="type" render={({ field }) => ( <FormItem><FormLabel>Access Type *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Access" /></SelectTrigger></FormControl><SelectContent>{pricingTypes.map(pt => <SelectItem key={pt} value={pt} className="capitalize">{pt.replace('_', ' ')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                            <FormField control={form.control} name="audience" render={({ field }) => ( <FormItem><FormLabel>Target Audience *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Audience" /></SelectTrigger></FormControl><SelectContent>{resolvedAudienceTypes.map(aud => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="audience" render={({ field }) => ( <FormItem><FormLabel>Target Audience *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Audience" /></SelectTrigger></FormControl><SelectContent>{audienceTypes.map(aud => <SelectItem key={aud} value={aud}>{aud}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         </CardContent>
                     </Card>
 
@@ -539,7 +543,7 @@ export default function CreateTestPage() {
                                     <FormItem>
                                         <div className="mb-2 flex justify-between items-center"><FormLabel>Select Questions * ({totalSelectedCount} / {totalAvailableCount})</FormLabel>
                                         {availableQuestions.length > 0 && (<div className="space-x-2"><Button type="button" size="sm" variant="outline" onClick={handleAutoSelect} disabled={isLoading || isLoadingQuestions || !chapterwiseCountWatch || chapterwiseCountWatch === 0}>Auto-Pick {chapterwiseCountWatch}</Button><Button type="button" size="sm" variant="outline" onClick={() => field.onChange(availableQuestions.map(q => q.id))} disabled={isLoading || isLoadingQuestions}>Select All</Button><Button type="button" size="sm" variant="outline" onClick={() => field.onChange([])} disabled={isLoading || isLoadingQuestions}>Deselect All</Button></div>)}</div>
-                                        <FormControl><ScrollArea className="h-72 w-full rounded-md border p-4 bg-muted/20">{isLoadingQuestions ? (<p>Loading...</p>) : availableQuestions.length === 0 ? (<p>No questions.</p>) : (<div className="space-y-2">{availableQuestions.map((item) => (<FormField key={item.id} control={form.control} name="selectedQuestionIds" render={({ field: checkboxField }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded bg-background"><FormControl><Checkbox checked={checkboxField.value?.includes(item.id)} onCheckedChange={(checked) => checked ? checkboxField.onChange([...(checkboxField.value || []), item.id]) : checkboxField.onChange(checkboxField.value?.filter(id => id !== item.id))} /></FormControl>
+                                        <FormControl><ScrollArea className="h-72 w-full rounded-md border p-4 bg-muted/20">{isLoadingQuestions ? (<p>Loading...</p>) : availableQuestions.length === 0 ? (<p>No questions found. Adjust filters or add questions to the bank.</p>) : (<div className="space-y-2">{availableQuestions.map((item) => (<FormField key={item.id} control={form.control} name="selectedQuestionIds" render={({ field: checkboxField }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 p-3 border rounded bg-background"><FormControl><Checkbox checked={checkboxField.value?.includes(item.id)} onCheckedChange={(checked) => checked ? checkboxField.onChange([...(checkboxField.value || []), item.id]) : checkboxField.onChange(checkboxField.value?.filter(id => id !== item.id))} /></FormControl>
                                         <FormLabel className="text-sm font-normal flex-1 cursor-pointer">
                                             {item.type === 'text' && item.question.text && (
                                                 <span className="font-medium block mathjax-content-preview" dangerouslySetInnerHTML={{__html: (item.question.text.substring(0,100)+'...')}}></span>
@@ -589,7 +593,6 @@ export default function CreateTestPage() {
             onClose={() => setIsJsonEditorOpen(false)}
             jsonString={sampleJsonContent}
             onSave={(editedJson) => {
-              // setJsonInputText(editedJson); // Example: update the textarea for bulk upload
               setIsJsonEditorOpen(false);
               toast({title: "JSON Content Updated", description: "Pasted into the text area."});
             }}
