@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Loader2, Filter, BookOpen, Check, ChevronsUpDown, AlertTriangle, Eye, FileText, ImageIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { QuestionBankItem, PricingType, ExamOption, TestStream, GeneratedTest, TestQuestion, AcademicStatus } from '@/types';
-import { pricingTypes, academicStatuses, testStreams, exams as examOptionsList } from '@/types';
+import { pricingTypes, academicStatuses, testStreams, exams } from '@/types';
 import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,6 +35,7 @@ const commonTestFieldsSchema = z.object({
     duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be a positive number."),
     type: z.enum(pricingTypes, { required_error: "Access type is required." }),
     audience: z.enum(academicStatuses, { required_error: "Target audience is required." }),
+    testType: z.enum(['chapterwise', 'full_length']) // Discriminator
 });
 
 // Schema for Chapterwise tests
@@ -42,7 +43,7 @@ const ChapterwiseSchema = commonTestFieldsSchema.extend({
     testType: z.literal('chapterwise'),
     subject: z.string().min(1, "Subject is required."),
     lesson: z.string().min(1, "Lesson name is required."),
-    examFilter: z.enum([...examOptionsList, 'all'] as [ExamOption, ...ExamOption[], 'all'], { invalid_type_error: "Please select an exam filter." }).default('all'),
+    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[], 'all'], { invalid_type_error: "Please select an exam filter." }).default('all'),
     selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").optional(),
     count: z.number().min(1, "Must select at least 1 question.").max(50, "Max 50 questions per chapterwise test."),
 });
@@ -51,7 +52,7 @@ const ChapterwiseSchema = commonTestFieldsSchema.extend({
 const FullLengthSchema = commonTestFieldsSchema.extend({
     testType: z.literal('full_length'),
     stream: z.enum(testStreams, { required_error: "Stream selection is required." }),
-    examFilter: z.enum([...examOptionsList, 'all'] as [ExamOption, ...ExamOption[], 'all'], { invalid_type_error: "Please select an exam filter." }).default('all'),
+    examFilter: z.enum([...exams, 'all'] as [ExamOption, ...ExamOption[], 'all'], { invalid_type_error: "Please select an exam filter." }).default('all'),
     totalQuestions: z.number().min(10, "Must select at least 10 total questions.").positive("Total questions must be positive."),
     weightagePhysics: z.number().min(0).max(100).optional(),
     weightageChemistry: z.number().min(0).max(100).optional(),
@@ -65,8 +66,8 @@ const FullLengthSchema = commonTestFieldsSchema.extend({
         sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageMaths ?? 0);
     } else if (data.stream === 'PCB') {
         sum = (data.weightagePhysics ?? 0) + (data.weightageChemistry ?? 0) + (data.weightageBiology ?? 0);
-    } else { 
-        return true; 
+    } else {
+        return true;
     }
     
     const hasAnyWeightage = (data.stream === 'PCM' && (data.weightagePhysics !== undefined || data.weightageChemistry !== undefined || data.weightageMaths !== undefined)) ||
@@ -75,7 +76,7 @@ const FullLengthSchema = commonTestFieldsSchema.extend({
     if (hasAnyWeightage) {
         return sum === 100;
     }
-    return true; 
+    return true;
 }, {
     message: "Weightages for selected subjects must add up to 100% for PCM/PCB streams if any weightage is specified.",
     path: ["weightagePhysics"], 
@@ -117,11 +118,13 @@ export default function CreateTestPage() {
         duration: 60,
         type: 'FREE',
         audience: 'Dropper',
+        // Chapterwise defaults
         subject: '',
         lesson: '',
         examFilter: 'all',
         selectedQuestionIds: [],
         count: 20,
+        // Full-length defaults
         stream: 'PCM',
         totalQuestions: 50,
         weightagePhysics: 33, 
@@ -296,7 +299,7 @@ export default function CreateTestPage() {
     }
   }, [availableQuestions, form, toast]); 
 
-  const onSubmit = async (data: TestCreationFormValues) => {
+  const onSubmit = async (data: TestCreationFormValues): Promise<void> => {
     setIsLoading(true);
     let testDefinition: GeneratedTest | null = null;
     const testCode = uuidv4().substring(0, 8).toUpperCase();
@@ -516,8 +519,8 @@ export default function CreateTestPage() {
         onLoad={handleMathJaxLoad}
       />
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Create New Test</h1>
-        <p className="text-muted-foreground">Generate chapterwise or full-length tests from the question bank.</p>
+            <h1 className="text-3xl font-bold tracking-tight">Create New Test</h1>
+            <p className="text-muted-foreground">Generate chapterwise or full-length tests from the question bank.</p>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -574,7 +577,7 @@ export default function CreateTestPage() {
                                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="Search lesson..." /><CommandList>{isLoadingLessons ? (<CommandItem disabled>Loading...</CommandItem>) : lessons.length === 0 && selectedSubjectWatch ? (<CommandEmpty>No lessons found.</CommandEmpty>) : !selectedSubjectWatch ? (<CommandEmpty>Select Subject first.</CommandEmpty>) : null }<CommandGroup>{lessons.map((lessonItem) => (<CommandItem value={lessonItem} key={lessonItem} onSelect={() => { form.setValue("lesson" as any, lessonItem); setLessonPopoverOpen(false); }}><Check className={cn("mr-2 h-4 w-4", lessonItem === field.value ? "opacity-100" : "opacity-0")} />{lessonItem}</CommandItem>))}</CommandGroup></CommandList></Command></PopoverContent></Popover><FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={form.control} name="examFilter" render={({ field }) => (<FormItem><FormLabel>Exam Filter</FormLabel><Select onValueChange={field.onChange} value={field.value as string ?? 'all'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="All Exams" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">All Exams</SelectItem>{examOptionsList.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="examFilter" render={({ field }) => (<FormItem><FormLabel>Exam Filter</FormLabel><Select onValueChange={field.onChange} value={field.value as string ?? 'all'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="All Exams" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">All Exams</SelectItem>{exams.map(ex => <SelectItem key={ex} value={ex}>{ex}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="count" render={({ field }) => (<FormItem><FormLabel>Number of Questions *</FormLabel><Select onValueChange={(value) => field.onChange(parseInt(value, 10))} value={(field.value as number)?.toString()} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select count (1-50)" /></SelectTrigger></FormControl><SelectContent>{Array.from({ length: 50 }, (_, i) => i + 1).map(num => (<SelectItem key={num} value={num.toString()}>{num}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="selectedQuestionIds" render={({ field }) => (
                             <FormItem>
@@ -637,7 +640,7 @@ export default function CreateTestPage() {
                     <CardHeader><CardTitle>3. Full Length Details</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         <FormField control={form.control} name="stream" render={({ field }) => (<FormItem><FormLabel>Stream *</FormLabel><Select onValueChange={field.onChange} value={field.value as TestStream ?? 'PCM'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger></FormControl><SelectContent>{testStreams.map(st => <SelectItem key={st} value={st}>{st}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="examFilter" render={({ field }) => (<FormItem><FormLabel>Source Question Exams *</FormLabel><Select onValueChange={field.onChange} value={field.value as string ?? 'all'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam Pool" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">All Exams (Combined)</SelectItem>{examOptionsList.map(ex => <SelectItem key={ex} value={ex}>Only {ex} Questions</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="examFilter" render={({ field }) => (<FormItem><FormLabel>Source Question Exams *</FormLabel><Select onValueChange={field.onChange} value={field.value as string ?? 'all'} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select Exam Pool" /></SelectTrigger></FormControl><SelectContent><SelectItem value="all">All Exams (Combined)</SelectItem>{exams.map(ex => <SelectItem key={ex} value={ex}>Only {ex} Questions</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="totalQuestions" render={({ field }) => (<FormItem><FormLabel>Total Questions *</FormLabel><FormControl><Input type="number" placeholder="e.g., 50" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} disabled={isLoading} min="10" /></FormControl><FormMessage /></FormItem>)} />
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
