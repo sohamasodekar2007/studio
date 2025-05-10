@@ -134,10 +134,12 @@ export default function CreateTestPage() {
       duration: 60,
       accessType: 'FREE',
       audience: null, 
+      // Chapterwise specific
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
+      // Full-length specific
       exam: 'MHT-CET', 
       stream: null,
       overallTotalQuestions: 50,
@@ -379,7 +381,7 @@ export default function CreateTestPage() {
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '), 
           questions: finalQuestions,
         };
-      } else { 
+      } else { // Full Length Test
         const fullLengthData = data; 
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
         let physicsQs: TestQuestion[] = [];
@@ -413,24 +415,27 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
+            // Potentially show a toast warning here if counts don't match exactly
         }
 
         testToSave = {
           testType: 'full_length',
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length, 
+          total_questions: allSelectedQuestionsForFLT.length, // Use actual selected count
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
-          stream: fullLengthData.stream!, 
-          examTypeTarget: fullLengthData.exam, 
+          stream: fullLengthData.stream!, // Assert non-null as it's required for full_length type by schema
+          examTypeTarget: fullLengthData.exam, // This field name matches FullLengthTestJson
           physics_questions: physicsQs.length > 0 ? physicsQs : undefined,
           chemistry_questions: chemistryQs.length > 0 ? chemistryQs : undefined,
           maths_questions: mathsQs.length > 0 && (fullLengthData.stream === 'PCM' || fullLengthData.exam === 'BITSAT') ? mathsQs : undefined, 
           biology_questions: biologyQs.length > 0 && fullLengthData.stream === 'PCB' ? biologyQs : undefined,
+          // weightage can be complex; for now, we assume it's for display and not directly used to form question arrays here
+          // as `subjectsConfig.lessons.questionCount` drives the selection logic.
           weightage: fullLengthData.subjectsConfig?.reduce((acc, curr) => { 
-            if (curr.lessons) { 
+            if (curr.lessons) { // Check if lessons exist
                  acc[curr.subjectName] = curr.lessons.reduce((lessonAcc, lesson) => {
                     lessonAcc[lesson.lessonName] = lesson.weightage;
                     return lessonAcc;
@@ -445,14 +450,14 @@ export default function CreateTestPage() {
 
       if (result.success && result.test_code) {
         toast({ title: 'Test Created!', description: `Test "${testToSave.name}" (Code: ${result.test_code}) saved successfully.` });
-        form.reset({
+        form.reset({ // Reset with current testType to keep that selection
             testType: data.testType, 
             testName: '', duration: 60, accessType: 'FREE', audience: null,
             subject: '', lessons: [], selectedQuestionIds: [], questionCount: 20,
             exam: 'MHT-CET', stream: null, overallTotalQuestions: 50, subjectsConfig: [],
         });
-        setAvailableQuestions([]); 
-        setLessonsBySubject({}); 
+        setAvailableQuestions([]); // Clear question list for chapterwise
+        setLessonsBySubject({}); // Clear lessons cache
       } else {
         throw new Error(result.message || "Failed to save test definition.");
       }
@@ -626,7 +631,7 @@ export default function CreateTestPage() {
                                                                         ? field.onChange([...(field.value || []), q.id])
                                                                         : field.onChange(field.value?.filter(value => value !== q.id))
                                                                     }}
-                                                                     disabled={(field.value?.length || 0) >= (form.getValues().questionCount || 0) && !field.value?.includes(q.id)}
+                                                                     disabled={(field.value?.length || 0) >= (form.getValues('questionCount') || 0) && !field.value?.includes(q.id)} // Ensure form.getValues is used on 'questionCount' not the field value
                                                                 />
                                                             </FormControl>
                                                             <FormLabel className="text-sm font-normal flex-grow cursor-pointer" onClick={() => {setPreviewQuestion(q); setIsPreviewDialogOpen(true);}}>
@@ -725,3 +730,4 @@ export default function CreateTestPage() {
     </>
   );
 }
+
