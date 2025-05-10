@@ -26,6 +26,7 @@ import Script from 'next/script';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
+import { Badge } from "@/components/ui/badge"; // Added Badge import
 
 // --- Zod Schemas ---
 
@@ -52,8 +53,7 @@ const SubjectConfigSchema = z.object({
   totalSubjectQuestions: z.number().min(0).default(0),
 });
 
-// Define the base FullLengthSchema as a ZodObject without superRefine
-const FullLengthSchemaObject = z.object({
+const FullLengthSchema = z.object({
   testType: z.literal('full_length'),
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
@@ -63,43 +63,39 @@ const FullLengthSchemaObject = z.object({
   stream: z.enum(testStreams).optional(),
   overallTotalQuestions: z.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
-});
-
-// Discriminated union schema using the base ZodObject schemas
-const TestCreationSchema = z.discriminatedUnion("testType", [
-    ChapterwiseSchema,
-    FullLengthSchemaObject, // Use the ZodObject here
-]).superRefine((data, ctx) => {
-    if (data.testType === 'full_length') {
-        // Apply FullLengthSchema's superRefine logic here
-        const fullLengthData = data; // Zod infers the type correctly here
-        if (fullLengthData.subjectsConfig && fullLengthData.subjectsConfig.length > 0) {
-            const totalWeightageSum = fullLengthData.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
-            if (Math.abs(totalWeightageSum - 100) >= 0.01) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    message: `Total subject weightages must sum to 100%. Current sum: ${totalWeightageSum.toFixed(1)}%`,
-                    path: ['subjectsConfig'],
-                });
-            }
-        }
-        if (fullLengthData.subjectsConfig) {
-            fullLengthData.subjectsConfig.forEach((subject, subjectIndex) => {
-                if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
-                    const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
-                    if (Math.abs(lessonWeightageSum - 100) >= 0.01) {
-                        ctx.addIssue({
-                            code: z.ZodIssueCode.custom,
-                            message: `Lesson weightages for ${subject.subjectName} must sum to 100%. Current sum: ${lessonWeightageSum.toFixed(1)}%`,
-                            path: [`subjectsConfig`, subjectIndex, 'lessons'],
-                        });
-                    }
-                }
+}).superRefine((data, ctx) => {
+    if (data.subjectsConfig && data.subjectsConfig.length > 0) {
+        const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
+        if (Math.abs(totalWeightageSum - 100) >= 0.01) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Total subject weightages must sum to 100%. Current sum: ${totalWeightageSum.toFixed(1)}%`,
+                path: ['subjectsConfig'],
             });
         }
     }
+    if (data.subjectsConfig) {
+        data.subjectsConfig.forEach((subject, subjectIndex) => {
+            if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
+                const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
+                if (Math.abs(lessonWeightageSum - 100) >= 0.01) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: `Lesson weightages for ${subject.subjectName} must sum to 100%. Current sum: ${lessonWeightageSum.toFixed(1)}%`,
+                        path: [`subjectsConfig`, subjectIndex, 'lessons'],
+                    });
+                }
+            }
+        });
+    }
 });
 
+
+// Discriminated union schema
+const TestCreationSchema = z.discriminatedUnion("testType", [
+    ChapterwiseSchema,
+    FullLengthSchema,
+]);
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
@@ -239,7 +235,7 @@ export default function CreateTestPage() {
             totalSubjectQuestions: existingConfig?.totalSubjectQuestions || 0,
             };
       });
-      replaceSubjectConfigs(newConfigs as any);
+      replaceSubjectConfigs(newConfigs as any); // Casting as 'any' might hide type errors, ensure type consistency
     } else {
       replaceSubjectConfigs([]);
     }
@@ -380,7 +376,7 @@ export default function CreateTestPage() {
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '),
           questions: finalQuestions,
         };
-      } else { 
+      } else { // Full Length
         const fullLengthData = data; 
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
         let physicsQs: TestQuestion[] = [];
@@ -415,13 +411,15 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
+            // Potentially adjust overallTotalQuestions if not enough questions were found, or show an error
+            // For now, we'll use the actual number of selected questions
         }
 
         testToSave = {
           testType: 'full_length',
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length, 
+          total_questions: allSelectedQuestionsForFLT.length, // Use actual selected count
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
