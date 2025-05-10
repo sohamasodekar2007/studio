@@ -1,7 +1,7 @@
 // src/app/chapterwise-test/[testCode]/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
 import { saveTestReport } from '@/actions/test-report-actions';
@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import Script from 'next/script';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
   [QuestionStatusEnum.NotVisited]: 'bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200',
@@ -62,15 +63,20 @@ export default function ChapterwiseTestPage() {
         }
     }
   }, []);
+  
+  const currentQuestion: TestQuestion | undefined = useMemo(() => {
+    if (!testData || !testData.questions) return undefined;
+    return testData.questions[currentQuestionIndex];
+  }, [testData, currentQuestionIndex]);
 
   useEffect(() => {
-    if (!isLoading && testData && currentQuestion) { // Ensure currentQuestion is also available
+    if (!isLoading && testData && currentQuestion) {
         const timerId = setTimeout(() => {
             typesetMathJax();
         }, 50);
         return () => clearTimeout(timerId);
     }
-  }, [isLoading, testData, currentQuestionIndex, typesetMathJax, currentQuestion]); // Add currentQuestion
+  }, [isLoading, testData, currentQuestionIndex, typesetMathJax, currentQuestion]);
 
   const loadTest = useCallback(async () => {
     if (!testCode) {
@@ -96,7 +102,8 @@ export default function ChapterwiseTestPage() {
              initialStatuses[0] = QuestionStatusEnum.Unanswered;
         }
         setQuestionStatuses(initialStatuses);
-        setStartTime(Date.now());
+        // Set start time only when instructions are dismissed
+        // setStartTime(Date.now()); // Moved to onProceed of InstructionsDialog
       }
     } catch (err: any) {
       console.error("Error loading test data:", err);
@@ -110,7 +117,7 @@ export default function ChapterwiseTestPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       toast({ variant: 'destructive', title: 'Unauthorized', description: 'Please log in to take the test.' });
-      router.push(`/auth/login?redirect=/take-test/${testCode}`);
+      router.push(`/auth/login?redirect=/chapterwise-test/${testCode}`);
       return;
     }
     if (!authLoading && user && userId && user.id !== userId) {
@@ -119,13 +126,58 @@ export default function ChapterwiseTestPage() {
         return;
     }
      if (!authLoading && user && !userId) {
+         // If userId is missing from query params, construct it and redirect
          router.replace(`/chapterwise-test/${testCode}?userId=${user.id}`);
          return;
      }
-    if (userId || authLoading) {
+    // Only load test if userId is present (either from initial load or after redirect)
+    if (userId || authLoading) { // Keep authLoading check to avoid race conditions
         loadTest();
     }
   }, [testCode, userId, authLoading, user, router, toast, loadTest]);
+
+  const handleStartTest = useCallback(() => {
+    setShowInstructions(false);
+    setStartTime(Date.now()); // Set start time when test actually begins
+  }, []);
+
+
+  const handleSubmitTest = useCallback(async (autoSubmit = false) => {
+    if (!testData || !user || !userId || isSubmitting || !startTime) {
+        return;
+    }
+    setIsSubmitting(true);
+    const endTime = Date.now();
+    const attemptTimestamp = startTime;
+
+    const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
+      questionId: q.id || `q-${index}`, // Ensure questionId is always present
+      selectedOption: userAnswers[index] || null,
+      status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
+    }));
+
+    const sessionData: TestSession = {
+      testId: testCode,
+      userId: userId,
+      startTime: startTime,
+      endTime: endTime,
+      answers: submittedAnswers,
+    };
+
+    try {
+        const result = await saveTestReport(sessionData, testData);
+         if (result.success && result.results) {
+             toast({ title: "Test Submitted!", description: "Your responses have been saved." });
+             router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestamp}`);
+         } else {
+             throw new Error(result.message || "Failed to save test report on the server.");
+         }
+    } catch (e: any) {
+       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results." });
+       setIsSubmitting(false);
+    }
+  }, [testData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router]);
+
 
   useEffect(() => {
     if (timeLeft <= 0 || showInstructions || !testData || isSubmitting || !startTime) return;
@@ -133,7 +185,7 @@ export default function ChapterwiseTestPage() {
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-           if (!isSubmitting) handleSubmitTest(true);
+           if (!isSubmitting) handleSubmitTest(true); // autoSubmit = true
           return 0;
         }
         return prevTime - 1;
@@ -148,7 +200,6 @@ export default function ChapterwiseTestPage() {
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const currentQuestion: TestQuestion | undefined = testData?.questions?.[currentQuestionIndex];
 
   const handleOptionChange = (optionKey: string) => {
     setUserAnswers(prev => ({ ...prev, [currentQuestionIndex]: optionKey }));
@@ -182,7 +233,7 @@ export default function ChapterwiseTestPage() {
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
          setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
     }
-    else { 
+    else {
       setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.MarkedForReview }));
     }
   };
@@ -196,43 +247,6 @@ export default function ChapterwiseTestPage() {
         setQuestionStatuses(prev => ({ ...prev, [currentQuestionIndex]: QuestionStatusEnum.Unanswered }));
     }
   };
-
-   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
-    if (!testData || !user || !userId || isSubmitting || !startTime) {
-        return;
-    }
-    setIsSubmitting(true);
-    const endTime = Date.now();
-    const attemptTimestamp = startTime;
-
-    const submittedAnswers: UserAnswer[] = (testData.questions || []).map((q, index) => ({
-      questionId: q.id || `q-${index}`,
-      selectedOption: userAnswers[index] || null,
-      status: questionStatuses[index] || QuestionStatusEnum.NotVisited,
-    }));
-
-    const sessionData: TestSession = {
-      testId: testCode,
-      userId: userId,
-      startTime: startTime,
-      endTime: endTime,
-      answers: submittedAnswers,
-    };
-
-    try {
-        const result = await saveTestReport(sessionData, testData);
-         if (result.success && result.results) {
-             toast({ title: "Test Submitted!", description: "Your responses have been saved." });
-             router.push(`/chapterwise-test-results/${testCode}?userId=${userId}&attemptTimestamp=${attemptTimestamp}`);
-         } else {
-             throw new Error(result.message || "Failed to save test report on the server.");
-         }
-    } catch (e: any) {
-       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message || "Could not save your test results." });
-       setIsSubmitting(false);
-    }
-  }, [testData, user, userId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router]);
-
 
   if (isLoading || authLoading) {
     return (
@@ -263,6 +277,10 @@ export default function ChapterwiseTestPage() {
       </div>
     );
   }
+  
+  if (showInstructions) {
+    return <InstructionsDialog isOpen={showInstructions} testData={testData} onProceed={handleStartTest} />;
+  }
 
   if (!currentQuestion) {
      return (
@@ -274,14 +292,11 @@ export default function ChapterwiseTestPage() {
      );
   }
 
-  if (showInstructions) {
-    return <InstructionsDialog isOpen={showInstructions} testData={testData} onProceed={() => setShowInstructions(false)} />;
-  }
 
   const optionKeys = ["A", "B", "C", "D"];
 
    const renderQuestionContent = (question: TestQuestion) => {
-     const imageUrl = question.question_image_url; // This should be the full public path
+     const imageUrl = question.question_image_url;
 
      if (imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
        return (
@@ -330,7 +345,7 @@ export default function ChapterwiseTestPage() {
 
   return (
     <>
-    <Script
+      <Script
         id="mathjax-script-test"
         src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         strategy="lazyOnload"
@@ -338,161 +353,161 @@ export default function ChapterwiseTestPage() {
           typesetMathJax();
         }}
       />
-    <div className="flex flex-col h-screen max-h-screen bg-muted overflow-hidden">
-      <header className="flex items-center justify-between p-3 border-b bg-card shadow-sm">
-        <h1 className="text-lg font-semibold truncate flex-1 mr-4">{testData.name}</h1>
-        <div className="flex items-center gap-4">
-            {user && (
-                <div className="text-xs text-muted-foreground hidden sm:block">
-                    {user.name} ({user.model})
-                </div>
-            )}
-            <div className="flex items-center gap-1 text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-md">
-                <Clock className="h-4 w-4" />
-                <span>{formatTime(timeLeft)}</span>
-            </div>
-        </div>
-      </header>
+      <div className="flex flex-col h-screen max-h-screen bg-muted overflow-hidden">
+        <header className="flex items-center justify-between p-3 border-b bg-card shadow-sm">
+          <h1 className="text-lg font-semibold truncate flex-1 mr-4">{testData.name}</h1>
+          <div className="flex items-center gap-4">
+              {user && (
+                  <div className="text-xs text-muted-foreground hidden sm:block">
+                      {user.name} ({user.model})
+                  </div>
+              )}
+              <div className="flex items-center gap-1 text-primary font-medium bg-primary/10 px-3 py-1.5 rounded-md">
+                  <Clock className="h-4 w-4" />
+                  <span>{formatTime(timeLeft)}</span>
+              </div>
+          </div>
+        </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>Question {currentQuestionIndex + 1} of {testData.questions.length}</span>
-                <Badge variant="outline">Marks: {currentQuestion.marks}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-                {renderQuestionContent(currentQuestion)}
-            </CardContent>
-          </Card>
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex justify-between items-center">
+                  <span>Question {currentQuestionIndex + 1} of {testData.questions.length}</span>
+                  <Badge variant="outline">Marks: {currentQuestion.marks}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                  {renderQuestionContent(currentQuestion)}
+              </CardContent>
+            </Card>
 
-          <RadioGroup
-            value={userAnswers[currentQuestionIndex] || undefined}
-            onValueChange={handleOptionChange}
-            className="space-y-3 mb-6"
-          >
-            {currentQuestion.options.map((optionText, idx) => {
-              const optionKey = optionKeys[idx];
-              return (
-                <Label
-                  key={optionKey}
-                  htmlFor={`option-${optionKey}`}
-                  className={cn(
-                    "flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-all hover:border-primary",
-                    userAnswers[currentQuestionIndex] === optionKey ? "border-primary bg-primary/5 ring-2 ring-primary" : "border-border"
+            <RadioGroup
+              value={userAnswers[currentQuestionIndex] || undefined}
+              onValueChange={handleOptionChange}
+              className="space-y-3 mb-6"
+            >
+              {currentQuestion.options.map((optionText, idx) => {
+                const optionKey = optionKeys[idx];
+                return (
+                  <Label
+                    key={optionKey}
+                    htmlFor={`option-${optionKey}`}
+                    className={cn(
+                      "flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-all hover:border-primary",
+                      userAnswers[currentQuestionIndex] === optionKey ? "border-primary bg-primary/5 ring-2 ring-primary" : "border-border"
+                    )}
+                  >
+                    <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary mt-1"/>
+                    <span className="font-medium">{optionKey}.</span>
+                    {renderOptionContent(optionText)}
+                  </Label>
+                );
+              })}
+            </RadioGroup>
+
+            <div className="flex flex-wrap gap-2 justify-between items-center mt-6">
+              <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleMarkForReview} className="text-purple-600 border-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-400 dark:hover:bg-purple-900/30">
+                      <Flag className="mr-2 h-4 w-4" />
+                      {questionStatuses[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || questionStatuses[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked ? 'Unmark' : 'Mark for Review'}
+                  </Button>
+                  <Button variant="outline" onClick={handleClearResponse} disabled={!userAnswers[currentQuestionIndex]}>
+                      <XSquare className="mr-2 h-4 w-4" /> Clear Response
+                  </Button>
+              </div>
+              <div className="flex gap-2">
+                  <Button onClick={() => navigateQuestion(currentQuestionIndex - 1)} disabled={currentQuestionIndex === 0}>
+                      <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                  </Button>
+                  {currentQuestionIndex < testData.questions.length - 1 ? (
+                      <Button onClick={() => navigateQuestion(currentQuestionIndex + 1)}>
+                          Next <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                  ) : (
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <Button variant="destructive" disabled={isSubmitting}>
+                                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                                  Submit Test
+                              </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                              <AlertDialogHeader>
+                              <AlertDialogTitle>Confirm Submission</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                  Are you sure you want to submit the test? You cannot change your answers after submission.
+                              </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                              <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                                  Yes, Submit
+                              </AlertDialogAction>
+                              </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
                   )}
+              </div>
+            </div>
+          </main>
+
+          <aside className="w-64 md:w-72 border-l bg-card p-4 overflow-y-auto hidden lg:block">
+            <h3 className="font-semibold mb-3 text-center">Question Palette</h3>
+            <div className="grid grid-cols-4 md:grid-cols-5 gap-2">
+              {(testData.questions || []).map((_, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="icon"
+                  className={cn(
+                    "h-9 w-9 text-xs font-medium",
+                    QUESTION_STATUS_COLORS[questionStatuses[index] || QuestionStatusEnum.NotVisited],
+                    currentQuestionIndex === index && "ring-2 ring-offset-2 ring-primary"
+                  )}
+                  onClick={() => navigateQuestion(index)}
                 >
-                  <RadioGroupItem value={optionKey} id={`option-${optionKey}`} className="border-primary text-primary focus:ring-primary mt-1"/>
-                  <span className="font-medium">{optionKey}.</span>
-                   {renderOptionContent(optionText)}
-                </Label>
-              );
-            })}
-          </RadioGroup>
-
-          <div className="flex flex-wrap gap-2 justify-between items-center mt-6">
-            <div className="flex gap-2">
-                 <Button variant="outline" onClick={handleMarkForReview} className="text-purple-600 border-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-400 dark:hover:bg-purple-900/30">
-                    <Flag className="mr-2 h-4 w-4" />
-                    {questionStatuses[currentQuestionIndex] === QuestionStatusEnum.MarkedForReview || questionStatuses[currentQuestionIndex] === QuestionStatusEnum.AnsweredAndMarked ? 'Unmark' : 'Mark for Review'}
+                  {index + 1}
                 </Button>
-                <Button variant="outline" onClick={handleClearResponse} disabled={!userAnswers[currentQuestionIndex]}>
-                    <XSquare className="mr-2 h-4 w-4" /> Clear Response
-                </Button>
+              ))}
             </div>
-             <div className="flex gap-2">
-                 <Button onClick={() => navigateQuestion(currentQuestionIndex - 1)} disabled={currentQuestionIndex === 0}>
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-                </Button>
-                {currentQuestionIndex < testData.questions.length - 1 ? (
-                    <Button onClick={() => navigateQuestion(currentQuestionIndex + 1)}>
-                        Next <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                ) : (
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={isSubmitting}>
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                                Submit Test
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle>Confirm Submission</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Are you sure you want to submit the test? You cannot change your answers after submission.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                                Yes, Submit
-                            </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                )}
+            <div className="mt-4 space-y-1 text-xs text-muted-foreground">
+              <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</p>
+              <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</p>
+              <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.NotVisited])}></span> Not Visited</p>
+              <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.MarkedForReview])}></span> Marked for Review</p>
+              <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.AnsweredAndMarked])}></span> Answered &amp; Marked</p>
             </div>
-          </div>
-        </main>
-
-        <aside className="w-64 md:w-72 border-l bg-card p-4 overflow-y-auto hidden lg:block">
-          <h3 className="font-semibold mb-3 text-center">Question Palette</h3>
-          <div className="grid grid-cols-4 md:grid-cols-5 gap-2">
-            {(testData.questions || []).map((_, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                size="icon"
-                className={cn(
-                  "h-9 w-9 text-xs font-medium",
-                  QUESTION_STATUS_COLORS[questionStatuses[index] || QuestionStatusEnum.NotVisited],
-                  currentQuestionIndex === index && "ring-2 ring-offset-2 ring-primary"
-                )}
-                onClick={() => navigateQuestion(index)}
-              >
-                {index + 1}
-              </Button>
-            ))}
-          </div>
-          <div className="mt-4 space-y-1 text-xs text-muted-foreground">
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.NotVisited])}></span> Not Visited</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.MarkedForReview])}></span> Marked for Review</p>
-            <p><span className={cn("inline-block w-3 h-3 rounded-sm mr-1.5 align-middle", QUESTION_STATUS_COLORS[QuestionStatusEnum.AnsweredAndMarked])}></span> Answered & Marked</p>
-          </div>
-           <div className="mt-6 text-center">
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
-                            Submit Test
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Submission</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to submit the test? You cannot change your answers after submission.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
-                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                            Yes, Submit
-                        </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-           </div>
-        </aside>
+            <div className="mt-6 text-center">
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                          <Button variant="destructive" className="w-full" disabled={isSubmitting}>
+                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4" />}
+                              Submit Test
+                          </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                          <AlertDialogTitle>Confirm Submission</AlertDialogTitle>
+                          <AlertDialogDescription>
+                              Are you sure you want to submit the test? You cannot change your answers after submission.
+                          </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleSubmitTest(false)} disabled={isSubmitting} className="bg-destructive hover:bg-destructive/90">
+                              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                              Yes, Submit
+                          </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+            </div>
+          </aside>
+        </div>
       </div>
     </>
   );
 }
-

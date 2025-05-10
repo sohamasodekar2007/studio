@@ -1,0 +1,13 @@
+{
+  "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "notebooks": [
+    {
+      "id": "04db4996-e80f-4d47-abe2-3d8617ce4cc6",
+      "name": "My Collections",
+      "createdAt": 1746848242725
+    }
+  ],
+  "bookmarkedQuestions": {
+    "04db4996-e80f-4d47-abe2-3d8617ce4cc6": []
+  }
+}
