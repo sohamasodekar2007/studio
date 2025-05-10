@@ -30,14 +30,16 @@ import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
-const BaseTestSchema = z.object({
+// Base properties shared by both test types
+const BaseTestProps = {
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(academicStatuses).nullable().default(null),
-});
+};
 
-const ChapterwiseSchema = BaseTestSchema.extend({
+const ChapterwiseSchema = z.object({
+  ...BaseTestProps,
   testType: z.literal('chapterwise'), // Discriminator
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
@@ -56,9 +58,10 @@ const SubjectConfigSchema = z.object({
   totalSubjectQuestions: z.coerce.number().min(0).default(0),
 });
 
-const FullLengthSchema = BaseTestSchema.extend({
+const FullLengthSchema = z.object({
+  ...BaseTestProps,
   testType: z.literal('full_length'), // Discriminator
-  exam: z.enum(exams),
+  exam: z.enum(exams), // Use imported 'exams'
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
@@ -426,16 +429,14 @@ export default function CreateTestPage() {
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
-          stream: fullLengthData.stream!, // Assert non-null as it's required for full_length type by schema
-          examTypeTarget: fullLengthData.exam, // This field name matches FullLengthTestJson
+          stream: fullLengthData.stream!, 
+          examTypeTarget: fullLengthData.exam, 
           physics_questions: physicsQs.length > 0 ? physicsQs : undefined,
           chemistry_questions: chemistryQs.length > 0 ? chemistryQs : undefined,
           maths_questions: mathsQs.length > 0 && (fullLengthData.stream === 'PCM' || fullLengthData.exam === 'BITSAT') ? mathsQs : undefined, 
           biology_questions: biologyQs.length > 0 && fullLengthData.stream === 'PCB' ? biologyQs : undefined,
-          // weightage can be complex; for now, we assume it's for display and not directly used to form question arrays here
-          // as `subjectsConfig.lessons.questionCount` drives the selection logic.
           weightage: fullLengthData.subjectsConfig?.reduce((acc, curr) => { 
-            if (curr.lessons) { // Check if lessons exist
+            if (curr.lessons) { 
                  acc[curr.subjectName] = curr.lessons.reduce((lessonAcc, lesson) => {
                     lessonAcc[lesson.lessonName] = lesson.weightage;
                     return lessonAcc;
@@ -450,14 +451,14 @@ export default function CreateTestPage() {
 
       if (result.success && result.test_code) {
         toast({ title: 'Test Created!', description: `Test "${testToSave.name}" (Code: ${result.test_code}) saved successfully.` });
-        form.reset({ // Reset with current testType to keep that selection
+        form.reset({ 
             testType: data.testType, 
             testName: '', duration: 60, accessType: 'FREE', audience: null,
             subject: '', lessons: [], selectedQuestionIds: [], questionCount: 20,
             exam: 'MHT-CET', stream: null, overallTotalQuestions: 50, subjectsConfig: [],
         });
-        setAvailableQuestions([]); // Clear question list for chapterwise
-        setLessonsBySubject({}); // Clear lessons cache
+        setAvailableQuestions([]); 
+        setLessonsBySubject({}); 
       } else {
         throw new Error(result.message || "Failed to save test definition.");
       }
@@ -631,7 +632,7 @@ export default function CreateTestPage() {
                                                                         ? field.onChange([...(field.value || []), q.id])
                                                                         : field.onChange(field.value?.filter(value => value !== q.id))
                                                                     }}
-                                                                     disabled={(field.value?.length || 0) >= (form.getValues('questionCount') || 0) && !field.value?.includes(q.id)} // Ensure form.getValues is used on 'questionCount' not the field value
+                                                                     disabled={(field.value?.length || 0) >= (form.getValues('questionCount') || 0) && !field.value?.includes(q.id)} 
                                                                 />
                                                             </FormControl>
                                                             <FormLabel className="text-sm font-normal flex-grow cursor-pointer" onClick={() => {setPreviewQuestion(q); setIsPreviewDialogOpen(true);}}>
@@ -730,4 +731,3 @@ export default function CreateTestPage() {
     </>
   );
 }
-
