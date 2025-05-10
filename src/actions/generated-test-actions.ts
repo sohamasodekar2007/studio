@@ -2,9 +2,10 @@
 // src/actions/generated-test-actions.ts
 'use server';
 
-import type { GeneratedTest, ChapterwiseTestJson, FullLengthTestJson } from '@/types'; // Use specific types
+import type { GeneratedTest, ChapterwiseTestJson, FullLengthTestJson, TestQuestion } from '@/types'; // Use specific types
 import fs from 'fs/promises';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid'; // For generating unique test codes
 
 // Define the base paths for saving generated test JSON files
 const chapterwiseTestsBasePath = path.join(process.cwd(), 'src', 'data', 'test_pages', 'chapterwise');
@@ -21,30 +22,59 @@ async function ensureDirExists(dirPath: string): Promise<void> {
   }
 }
 
+// Helper function to generate a unique test code
+function generateUniqueTestCode(): string {
+    // Generates an 8-character alphanumeric code, e.g., "AB12CD34"
+    return Math.random().toString(36).substring(2, 10).toUpperCase();
+}
+
+
 /**
  * Saves the generated test definition JSON to the appropriate folder
  * (chapterwise or full_length) based on the test type.
  * The filename will be the unique test_code.
  *
- * @param testDefinition - The GeneratedTest object containing all test details.
+ * @param testDataToSave - The GeneratedTest object containing all test details, EXCLUDING test_code and createdAt (will be generated here).
  * @returns A promise resolving with success status, optional message, and the file path where it was saved.
  */
 export async function saveGeneratedTest(
-    testDefinition: GeneratedTest
-): Promise<{ success: boolean; message?: string; filePath?: string }> {
+    testDataToSave: Omit<GeneratedTest, 'test_code' | 'createdAt'>
+): Promise<{ success: boolean; message?: string; filePath?: string, test_code?: string }> {
+    
+    const test_code = generateUniqueTestCode();
+    const createdAt = new Date().toISOString();
+
+    const fullTestDefinition: GeneratedTest = {
+        ...testDataToSave,
+        test_code,
+        createdAt,
+    } as GeneratedTest; // Type assertion after adding generated fields
+
     let targetDir: string;
     let filename: string;
 
     // Determine save directory and filename based on test type
-    if (testDefinition.testType === 'chapterwise') {
+    if (fullTestDefinition.testType === 'chapterwise') {
         targetDir = chapterwiseTestsBasePath;
-        filename = `${testDefinition.test_code}.json`;
-    } else if (testDefinition.testType === 'full_length') {
+        filename = `${fullTestDefinition.test_code}.json`;
+        
+        // Ensure 'lesson' is a string for single-lesson, 'lessons' for multi.
+        // This is a common source of type issues if not handled carefully.
+        const chapterwiseData = fullTestDefinition as ChapterwiseTestJson;
+        if (chapterwiseData.lessons && chapterwiseData.lessons.length === 1 && !chapterwiseData.lesson) {
+            // If 'lessons' has one item and 'lesson' isn't set, populate 'lesson'
+            chapterwiseData.lesson = chapterwiseData.lessons[0];
+        } else if (chapterwiseData.lesson && (!chapterwiseData.lessons || chapterwiseData.lessons.length === 0)) {
+            // If 'lesson' is set and 'lessons' isn't, populate 'lessons'
+            chapterwiseData.lessons = [chapterwiseData.lesson];
+        }
+
+
+    } else if (fullTestDefinition.testType === 'full_length') {
         targetDir = fullLengthTestsBasePath;
-         filename = `${testDefinition.test_code}.json`;
+        filename = `${fullTestDefinition.test_code}.json`;
     } else {
-        // Fallback for safety, though should be covered by types
-        console.error('Unknown test type provided to saveGeneratedTest:', (testDefinition as any).testType);
+        console.error('Unknown test type provided to saveGeneratedTest:', (fullTestDefinition as any).testType);
         return { success: false, message: 'Invalid test type provided.' };
     }
 
@@ -53,15 +83,13 @@ export async function saveGeneratedTest(
     try {
         await ensureDirExists(targetDir); // Ensure the target directory exists
 
-        // Remove the temporary 'testType' discriminator property before saving
-        const { testType, ...dataToSave } = testDefinition;
-
-        await fs.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
+        // The fullTestDefinition already includes test_code and createdAt
+        await fs.writeFile(filePath, JSON.stringify(fullTestDefinition, null, 2), 'utf-8');
         console.log(`Generated test definition saved: ${filePath}`);
-        return { success: true, message: `Test ${testDefinition.test_code} saved successfully.`, filePath };
+        return { success: true, message: `Test ${fullTestDefinition.test_code} saved successfully.`, filePath, test_code: fullTestDefinition.test_code };
 
     } catch (error: any) {
-        console.error(`Error saving generated test definition ${testDefinition.test_code}:`, error);
+        console.error(`Error saving generated test definition ${fullTestDefinition.test_code}:`, error);
         return { success: false, message: `Failed to save test definition. Reason: ${error.message}` };
     }
 }
@@ -77,7 +105,6 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
 
     for (const baseDir of directoriesToScan) {
         try {
-            // Ensure the directory exists, create if not
             await ensureDirExists(baseDir);
 
             const files = await fs.readdir(baseDir);
@@ -87,16 +114,41 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
                 const filePath = path.join(baseDir, file);
                 try {
                     const fileContent = await fs.readFile(filePath, 'utf-8');
-                    const testData = JSON.parse(fileContent) as Omit<GeneratedTest, 'testType'>; // Read base data
+                    // Parse first to determine type, then cast
+                    const parsedData = JSON.parse(fileContent);
+                    
+                    if (!parsedData.testType) {
+                         // Try to infer from directory if testType is missing
+                         if (baseDir.includes('chapterwise') && !parsedData.testType) parsedData.testType = 'chapterwise';
+                         else if (baseDir.includes('full_length') && !parsedData.testType) parsedData.testType = 'full_length';
+                    }
 
-                    // Add back the testType based on the directory it was read from
-                    const testType = baseDir.includes('chapterwise') ? 'chapterwise' : 'full_length';
-                    const fullTestData = { ...testData, testType } as GeneratedTest;
+
+                    // Basic validation (check for required fields for either type)
+                    if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testType) {
+                        // Perform specific validations based on inferred/parsed testType
+                        if (parsedData.testType === 'chapterwise') {
+                            const chapterwiseData = parsedData as ChapterwiseTestJson;
+                            // Ensure 'questions' array exists for chapterwise
+                            if (!Array.isArray(chapterwiseData.questions)) chapterwiseData.questions = [];
+                             // Ensure 'lessons' is an array, and 'lesson' (single) is present if 'lessons' is empty/not there
+                            if (!Array.isArray(chapterwiseData.lessons)) {
+                                chapterwiseData.lessons = chapterwiseData.lesson ? [chapterwiseData.lesson] : [];
+                            }
+                            if (chapterwiseData.lessons.length === 0 && chapterwiseData.lesson) {
+                                chapterwiseData.lessons = [chapterwiseData.lesson];
+                            }
 
 
-                    // Basic validation (check for required fields)
-                    if (fullTestData.test_code && fullTestData.name && fullTestData.test_subject && fullTestData.type) {
-                         allTests.push(fullTestData);
+                        } else if (parsedData.testType === 'full_length') {
+                            const fullLengthData = parsedData as FullLengthTestJson;
+                            // Ensure subject-specific question arrays exist for full-length
+                            if (!Array.isArray(fullLengthData.physics_questions)) fullLengthData.physics_questions = [];
+                            if (!Array.isArray(fullLengthData.chemistry_questions)) fullLengthData.chemistry_questions = [];
+                            if (fullLengthData.stream === 'PCM' && !Array.isArray(fullLengthData.maths_questions)) fullLengthData.maths_questions = [];
+                            if (fullLengthData.stream === 'PCB' && !Array.isArray(fullLengthData.biology_questions)) fullLengthData.biology_questions = [];
+                        }
+                        allTests.push(parsedData as GeneratedTest);
                     } else {
                         console.warn(`Skipping invalid test file (missing core fields): ${filePath}`);
                     }
@@ -109,17 +161,15 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
                 console.warn(`Directory not found: ${baseDir}. Skipping.`);
             } else {
                 console.error(`Error reading tests from ${baseDir}:`, error);
-                // Consider throwing a more specific error if needed by the caller
             }
         }
     }
 
-    // Sort tests by creation date descending (newest first) if createdAt exists
     allTests.sort((a, b) => {
         if (a.createdAt && b.createdAt) {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
-        return 0; // No sorting if createdAt is missing
+        return 0;
     });
 
     return allTests;
@@ -139,25 +189,19 @@ export async function deleteGeneratedTest(testCode: string): Promise<{ success: 
 
     const possibleDirs = [chapterwiseTestsBasePath, fullLengthTestsBasePath];
     let deleted = false;
-    let filePathTried: string | null = null;
 
     for (const dir of possibleDirs) {
-        // Assume filename is simply testCode.json as per save logic
         const filePath = path.join(dir, `${testCode}.json`);
-        filePathTried = filePath; // Store last tried path for error message
-
         try {
-            await fs.access(filePath); // Check if file exists
-            await fs.unlink(filePath); // Attempt deletion
+            await fs.access(filePath); 
+            await fs.unlink(filePath); 
             console.log(`Deleted generated test file: ${filePath}`);
             deleted = true;
-            break; // Stop searching once deleted
+            break; 
         } catch (error: any) {
             if (error.code === 'ENOENT') {
-                // File not found in this directory, continue searching
                 continue;
             } else {
-                // Other error during deletion
                 console.error(`Error deleting generated test ${testCode} from ${filePath}:`, error);
                 return { success: false, message: `Failed to delete test ${testCode} from ${dir}. Reason: ${error.message}` };
             }
@@ -167,13 +211,10 @@ export async function deleteGeneratedTest(testCode: string): Promise<{ success: 
     if (deleted) {
         return { success: true };
     } else {
-         // If loop finishes and not deleted, it wasn't found
          return { success: false, message: `Test file with code ${testCode} not found in any directory.` };
     }
 }
 
-// --- TODO: Add functions for updating a generated test if needed ---
-// export async function updateGeneratedTest(...) { ... }
 
 /**
  * Fetches a single generated test by its unique test code.
@@ -192,40 +233,50 @@ export async function getGeneratedTestByCode(testCode: string): Promise<Generate
     for (const dir of possibleDirs) {
         const filePath = path.join(dir, `${testCode}.json`);
         try {
-            // Check if file exists first
             await fs.access(filePath);
-
-            // Read and parse the file
             const fileContent = await fs.readFile(filePath, 'utf-8');
-            const testData = JSON.parse(fileContent) as Omit<GeneratedTest, 'testType'>;
+            const parsedData = JSON.parse(fileContent);
 
-            // Determine test type based on directory
-            const testType = dir.includes('chapterwise') ? 'chapterwise' : 'full_length';
-            const fullTestData = { ...testData, testType } as GeneratedTest;
-
-            // Basic validation
-             if (fullTestData.test_code && fullTestData.name && fullTestData.test_subject && fullTestData.type) {
-                  console.log(`Test found: ${testCode} in ${dir}`);
-                  return fullTestData;
-             } else {
+            if (!parsedData.testType) {
+                if (dir.includes('chapterwise')) parsedData.testType = 'chapterwise';
+                else if (dir.includes('full_length')) parsedData.testType = 'full_length';
+            }
+            
+            // Validate common fields
+            if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testType) {
+                 // Specific type validation and default empty arrays for question lists
+                 if (parsedData.testType === 'chapterwise') {
+                    const chapterwiseData = parsedData as ChapterwiseTestJson;
+                    if (!Array.isArray(chapterwiseData.questions)) chapterwiseData.questions = [];
+                     if (!Array.isArray(chapterwiseData.lessons)) {
+                        chapterwiseData.lessons = chapterwiseData.lesson ? [chapterwiseData.lesson] : [];
+                    }
+                    if (chapterwiseData.lessons.length === 0 && chapterwiseData.lesson) {
+                        chapterwiseData.lessons = [chapterwiseData.lesson];
+                    }
+                } else if (parsedData.testType === 'full_length') {
+                    const fullLengthData = parsedData as FullLengthTestJson;
+                    if (!Array.isArray(fullLengthData.physics_questions)) fullLengthData.physics_questions = [];
+                    if (!Array.isArray(fullLengthData.chemistry_questions)) fullLengthData.chemistry_questions = [];
+                    if (fullLengthData.stream === 'PCM' && !Array.isArray(fullLengthData.maths_questions)) fullLengthData.maths_questions = [];
+                    if (fullLengthData.stream === 'PCB' && !Array.isArray(fullLengthData.biology_questions)) fullLengthData.biology_questions = [];
+                }
+                console.log(`Test found: ${testCode} in ${dir}`);
+                return parsedData as GeneratedTest;
+            } else {
                  console.warn(`Found test file ${filePath} but it's missing core fields.`);
-                 // Continue searching in the other directory
-             }
+            }
 
         } catch (error: any) {
-            if (error.code === 'ENOENT') {
-                // File not found in this directory, continue to the next one
-                continue;
-            } else {
-                // Other error (parsing, reading)
+            if (error.code !== 'ENOENT') {
                 console.error(`Error accessing or parsing test file ${filePath}:`, error);
                 // Return null on significant errors, maybe throw depending on desired behavior
                 return null;
             }
+            // If ENOENT, continue to the next directory
         }
     }
 
-    // If the loop finishes without finding the file
     console.log(`Test with code ${testCode} not found in any directory.`);
-    return null; // Not found in any directory
+    return null;
 }

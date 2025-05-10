@@ -124,6 +124,8 @@ export interface BulkQuestionInput {
 
 // Reusing Academic Status for Audience
 export type AudienceType = AcademicStatus;
+export const audienceTypes = academicStatuses;
+
 
 // Define Test Streams
 export const testStreams = ["PCM", "PCB"] as const;
@@ -132,17 +134,18 @@ export type TestStream = typeof testStreams[number];
 
 // Interface for individual question within a generated test JSON
 export interface TestQuestion {
-    id?: string;
-    type?: QuestionType;
-    question_text?: string | null;
-    question_image_url?: string | null;
-    options: (string | null)[];
-    answer: string;
+    id?: string; // Question ID from the question bank
+    type?: QuestionType; // text or image
+    question_text?: string | null; // For text questions
+    question_image_url?: string | null; // For image questions (full public path)
+    options: (string | null)[]; // Array of 4 options, e.g., ["Option A text", "Option B text", ...]
+    answer: string; // Correct option key, e.g., "A", "B"
     marks: number;
     explanation_text?: string | null;
-    explanation_image_url?: string | null;
-    explanation?: string | null;
-    question?: string | null;
+    explanation_image_url?: string | null; // Full public path to explanation image
+    // Legacy fields for compatibility, prefer specific ones above
+    explanation?: string | null; // Could be text or image path in older data
+    question?: string | null; // Could be text or image path in older data
 }
 
 
@@ -152,50 +155,54 @@ interface BaseGeneratedTest {
     test_code: string;
     name: string;
     duration: number;
-    count: number;
+    // count: number; // 'count' might be redundant if total_questions is present and accurate
     total_questions: number;
-    type: PricingType;
-    audience: AudienceType | null;
-    createdAt?: string;
-    test_subject: string[];
+    type: PricingType; // FREE, PAID, FREE_PREMIUM
+    audience: AudienceType | null; // e.g., "11th Class", "12th Class", "Dropper"
+    createdAt?: string; // ISO date string
+    test_subject: string[]; // Array of subjects covered, e.g., ["Physics", "Chemistry"]
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
     testType: 'chapterwise';
-    lesson: string;
-    examFilter?: ExamOption | 'all';
-    questions: TestQuestion[];
+    lessons: string[]; // Can now include multiple lessons for combined chapterwise tests
+    examFilter?: ExamOption | 'all'; // Optional filter for questions
+    questions: TestQuestion[]; // Array of actual question objects for the test
 
-    // Ensure fields from FullLengthTestJson are explicitly undefined
+    // Ensure fields specific to FullLengthTestJson are explicitly undefined or not present
     stream?: undefined;
     weightage?: undefined;
-    physics?: undefined;
-    chemistry?: undefined;
-    maths?: undefined;
-    biology?: undefined;
+    physics_questions?: undefined;
+    chemistry_questions?: undefined;
+    maths_questions?: undefined;
+    biology_questions?: undefined;
+    lesson?: string; // Keep 'lesson' for single-lesson tests for backward compatibility or specific use, 'lessons' for multi
 }
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
     testType: 'full_length';
-    stream: TestStream;
-    examFilter?: ExamOption | 'all';
+    stream: TestStream; // PCM or PCB
+    examTypeTarget: ExamOption; // The specific exam this full-length test targets (e.g., MHT-CET, JEE Main)
+    
+    // Subject-specific question arrays, containing full TestQuestion objects
+    physics_questions?: TestQuestion[];
+    chemistry_questions?: TestQuestion[];
+    maths_questions?: TestQuestion[]; // For PCM
+    biology_questions?: TestQuestion[]; // For PCB
+    
+    // Optional: Store the intended weightage per subject or even per lesson if needed for display/analysis
+    // This is more for metadata; the actual questions are in the arrays above.
     weightage?: {
-        physics: number;
-        chemistry: number;
-        maths?: number;
-        biology?: number;
+        [subject: string]: number | { [lesson: string]: number }; // e.g. Physics: 30 or Physics: { "Motion": 10, "Optics": 20 }
     };
-    // Subject-specific question arrays
-    physics?: TestQuestion[];
-    chemistry?: TestQuestion[];
-    maths?: TestQuestion[];
-    biology?: TestQuestion[];
 
-    // Ensure fields from ChapterwiseTestJson are explicitly undefined
+    // Ensure fields specific to ChapterwiseTestJson are explicitly undefined or not present
     questions?: undefined;
+    lessons?: undefined;
     lesson?: undefined;
+    examFilter?: undefined; // examTypeTarget serves this purpose for FLTs
 }
 
 // Discriminated union for generated tests
@@ -232,14 +239,14 @@ export interface DetailedAnswer {
   questionId: string;
   questionIndex: number;
   questionText?: string | null;
-  questionImageUrl?: string | null;
+  questionImageUrl?: string | null; // Full public path
   options?: (string | null)[];
   userAnswer: string | null;
   correctAnswer: string;
   isCorrect: boolean;
   status: QuestionStatus;
   explanationText?: string | null;
-  explanationImageUrl?: string | null;
+  explanationImageUrl?: string | null; // Full public path
   marks?: number;
 }
 
@@ -250,7 +257,7 @@ export interface TestResultSummary {
     testName: string;
     attemptTimestamp: number;
     submittedAt: number;
-    duration: number;
+    duration: number; // Test's configured duration
     totalQuestions: number;
     attempted: number;
     correct: number;
@@ -259,11 +266,11 @@ export interface TestResultSummary {
     score: number;
     totalMarks: number;
     percentage: number;
-    timeTakenMinutes: number;
+    timeTakenMinutes: number; // Actual time taken by user
     pointsEarned?: number;
     detailedAnswers: DetailedAnswer[];
-     user?: Omit<UserProfile, 'password'> | null;
-     rank?: number;
+    user?: Omit<UserProfile, 'password'> | null; // For leaderboard display
+    rank?: number; // For leaderboard display
 }
 
 
@@ -276,9 +283,9 @@ export interface ShortNote {
     subject: string;
     examType: ExamOption;
     contentType: 'pdf' | 'html_php'; // Adjusted contentType
-    filePath: string;
-    createdAt: string;
-    modifiedAt: string;
+    filePath: string; // Relative path from the respective content directory
+    createdAt: string; // ISO date string
+    modifiedAt: string; // ISO date string
 }
 
 // Interface for the JSON file storing note metadata per subject/exam
@@ -303,6 +310,7 @@ export interface UserDppLessonProgress {
   subject: string;
   lesson: string;
   lastAccessed?: number;
+  // Key is questionId, value is an array of attempts (latest first)
   questionAttempts: Record<string, DppAttempt[]>;
 }
 
@@ -317,17 +325,18 @@ export interface Notebook {
 
 // Interface for a bookmarked question within a notebook
 export interface BookmarkedQuestion {
-  questionId: string;
-  subject: string;
-  lesson: string;
-  addedAt: number;
-  tags?: BookmarkTag[];
+  questionId: string; // ID of the question from question_bank
+  subject: string;    // Subject of the question
+  lesson: string;     // Lesson of the question
+  addedAt: number;    // Timestamp when bookmarked
+  tags?: BookmarkTag[]; // Optional tags
 }
 
 // Interface for the user's entire notebook data structure
 export interface UserNotebookData {
   userId: string;
   notebooks: Notebook[];
+  // Key is notebookId, value is an array of bookmarked questions
   bookmarkedQuestions: Record<string, BookmarkedQuestion[]>;
 }
 
@@ -339,8 +348,8 @@ export type BookmarkTag = typeof bookmarkTags[number];
 // ---- User Follows Types ----
 export interface UserFollows {
   userId: string;
-  following: string[];
-  followers: string[];
+  following: string[]; // Array of user IDs the current user is following
+  followers: string[]; // Array of user IDs following the current user
 }
 
 // ---- Challenge Test Types ----
@@ -349,7 +358,7 @@ export type ChallengeStatus = "pending" | "accepted" | "rejected" | "completed" 
 export interface ChallengeParticipant {
   userId: string;
   name: string | null;
-  avatarUrl?: string | null;
+  avatarUrl?: string | null; // Path relative to public/avatars
   status: ChallengeStatus;
   score?: number;
   timeTaken?: number; // in seconds
@@ -359,10 +368,10 @@ export interface ChallengeParticipant {
 
 export interface ChallengeTestConfig {
   subject: string;
-  lesson: string;
+  lesson: string; // For now, challenges are based on a single lesson
   numQuestions: number;
-  difficulty?: DifficultyLevel | 'all';
-  examFilter?: ExamOption | 'all';
+  difficulty?: DifficultyLevel | 'all'; // 'all' means mix of difficulties
+  examFilter?: ExamOption | 'all'; // Filter questions by exam tag
 }
 
 export interface Challenge {
@@ -372,20 +381,20 @@ export interface Challenge {
   participants: Record<string, ChallengeParticipant>; // Keyed by userId
   testConfig: ChallengeTestConfig;
   testStatus: "waiting" | "started" | "completed" | "expired";
-  questions: TestQuestion[];
-  createdAt: number;
-  expiresAt: number;
-  startedAt?: number;
+  questions: TestQuestion[]; // Actual questions for the challenge
+  createdAt: number; // Timestamp of creation
+  expiresAt: number; // Timestamp of expiry (e.g., creation + 3 hours)
+  startedAt?: number; // Timestamp when creator starts the test
 }
 
-// For notifications/invites
+// For notifications/invites list
 export interface ChallengeInvite {
   challengeCode: string;
   creatorId: string;
   creatorName: string | null;
-  testName: string;
+  testName: string; // e.g., "Physics - Motion Challenge"
   numQuestions: number;
-  status: "pending" | "accepted" | "rejected" | "expired";
+  status: "pending" | "accepted" | "rejected" | "expired"; // Status from perspective of the invited user
   createdAt: number;
   expiresAt: number;
 }
@@ -421,8 +430,8 @@ export interface AppNotification {
     message: string;
     link?: string;
     isRead: boolean;
-    createdAt: number;
-    icon?: React.ElementType;
+    createdAt: number; // Timestamp
+    icon?: React.ElementType; // Optional icon component
 }
 
 // ---- Platform Settings Type ----
