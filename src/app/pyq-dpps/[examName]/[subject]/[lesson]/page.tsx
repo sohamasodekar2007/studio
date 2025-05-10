@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getPyqQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { savePyqDppAttempt, getPyqDppProgress } from '@/actions/pyq-dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, ArrowLeft, Lock, Sparkles } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // For Locked Content
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
@@ -40,7 +41,8 @@ export default function PyqDppPracticePage() {
   const subject = decodeURIComponent(params.subject as string);
   const lesson = decodeURIComponent(params.lesson as string);
 
-  const [allQuestions, setAllQuestions] = useState<QuestionBankItem[]>([]);
+  const [allQuestionsFromLesson, setAllQuestionsFromLesson] = useState<QuestionBankItem[]>([]);
+  const [accessibleQuestions, setAccessibleQuestions] = useState<QuestionBankItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter>('All');
@@ -56,6 +58,7 @@ export default function PyqDppPracticePage() {
   const [isNotebookModalOpen, setIsNotebookModalOpen] = useState(false);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  const [isContentLocked, setIsContentLocked] = useState(false);
 
   const typesetMathJax = useCallback(() => {
     if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
@@ -70,12 +73,17 @@ export default function PyqDppPracticePage() {
     }
   }, []);
   
+  const filteredAndAccessibleQuestions = useMemo(() => {
+    let questionsToFilter = accessibleQuestions;
+    if (selectedDifficulty !== 'All') {
+      questionsToFilter = questionsToFilter.filter(q => q.difficulty === selectedDifficulty);
+    }
+    return questionsToFilter;
+  }, [accessibleQuestions, selectedDifficulty]);
+
   const currentQuestion = useMemo(() => {
-    const filtered = selectedDifficulty === 'All' 
-      ? allQuestions 
-      : allQuestions.filter(q => q.difficulty === selectedDifficulty);
-    return filtered[currentQuestionIndex];
-  }, [allQuestions, selectedDifficulty, currentQuestionIndex]);
+    return filteredAndAccessibleQuestions[currentQuestionIndex];
+  }, [filteredAndAccessibleQuestions, currentQuestionIndex]);
 
   useEffect(() => {
      if (!isLoading && currentQuestion) {
@@ -92,16 +100,45 @@ export default function PyqDppPracticePage() {
       setIsLoading(false);
       return;
     }
-    const fetchQuestions = async () => {
+    const fetchAndFilterQuestions = async () => {
       setIsLoading(true);
       setError(null);
+      setIsContentLocked(false);
       try {
         const fetchedQuestions = await getPyqQuestionsForLesson(examName, subject, lesson);
-        setAllQuestions(fetchedQuestions);
+        setAllQuestionsFromLesson(fetchedQuestions); // Store all for reference if needed
+
+        if (!user) { // User not logged in or still loading
+            if (!authLoading) { // If auth is done and still no user
+                setIsContentLocked(true); 
+                setAccessibleQuestions([]);
+            }
+            // If authLoading, wait for user status
+            return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const allowedYearForFreeUsers = currentYear - 1;
+        const isPremiumUser = user.model !== 'free';
+
+        const userAccessibleQuestions = fetchedQuestions.filter(q => {
+            if (!q.isPyq || !q.pyqDetails?.date) return false; // Only PYQs with dates
+            const questionYear = new Date(q.pyqDetails.date).getFullYear();
+            if (isPremiumUser) return true; // Premium users see all years
+            return questionYear === allowedYearForFreeUsers; // Free users see last year's
+        });
+
+        if (userAccessibleQuestions.length === 0 && fetchedQuestions.length > 0 && !isPremiumUser) {
+            // Lesson has PYQs, but none accessible to free user this year
+            setIsContentLocked(true);
+        }
+        
+        setAccessibleQuestions(userAccessibleQuestions);
         setCurrentQuestionIndex(0);
         setUserAnswers({});
         setShowSolution(false);
         setIsCorrect(null);
+
       } catch (err) {
         console.error(`Failed to load PYQ questions for ${examName}/${subject}/${lesson}:`, err);
         setError(`Could not load PYQ questions for this lesson.`);
@@ -109,8 +146,12 @@ export default function PyqDppPracticePage() {
         setIsLoading(false);
       }
     };
-    fetchQuestions();
-  }, [examName, subject, lesson]);
+
+    if (!authLoading) { // Ensure user state is resolved before fetching
+        fetchAndFilterQuestions();
+    }
+
+  }, [examName, subject, lesson, user, authLoading]); // Add user and authLoading to dependencies
 
   useEffect(() => {
        if (user?.id && examName && subject && lesson) {
@@ -130,13 +171,6 @@ export default function PyqDppPracticePage() {
                 .finally(() => setIsLoadingNotebooks(false));
        }
    }, [user, examName, subject, lesson]);
-
-  const filteredQuestions = useMemo(() => {
-    if (selectedDifficulty === 'All') {
-      return allQuestions;
-    }
-    return allQuestions.filter(q => q.difficulty === selectedDifficulty);
-  }, [allQuestions, selectedDifficulty]);
 
   const previousAttempts = currentQuestion ? dppProgress?.questionAttempts[currentQuestion.id] : [];
   const lastAttempt = previousAttempts?.[0];
@@ -190,11 +224,11 @@ export default function PyqDppPracticePage() {
    };
 
    const goToNextQuestion = () => {
-       if (currentQuestionIndex < filteredQuestions.length - 1) {
+       if (currentQuestionIndex < filteredAndAccessibleQuestions.length - 1) {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
-           const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
+           const nextQuestionId = filteredAndAccessibleQuestions[currentQuestionIndex + 1]?.id;
            if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
                setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
            }
@@ -276,7 +310,7 @@ export default function PyqDppPracticePage() {
                   <CardHeader> <CardTitle className="text-lg">Explanation</CardTitle> </CardHeader>
                   <CardContent>
                       {hasText && <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>}
-                      {hasImage && <div className="relative w-full max-w-lg h-64 mx-auto mt-4"><Image src={explanationImagePath!} alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded border" data-ai-hint="explanation image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
+                      {hasImage && <div className="relative w-full max-w-lg h-64 mx-auto mt-4"><Image src={explanationImagePath!} alt={`Explanation Image`} layout="fill" objectFit="contain" className="rounded border" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
                   </CardContent>
               </Card>
          );
@@ -330,6 +364,7 @@ export default function PyqDppPracticePage() {
       }
     }, [user?.id, toast]);
 
+
    if (isLoading || authLoading) { 
      return ( 
         <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
@@ -345,7 +380,7 @@ export default function PyqDppPracticePage() {
         </div>
      );
    }
-    if (!user) { router.push('/auth/login?redirect=/pyq-dpps'); return null; } 
+    if (!user && !authLoading) { router.push(`/auth/login?redirect=/pyq-dpps/${encodeURIComponent(examName)}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}`); return null; } 
     if (error) { return ( 
          <div className="container mx-auto py-8 px-4 max-w-4xl text-center space-y-4">
            <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
@@ -354,13 +389,38 @@ export default function PyqDppPracticePage() {
            <Button asChild variant="outline"><Link href={`/pyq-dpps/${encodeURIComponent(examName)}`}>Back to Lessons</Link></Button>
          </div>
     ); }
-    if (filteredQuestions.length === 0) { return ( 
+    
+    if (isContentLocked) {
+        return (
+             <div className="container mx-auto py-8 px-4 max-w-2xl text-center space-y-4">
+                <Lock className="h-12 w-12 text-amber-500 mx-auto" />
+                <h1 className="text-2xl font-bold">Content Locked</h1>
+                 <Alert variant="default" className="text-left bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700">
+                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertTitle className="text-amber-700 dark:text-amber-300">Premium Access Required</AlertTitle>
+                    <AlertDescription className="text-amber-600 dark:text-amber-400 text-sm">
+                        Access to PYQs from the current year and all past years is a premium feature.
+                        Free users can access PYQs from the previous year ({new Date().getFullYear() - 1}).
+                    </AlertDescription>
+                </Alert>
+                <Button asChild className="mt-4">
+                    {/* Link to upgrade page or pricing (if available) */}
+                    <Link href="/#pricing">Upgrade to Premium</Link> 
+                </Button>
+                 <Button asChild variant="outline" className="mt-2">
+                    <Link href={`/pyq-dpps/${encodeURIComponent(examName)}`}>Back to {examName} Lessons</Link>
+                </Button>
+            </div>
+        );
+    }
+
+    if (filteredAndAccessibleQuestions.length === 0) { return ( 
          <div className="container mx-auto py-8 px-4 max-w-4xl space-y-6">
              <div className="mb-4"><Link href={`/pyq-dpps/${encodeURIComponent(examName)}`} className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to {examName} Lessons</Link></div>
              <h1 className="text-3xl font-bold tracking-tight">PYQ DPP: {lesson}</h1>
              <p className="text-muted-foreground">Subject: {subject} | Exam: {examName}</p>
               <div className="flex flex-wrap items-center gap-2 mb-4 border-b pb-4"> <Filter className="h-5 w-5 text-muted-foreground" /> <span className="font-medium mr-2">Difficulty:</span> {(['All', 'Easy', 'Medium', 'Hard'] as DifficultyFilter[]).map(diff => (<Button key={diff} variant={selectedDifficulty === diff ? 'default' : 'outline'} size="sm" onClick={() => handleDifficultyFilter(diff)}>{diff}</Button>))} </div>
-             <Card><CardContent className="p-10 text-center text-muted-foreground">No PYQs found matching the '{selectedDifficulty}' filter for this lesson.</CardContent></Card>
+             <Card><CardContent className="p-10 text-center text-muted-foreground">No PYQs found matching the '{selectedDifficulty}' filter for this lesson or year based on your plan.</CardContent></Card>
           </div>
      ); }
 
@@ -378,7 +438,7 @@ export default function PyqDppPracticePage() {
              <Card className="shadow-md">
              <CardHeader>
                  <div className="flex justify-between items-start flex-wrap gap-2">
-                     <CardTitle>Question {currentQuestionIndex + 1} of {filteredQuestions.length}</CardTitle>
+                     <CardTitle>Question {currentQuestionIndex + 1} of {filteredAndAccessibleQuestions.length}</CardTitle>
                      <div className="flex items-center gap-2 flex-wrap"> {renderPyqInfo(currentQuestion)} <Badge variant="secondary">{currentQuestion.difficulty}</Badge> {renderPreviousAttemptStatus()} </div>
                  </div>
              </CardHeader>
@@ -386,7 +446,7 @@ export default function PyqDppPracticePage() {
              <CardFooter className="flex justify-between items-center flex-wrap gap-2">
                   <div className="flex gap-2"> <Button variant="secondary" onClick={checkAnswer} disabled={showSolution || userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer</Button> <Button variant="outline" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving}><Bookmark className="mr-2 h-4 w-4" />Bookmark</Button> </div>
                  {isCorrect !== null && (<span className={`font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>{isCorrect ? 'Correct!' : 'Incorrect'}</span>)}
-                 <Button onClick={goToNextQuestion} disabled={!showSolution || isSaving}>{currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}</Button>
+                 <Button onClick={goToNextQuestion} disabled={!showSolution || isSaving}>{currentQuestionIndex === filteredAndAccessibleQuestions.length - 1 ? 'Finish DPP' : 'Next Question'}</Button>
              </CardFooter>
              </Card>
          ) : (
@@ -397,4 +457,3 @@ export default function PyqDppPracticePage() {
      </>
    );
  }
-

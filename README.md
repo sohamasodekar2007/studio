@@ -7,11 +7,23 @@ It uses local storage for authentication and `users.json` for user data persiste
 
 *   Browse Test Series (MHT-CET, JEE Main, JEE Advanced, NEET) with filtering
 *   User Authentication (Sign up / Login) using Local Storage and `users.json`
-*   User Profile Settings (Name, Password)
+*   User Profile Settings (Name, Password, Avatar)
 *   Help & Support Section
 *   Privacy Policy & Terms of Service Pages
-*   AI-Powered Study Tips (using Genkit)
+*   AI-Powered Doubt Solving (using Genkit) - Premium Feature
 *   Admin Panel (Dashboard, User Management, Test Management, Settings)
+*   Daily Practice Problems (DPP) with progress tracking
+*   PYQ DPPs with tiered access:
+    *   **Free Users**: Access PYQs from the previous calendar year.
+    *   **Premium Users** (e.g., "Combo" plan or any non-"free" plan): Access all available PYQs, including the latest year.
+    *   Content for inaccessible years is indicated, with prompts to upgrade for full access.
+*   Notebooks for bookmarking questions
+*   Leaderboard based on points from tests and DPPs
+*   Friend system (Follow/Unfollow, View Following/Followers)
+*   Performance Comparison with Friends
+*   Challenge Tests: Create and participate in timed challenges with friends.
+*   Real-time notifications for challenge invites (using browser notifications if permission granted).
+*   User Referral System: Users get unique referral codes; stats on referrals are tracked.
 
 ## Getting Started
 
@@ -20,13 +32,15 @@ It uses local storage for authentication and `users.json` for user data persiste
     ```bash
     npm install
     ```
-3.  **Set up Google AI:**
+3.  **Set up Google AI (for AI features):**
     *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 4.  **Configure Environment Variables:**
     *   **CRITICAL:** Create a file named `.env.local` in the project root (if it doesn't exist). Do NOT use `.env.example` or just `.env` for Next.js public variables.
     *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in.
     *   Set `ADMIN_PASSWORD` to a secure password for the default admin user (e.g., `Soham@1234`). This is used for the initial local admin setup.
+    *   Set `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` and `TELEGRAM_BOT_TOKEN` if using Telegram login.
+    *   Set `NEXT_PUBLIC_TELEGRAM_REDIRECT_URI` for Telegram login callback.
     *   **Example `.env.local` content:**
         ```
         GOOGLE_GENAI_API_KEY=YOUR_GOOGLE_GENAI_API_KEY_HERE
@@ -79,7 +93,7 @@ It uses local storage for authentication and `users.json` for user data persiste
 *   `src/types/`: TypeScript type definitions (`index.ts`).
 *   `src/data/`: Contains local data files like `users.json`, `question_bank`, `test_pages`. **Note:** Local file storage is for demonstration/local development and is not scalable or secure for production.
 *   `src/actions/`: Server Actions (e.g., `user-actions.ts`, `auth-actions.ts`).
-*   `public/`: Static assets (e.g., `question_bank_images`, logos).
+*   `public/`: Static assets (e.g., `question_bank_images`, `avatars`, logos).
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
 *   `.env.local`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY & SERVER RESTARTED.**
 *   `.env.example`: Example environment variables file.
