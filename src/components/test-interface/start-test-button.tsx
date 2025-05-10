@@ -28,8 +28,8 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
         return true;
       case 'PAID':
          if (userModel === 'combo') return true; 
-         if (test.testType === 'chapterwise' && userModel === 'chapterwise') return true;
-         if (test.testType === 'full_length' && userModel === 'full_length') return true;
+         if (test.testseriesType === 'chapterwise' && userModel === 'chapterwise') return true; // Renamed from testType
+         if (test.testseriesType === 'full_length' && userModel === 'full_length') return true; // Renamed from testType
          return false; 
       default:
         return false; 
@@ -46,7 +46,7 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
         title: 'Login Required',
         description: 'Please log in or sign up to start the test.',
       });
-      router.push(`/auth/login?redirect=/take-test/${test.test_code}`); // Keep redirect to take-test for consistency
+      router.push(`/auth/login?redirect=/take-test/${test.test_code}`); 
       return;
     }
 
@@ -57,11 +57,8 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
              title: 'Upgrade Required',
              description: `Your current plan (${userModel}) does not include access to this test. Please upgrade.`,
          });
-         // Optionally redirect to a pricing page
-         // router.push('/pricing');
          return;
     }
-    // If user has access, the link will proceed. Target _blank is set on Link.
   };
 
   let buttonText = 'Start Test Now';
@@ -74,15 +71,13 @@ export default function StartTestButton({ test }: StartTestButtonProps) {
     isDisabled = true;
   } else if (!user) {
     buttonText = 'Login to Start';
-    // isDisabled = false, but onClick will handle redirect
   } else if (!hasAccess) {
     buttonText = 'Upgrade to Access';
-    isDisabled = true; // Button should be visually disabled, click is handled too.
+    isDisabled = true; 
     buttonIcon = <Lock className="mr-2 h-4 w-4" />; 
     buttonVariant = "secondary"; 
   }
 
-  // The test interface is now unified
   const testInterfacePath = (user && user.id) ? `/test-interface/${test.test_code}?userId=${user.id}` : '#';
 
   return (

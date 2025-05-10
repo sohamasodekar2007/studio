@@ -2,18 +2,18 @@
 // src/app/admin/tests/manage/page.tsx
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useMemo, useCallback } from 'react'; 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search, Edit, Trash2, Eye, BookOpen, FileJson, Clock, HelpCircle } from "lucide-react"; // Added icons
+import { MoreHorizontal, PlusCircle, Search, Edit, Trash2, Eye, BookOpen, FileJson, Clock, HelpCircle } from "lucide-react"; 
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
-import type { GeneratedTest, PricingType } from '@/types'; // Use new GeneratedTest type
-import { getAllGeneratedTests, deleteGeneratedTest } from '@/actions/generated-test-actions'; // Import actions for generated tests
+import type { GeneratedTest, PricingType } from '@/types'; 
+import { getAllGeneratedTests, deleteGeneratedTest } from '@/actions/generated-test-actions'; 
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -33,7 +33,7 @@ export default function ManageTestsPage() {
   const [tests, setTests] = useState<GeneratedTest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false); // State for delete confirmation
+  const [isDeleting, setIsDeleting] = useState(false); 
 
   const fetchAllGeneratedTests = useCallback(() => {
     setIsLoading(true);
@@ -49,13 +49,12 @@ export default function ManageTestsPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [toast]); // Add toast as dependency
+  }, [toast]); 
 
   useEffect(() => {
     fetchAllGeneratedTests();
-  }, [fetchAllGeneratedTests]); // Depend on the memoized fetch function
+  }, [fetchAllGeneratedTests]); 
 
-  // Filter tests based on search term (name, code, subjects)
   const filteredTests = useMemo(() => {
     return tests.filter(test =>
       (test.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -65,26 +64,21 @@ export default function ManageTestsPage() {
   }, [tests, searchTerm]);
 
 
-  // Function to handle test deletion
   const handleDeleteTest = async (testCode: string) => {
      setIsDeleting(true);
      const originalTests = [...tests];
-      // Optimistic update
      setTests(prevTests => prevTests.filter(test => test.test_code !== testCode));
 
      try {
         const result = await deleteGeneratedTest(testCode);
         if (!result.success) {
-            // Revert optimistic update
             setTests(originalTests);
             toast({ variant: "destructive", title: "Delete Failed", description: result.message });
         } else {
             toast({ title: "Test Deleted", description: `Test ${testCode} has been removed.` });
-            // Optimistic update succeeded, no explicit refetch needed unless state is complex
         }
      } catch (error) {
          console.error("Failed to delete test:", error);
-          // Revert optimistic update
          setTests(originalTests);
          toast({ variant: "destructive", title: "Error", description: "Could not delete test." });
      } finally {
@@ -118,7 +112,6 @@ export default function ManageTestsPage() {
 
       <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            {/* Search Input */}
             <div className="relative flex-1 md:grow-0">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
              <Input
@@ -128,7 +121,6 @@ export default function ManageTestsPage() {
                className="pl-10 w-full md:w-80"
              />
            </div>
-           {/* Add Filters here if needed (e.g., by subject, type) */}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -191,14 +183,13 @@ export default function ManageTestsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem disabled> {/* TODO: Implement View/Edit JSON */}
+                            <DropdownMenuItem disabled> 
                                 <FileJson className="mr-2 h-4 w-4" /> View/Edit JSON
                             </DropdownMenuItem>
-                            <DropdownMenuItem disabled> {/* TODO: Implement Edit Test Metadata */}
+                            <DropdownMenuItem disabled> 
                               <Edit className="mr-2 h-4 w-4" /> Edit Details
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {/* Delete Confirmation */}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                   <Button
@@ -245,11 +236,8 @@ export default function ManageTestsPage() {
            <div className="text-xs text-muted-foreground">
             Showing <strong>{filteredTests.length}</strong> of <strong>{tests.length}</strong> total generated tests.
           </div>
-           {/* TODO: Add Pagination */}
         </CardFooter>
       </Card>
     </div>
   );
 }
-
-    

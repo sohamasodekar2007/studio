@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import StartTestButton from '@/components/test-interface/start-test-button'; 
 import type { PricingType } from '@/types';
 import Image from "next/image";
-import { Badge } from "@/components/ui/badge"; // Ensure Badge is imported
+import { Badge } from "@/components/ui/badge"; 
 
 const formatPricing = (pricing: PricingType) => {
     switch (pricing) {
@@ -44,7 +44,7 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
     notFound();
   }
 
-  const syllabusCovered = testData.testType === 'chapterwise' && testData.lesson
+  const syllabusCovered = testData.testseriesType === 'chapterwise' && testData.lesson // Renamed from testType
     ? [testData.lesson]
     : testData.test_subject.map(s => `Full Syllabus - ${s}`);
 
@@ -57,9 +57,7 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
       </div>
 
       <Card className="overflow-hidden bg-card">
-        {/* Removed CardHeader that contained the Image */}
         <CardContent className="p-6 space-y-4">
-            {/* Moved pricing badge here */}
             <div className="flex justify-end mb-2">
                 <Badge
                    variant={getPricingBadgeVariant(testData.type)}
@@ -71,7 +69,7 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
 
             <div className="flex flex-wrap gap-2 mb-2">
                  <Badge variant="outline"><CalendarDays className="h-4 w-4 mr-1"/>For: {testData.audience}</Badge>
-                 <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testType === 'full_length' && testData.stream ? testData.stream : testData.testType.replace('_', ' ')}</Badge>
+                 <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testseriesType === 'full_length' && testData.stream ? testData.stream : testData.testseriesType.replace('_', ' ')}</Badge> {/* Renamed testType */}
                 {testData.test_subject.map(sub => (
                    <Badge key={sub} variant="secondary"><BookOpen className="h-4 w-4 mr-1"/>{sub}</Badge>
                 ))}
@@ -105,15 +103,14 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
                     )}
                 </ul>
             </div>
-             {/* Interface for non-chapterwise tests is under development */}
-             {testData.testType !== 'chapterwise' && (
+             {testData.testseriesType !== 'chapterwise' && ( // Renamed from testType
                 <div className="mt-6 p-4 border border-amber-500 bg-amber-50 dark:bg-amber-950 rounded-md text-amber-700 dark:text-amber-300">
                     <div className="flex items-start">
                     <AlertTriangle className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0" />
                     <div>
                         <h4 className="font-semibold">Test Interface Note</h4>
                         <p className="text-sm">
-                        The test-taking interface for {testData.testType.replace('_', ' ')} tests is currently under development.
+                        The test-taking interface for {testData.testseriesType.replace('_', ' ')} tests is currently under development. {/* Renamed testType */}
                         This button will lead to the chapterwise test interface for now.
                         </p>
                     </div>

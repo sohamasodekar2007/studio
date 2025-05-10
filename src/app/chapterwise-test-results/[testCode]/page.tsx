@@ -7,7 +7,7 @@
  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
  import { Progress } from '@/components/ui/progress';
- import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye, Users } from 'lucide-react'; // Added Users icon
+ import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye, Users } from 'lucide-react'; 
  import Link from 'next/link';
  import type { TestResultSummary, GeneratedTest, UserProfile, ChapterwiseTestJson } from '@/types';
  import { Skeleton } from '@/components/ui/skeleton';
@@ -57,7 +57,6 @@
    const [rankPrediction, setRankPrediction] = useState<PredictRankOutput | null>(null);
 
 
-   // --- Fetching Data ---
    const fetchTestAndResults = useCallback(async () => {
        if (!testCode || !userId || !attemptTimestampStr) {
          setError("Missing test information to load results.");
@@ -86,9 +85,8 @@
          if (!reportData) throw new Error(`Could not find results for this attempt.`);
 
          
-         if (testDefData && testDefData.testType !== 'chapterwise') {
+         if (testDefData && testDefData.testseriesType !== 'chapterwise') { // Renamed from testType
              console.warn("Viewing non-chapterwise results on chapterwise page. This page might need to be generalized or removed.");
-             // This page might need to be updated or redirected if it's strictly for chapterwise
          }
 
          setTestDefinition(testDefData as ChapterwiseTestJson | null); 
@@ -492,5 +490,3 @@
      </>
    );
  }
-
-    

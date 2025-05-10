@@ -64,7 +64,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const [showInstructions, setShowInstructions] = useState(true);
   
   const initialSection = useMemo(() => {
-    if (initialTestData.testType === 'full_length') {
+    if (initialTestData.testseriesType === 'full_length') { // Renamed from testType
         if (initialTestData.physics_questions && initialTestData.physics_questions.length > 0) return 'Physics';
         if (initialTestData.chemistry_questions && initialTestData.chemistry_questions.length > 0) return 'Chemistry';
         if (initialTestData.maths_questions && initialTestData.maths_questions.length > 0) return 'Mathematics';
@@ -87,9 +87,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
   const allQuestionsInOrder = useMemo(() => {
     if (!testData) return [];
-    if (testData.testType === 'chapterwise') {
+    if (testData.testseriesType === 'chapterwise') { // Renamed from testType
       return testData.questions || [];
-    } else if (testData.testType === 'full_length') {
+    } else if (testData.testseriesType === 'full_length') { // Renamed from testType
       const questions: TestQuestion[] = [];
       if (testData.physics_questions) questions.push(...testData.physics_questions);
       if (testData.chemistry_questions) questions.push(...testData.chemistry_questions);
@@ -103,10 +103,10 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const questionsBySection = useMemo(() => {
     if (!testData) return {};
     const sections: Record<string, TestQuestion[]> = {};
-    if (testData.testType === 'chapterwise' && testData.questions) {
+    if (testData.testseriesType === 'chapterwise' && testData.questions) { // Renamed from testType
         const sectionName = testData.test_subject[0] || 'Questions';
         sections[sectionName] = testData.questions;
-    } else if (testData.testType === 'full_length') {
+    } else if (testData.testseriesType === 'full_length') { // Renamed from testType
         if (testData.physics_questions && testData.physics_questions.length > 0) sections['Physics'] = testData.physics_questions;
         if (testData.chemistry_questions && testData.chemistry_questions.length > 0) sections['Chemistry'] = testData.chemistry_questions;
         if (testData.maths_questions && testData.maths_questions.length > 0) sections['Mathematics'] = testData.maths_questions;
@@ -142,7 +142,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     }
   }, [currentQuestion, showInstructions, typesetMathJax, isLoading]);
 
-  // Load from local storage on mount
   useEffect(() => {
     if (!user?.id || !testCode || authLoading || !isResuming) return;
 
@@ -151,7 +150,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
     let initialStatuses: Record<string, QuestionStatus> = {};
     allQuestionsInOrder.forEach((q, index) => {
-        if (q.id) { // Ensure question ID exists
+        if (q.id) { 
             initialStatuses[q.id] = index === 0 ? QuestionStatusEnum.Unanswered : QuestionStatusEnum.NotVisited;
         }
     });
@@ -165,12 +164,11 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
                 setCurrentSection(savedState.currentSection || initialSection);
                 setCurrentQuestionIndexInSection(savedState.currentQuestionIndexInSection || 0);
                 setUserAnswers(savedState.userAnswers || {});
-                // Merge saved statuses with initial ones to ensure all questions have a status
                 setQuestionStatuses({...initialStatuses, ...(savedState.questionStatuses || {})});
                 setShowInstructions(false); 
                 toast({ title: "Test Resumed", description: "Your previous progress has been loaded." });
             } else {
-                 localStorage.removeItem(savedSessionKey); // Invalid saved state for this test/user
+                 localStorage.removeItem(savedSessionKey); 
                  setQuestionStatuses(initialStatuses);
             }
         } catch (e) {
@@ -184,18 +182,15 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     setIsResuming(false); 
   }, [user?.id, testCode, authLoading, isResuming, allQuestionsInOrder, initialSection, toast]);
 
-  // Save to local storage on state change
   useEffect(() => {
     if (!user?.id || !testCode || showInstructions || startTime === null || authLoading || isResuming) return;
-
-    const currentGlobalIdx = globalQuestionIndex; // Recalculate based on current section and index
     
     const sessionState: InProgressTestState = {
       testCode,
       userId: user.id,
       startTime,
       timeLeft,
-      currentGlobalIndex: currentGlobalIdx, 
+      currentGlobalIndex: globalQuestionIndex, 
       currentSection,
       currentQuestionIndexInSection,
       userAnswers,
@@ -342,7 +337,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
         setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.Answered }));
     } else if (currentStatus === QuestionStatusEnum.MarkedForReview) {
          setQuestionStatuses(prev => ({ ...prev, [currentQId]: userAnswers[currentQId] ? QuestionStatusEnum.Answered : QuestionStatusEnum.Unanswered }));
-    } else { // Unanswered or NotVisited
+    } else { 
       setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.MarkedForReview }));
     }
   };
@@ -355,24 +350,8 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
     if (currentStatus === QuestionStatusEnum.AnsweredAndMarked) {
         setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.MarkedForReview }));
-    } else { // Answered, MarkedForReview, NotVisited, Unanswered
+    } else { 
         setQuestionStatuses(prev => ({ ...prev, [currentQId]: QuestionStatusEnum.Unanswered }));
-    }
-  };
-
-  const toggleFullScreen = () => {
-    if (typeof window !== 'undefined' && document.documentElement) {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
-                toast({variant: 'destructive', title: 'Fullscreen Error', description: `Could not enter fullscreen: ${err.message}`});
-            });
-            setIsFullScreen(true);
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-                setIsFullScreen(false);
-            }
-        }
     }
   };
 
@@ -443,7 +422,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
           user={user}
         />}
         
-        {testData.testType === 'full_length' && Object.keys(questionsBySection).length > 1 && (
+        {testData.testseriesType === 'full_length' && Object.keys(questionsBySection).length > 1 && ( // Renamed from testType
             <div className="bg-card border-b px-2 py-1.5 flex gap-1 overflow-x-auto no-scrollbar shadow-sm">
                 {Object.keys(questionsBySection).map(sectionName => (
                     <Button 

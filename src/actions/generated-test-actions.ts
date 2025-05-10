@@ -31,7 +31,7 @@ function generateUniqueTestCode(): string {
 
 /**
  * Saves the generated test definition JSON to the appropriate folder
- * (chapterwise or full_length) based on the test type.
+ * (chapterwise or full_length) based on the test series type.
  * The filename will be the unique test_code.
  *
  * @param testDataToSave - The GeneratedTest object containing all test details, EXCLUDING test_code and createdAt (will be generated here).
@@ -53,37 +53,32 @@ export async function saveGeneratedTest(
     let targetDir: string;
     let filename: string;
 
-    // Determine save directory and filename based on test type
-    if (fullTestDefinition.testType === 'chapterwise') {
+    // Determine save directory and filename based on test series type
+    if (fullTestDefinition.testseriesType === 'chapterwise') { // Renamed from testType
         targetDir = chapterwiseTestsBasePath;
         filename = `${fullTestDefinition.test_code}.json`;
         
-        // Ensure 'lesson' is a string for single-lesson, 'lessons' for multi.
-        // This is a common source of type issues if not handled carefully.
         const chapterwiseData = fullTestDefinition as ChapterwiseTestJson;
         if (chapterwiseData.lessons && chapterwiseData.lessons.length === 1 && !chapterwiseData.lesson) {
-            // If 'lessons' has one item and 'lesson' isn't set, populate 'lesson'
             chapterwiseData.lesson = chapterwiseData.lessons[0];
         } else if (chapterwiseData.lesson && (!chapterwiseData.lessons || chapterwiseData.lessons.length === 0)) {
-            // If 'lesson' is set and 'lessons' isn't, populate 'lessons'
             chapterwiseData.lessons = [chapterwiseData.lesson];
         }
 
 
-    } else if (fullTestDefinition.testType === 'full_length') {
+    } else if (fullTestDefinition.testseriesType === 'full_length') { // Renamed from testType
         targetDir = fullLengthTestsBasePath;
         filename = `${fullTestDefinition.test_code}.json`;
     } else {
-        console.error('Unknown test type provided to saveGeneratedTest:', (fullTestDefinition as any).testType);
-        return { success: false, message: 'Invalid test type provided.' };
+        console.error('Unknown test series type provided to saveGeneratedTest:', (fullTestDefinition as any).testseriesType); // Renamed from testType
+        return { success: false, message: 'Invalid test series type provided.' };
     }
 
     const filePath = path.join(targetDir, filename);
 
     try {
-        await ensureDirExists(targetDir); // Ensure the target directory exists
+        await ensureDirExists(targetDir); 
 
-        // The fullTestDefinition already includes test_code and createdAt
         await fs.writeFile(filePath, JSON.stringify(fullTestDefinition, null, 2), 'utf-8');
         console.log(`Generated test definition saved: ${filePath}`);
         return { success: true, message: `Test ${fullTestDefinition.test_code} saved successfully.`, filePath, test_code: fullTestDefinition.test_code };
@@ -114,24 +109,18 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
                 const filePath = path.join(baseDir, file);
                 try {
                     const fileContent = await fs.readFile(filePath, 'utf-8');
-                    // Parse first to determine type, then cast
                     const parsedData = JSON.parse(fileContent);
                     
-                    if (!parsedData.testType) {
-                         // Try to infer from directory if testType is missing
-                         if (baseDir.includes('chapterwise') && !parsedData.testType) parsedData.testType = 'chapterwise';
-                         else if (baseDir.includes('full_length') && !parsedData.testType) parsedData.testType = 'full_length';
+                    if (!parsedData.testseriesType) { // Renamed from testType
+                         if (baseDir.includes('chapterwise') && !parsedData.testseriesType) parsedData.testseriesType = 'chapterwise'; // Renamed from testType
+                         else if (baseDir.includes('full_length') && !parsedData.testseriesType) parsedData.testseriesType = 'full_length'; // Renamed from testType
                     }
 
 
-                    // Basic validation (check for required fields for either type)
-                    if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testType) {
-                        // Perform specific validations based on inferred/parsed testType
-                        if (parsedData.testType === 'chapterwise') {
+                    if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testseriesType) { // Renamed from testType
+                        if (parsedData.testseriesType === 'chapterwise') { // Renamed from testType
                             const chapterwiseData = parsedData as ChapterwiseTestJson;
-                            // Ensure 'questions' array exists for chapterwise
                             if (!Array.isArray(chapterwiseData.questions)) chapterwiseData.questions = [];
-                             // Ensure 'lessons' is an array, and 'lesson' (single) is present if 'lessons' is empty/not there
                             if (!Array.isArray(chapterwiseData.lessons)) {
                                 chapterwiseData.lessons = chapterwiseData.lesson ? [chapterwiseData.lesson] : [];
                             }
@@ -140,9 +129,8 @@ export async function getAllGeneratedTests(): Promise<GeneratedTest[]> {
                             }
 
 
-                        } else if (parsedData.testType === 'full_length') {
+                        } else if (parsedData.testseriesType === 'full_length') { // Renamed from testType
                             const fullLengthData = parsedData as FullLengthTestJson;
-                            // Ensure subject-specific question arrays exist for full-length
                             if (!Array.isArray(fullLengthData.physics_questions)) fullLengthData.physics_questions = [];
                             if (!Array.isArray(fullLengthData.chemistry_questions)) fullLengthData.chemistry_questions = [];
                             if (fullLengthData.stream === 'PCM' && !Array.isArray(fullLengthData.maths_questions)) fullLengthData.maths_questions = [];
@@ -237,15 +225,13 @@ export async function getGeneratedTestByCode(testCode: string): Promise<Generate
             const fileContent = await fs.readFile(filePath, 'utf-8');
             const parsedData = JSON.parse(fileContent);
 
-            if (!parsedData.testType) {
-                if (dir.includes('chapterwise')) parsedData.testType = 'chapterwise';
-                else if (dir.includes('full_length')) parsedData.testType = 'full_length';
+            if (!parsedData.testseriesType) { // Renamed from testType
+                if (dir.includes('chapterwise')) parsedData.testseriesType = 'chapterwise'; // Renamed from testType
+                else if (dir.includes('full_length')) parsedData.testseriesType = 'full_length'; // Renamed from testType
             }
             
-            // Validate common fields
-            if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testType) {
-                 // Specific type validation and default empty arrays for question lists
-                 if (parsedData.testType === 'chapterwise') {
+            if (parsedData.test_code && parsedData.name && parsedData.test_subject && parsedData.type && parsedData.testseriesType) { // Renamed from testType
+                 if (parsedData.testseriesType === 'chapterwise') { // Renamed from testType
                     const chapterwiseData = parsedData as ChapterwiseTestJson;
                     if (!Array.isArray(chapterwiseData.questions)) chapterwiseData.questions = [];
                      if (!Array.isArray(chapterwiseData.lessons)) {
@@ -254,7 +240,7 @@ export async function getGeneratedTestByCode(testCode: string): Promise<Generate
                     if (chapterwiseData.lessons.length === 0 && chapterwiseData.lesson) {
                         chapterwiseData.lessons = [chapterwiseData.lesson];
                     }
-                } else if (parsedData.testType === 'full_length') {
+                } else if (parsedData.testseriesType === 'full_length') { // Renamed from testType
                     const fullLengthData = parsedData as FullLengthTestJson;
                     if (!Array.isArray(fullLengthData.physics_questions)) fullLengthData.physics_questions = [];
                     if (!Array.isArray(fullLengthData.chemistry_questions)) fullLengthData.chemistry_questions = [];
@@ -270,10 +256,8 @@ export async function getGeneratedTestByCode(testCode: string): Promise<Generate
         } catch (error: any) {
             if (error.code !== 'ENOENT') {
                 console.error(`Error accessing or parsing test file ${filePath}:`, error);
-                // Return null on significant errors, maybe throw depending on desired behavior
                 return null;
             }
-            // If ENOENT, continue to the next directory
         }
     }
 

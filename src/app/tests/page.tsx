@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label"; // Corrected import
+import { Label } from "@/components/ui/label"; 
 import { Checkbox } from "@/components/ui/checkbox";
 import type { GeneratedTest, ExamOption, PricingType, UserModel } from '@/types';
 import { exams, pricingTypes } from '@/types';
@@ -60,7 +60,7 @@ export default function TestsPage() {
     const userModel = user?.model || 'free';
 
     return allTestItems
-      .filter(item => { // Initial search and subject filtering
+      .filter(item => { 
         const searchLower = searchTerm.toLowerCase();
         const nameMatch = item.name.toLowerCase().includes(searchLower);
         const subjectMatchArray = Array.isArray(item.test_subject) ? item.test_subject : [item.test_subject];
@@ -74,28 +74,27 @@ export default function TestsPage() {
 
         return searchPass && subjectFilterPass && pricingFilterPass;
       })
-      .filter(item => { // Plan-based filtering logic
+      .filter(item => { 
         switch (userModel) {
           case 'free':
             return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
           case 'chapterwise':
-            if (item.testType === 'chapterwise') {
+            if (item.testseriesType === 'chapterwise') { // Renamed from testType
               return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
-            } else if (item.testType === 'full_length') {
+            } else if (item.testseriesType === 'full_length') { // Renamed from testType
               return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
             }
             return false;
           case 'full_length':
-            if (item.testType === 'full_length') {
+            if (item.testseriesType === 'full_length') { // Renamed from testType
               return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
-            } else if (item.testType === 'chapterwise') {
+            } else if (item.testseriesType === 'chapterwise') { // Renamed from testType
               return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
             }
             return false;
           case 'combo':
-            return true; // Combo users see all tests that passed previous filters
+            return true; 
           default:
-            // Fallback for unknown userModel, show only free tests
             return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
         }
       });
@@ -280,13 +279,12 @@ export default function TestsPage() {
                          </div>
                            <div className="flex items-center gap-1.5 col-span-2">
                             <CheckSquare className="h-4 w-4 text-primary" />
-                            <span>For: {item.audience} {item.testType === 'full_length' && item.stream ? `(${item.stream})` : item.testType === 'chapterwise' ? '(Chapterwise)' : ''}</span>
+                            <span>For: {item.audience} {item.testseriesType === 'full_length' && item.stream ? `(${item.stream})` : item.testseriesType === 'chapterwise' ? '(Chapterwise)' : ''}</span> {/* Renamed testType */}
                            </div>
                     </div>
 
 
                     <div className="pt-2 mt-auto">
-                         {/* Updated Link construction for test details page */}
                          <Link href={`/tests/${item.test_code}`} passHref>
                            <Button variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                                View Details <ArrowRight className="ml-2 h-4 w-4" />
@@ -307,4 +305,3 @@ export default function TestsPage() {
     </div>
   );
 }
-

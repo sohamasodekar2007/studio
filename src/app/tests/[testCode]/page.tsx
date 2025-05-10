@@ -1,7 +1,7 @@
 // src/app/tests/[testCode]/page.tsx
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, HelpCircle, ListChecks, CheckCircle, Tag, BookOpen, CalendarDays, CheckSquare, AlertTriangle } from "lucide-react"; // Added icons
+import { Clock, HelpCircle, ListChecks, CheckCircle, Tag, BookOpen, CalendarDays, CheckSquare, AlertTriangle } from "lucide-react"; 
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
 import Link from "next/link";
@@ -45,7 +45,7 @@ export default async function TestDetailPage({ params }: { params: { testCode: s
     notFound();
   }
 
-  const syllabusCovered = testData.testType === 'chapterwise' && testData.lesson
+  const syllabusCovered = testData.testseriesType === 'chapterwise' && testData.lesson // Renamed from testType
     ? [testData.lesson]
     : testData.test_subject.map(s => `Full Syllabus - ${s}`);
 
@@ -75,7 +75,7 @@ export default async function TestDetailPage({ params }: { params: { testCode: s
         <CardContent className="p-6 space-y-4">
             <div className="flex flex-wrap gap-2 mb-2">
                  <Badge variant="outline"><CalendarDays className="h-4 w-4 mr-1"/>For: {testData.audience}</Badge>
-                 <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testType === 'full_length' && testData.stream ? testData.stream : testData.testType.replace('_', ' ')}</Badge>
+                 <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testseriesType === 'full_length' && testData.stream ? testData.stream : testData.testseriesType.replace('_', ' ')}</Badge> {/* Renamed testType */}
                 {testData.test_subject.map(sub => (
                    <Badge key={sub} variant="secondary"><BookOpen className="h-4 w-4 mr-1"/>{sub}</Badge>
                 ))}
@@ -136,8 +136,8 @@ export default async function TestDetailPage({ params }: { params: { testCode: s
             <li>Your answers are saved as you navigate.</li>
             <li>Results will be available immediately after submission.</li>
             <li>For premium tests, ensure your subscription is active.</li>
-            {testData.testType !== 'chapterwise' && (
-                <li><AlertTriangle className="h-4 w-4 inline mr-1 text-amber-600"/>The interface for Full Length tests is currently under development.</li>
+            {testData.testseriesType !== 'chapterwise' && ( // Renamed from testType
+                <li><AlertTriangle className="h-4 w-4 inline mr-1 text-amber-600"/>The interface for {testData.testseriesType.replace('_', ' ')} tests is currently under development.</li>
             )}
           </ul>
         </CardContent>

@@ -124,7 +124,6 @@ export interface BulkQuestionInput {
 
 // Reusing Academic Status for Audience
 export type AudienceType = AcademicStatus;
-export const audienceTypes = academicStatuses;
 
 
 // Define Test Streams
@@ -151,11 +150,10 @@ export interface TestQuestion {
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
-    testType: 'chapterwise' | 'full_length';
+    testseriesType: 'chapterwise' | 'full_length'; // Renamed from testType
     test_code: string;
     name: string;
     duration: number;
-    // count: number; // 'count' might be redundant if total_questions is present and accurate
     total_questions: number;
     type: PricingType; // FREE, PAID, FREE_PREMIUM
     audience: AudienceType | null; // e.g., "11th Class", "12th Class", "Dropper"
@@ -165,7 +163,7 @@ interface BaseGeneratedTest {
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
-    testType: 'chapterwise';
+    testseriesType: 'chapterwise'; // Renamed from testType
     lessons: string[]; // Can now include multiple lessons for combined chapterwise tests
     examFilter?: ExamOption | 'all'; // Optional filter for questions
     questions: TestQuestion[]; // Array of actual question objects for the test
@@ -182,7 +180,7 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
-    testType: 'full_length';
+    testseriesType: 'full_length'; // Renamed from testType
     stream: TestStream; // PCM or PCB
     examTypeTarget: ExamOption; // The specific exam this full-length test targets (e.g., MHT-CET, JEE Main)
     
@@ -192,17 +190,14 @@ export interface FullLengthTestJson extends BaseGeneratedTest {
     maths_questions?: TestQuestion[]; // For PCM
     biology_questions?: TestQuestion[]; // For PCB
     
-    // Optional: Store the intended weightage per subject or even per lesson if needed for display/analysis
-    // This is more for metadata; the actual questions are in the arrays above.
     weightage?: {
-        [subject: string]: number | { [lesson: string]: number }; // e.g. Physics: 30 or Physics: { "Motion": 10, "Optics": 20 }
+        [subject: string]: number | { [lesson: string]: number }; 
     };
 
-    // Ensure fields specific to ChapterwiseTestJson are explicitly undefined or not present
     questions?: undefined;
     lessons?: undefined;
     lesson?: undefined;
-    examFilter?: undefined; // examTypeTarget serves this purpose for FLTs
+    examFilter?: undefined; 
 }
 
 // Discriminated union for generated tests
