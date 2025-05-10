@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
-import { saveDppAttempt, getDppProgress } from '@/actions/dpp-progress-actions';
+import { saveDppAttempt, getDppProgress, getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowLeft, ArrowRight, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowLeft, ArrowRight, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -23,9 +23,10 @@ import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/acti
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress'; // For DPP progress bar
+import { Progress } from '@/components/ui/progress'; 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+const DAILY_DPP_GOAL = 10; // Define the daily goal here or import from a config
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
@@ -96,11 +97,11 @@ export default function DppLessonPage() {
 
   useEffect(() => {
     if (!isLoading && currentQuestion) {
-        setAnimateCard(true); // Trigger animation
+        setAnimateCard(true); 
         const timerId = setTimeout(() => {
             typesetMathJax();
-            setAnimateCard(false); // Reset animation state after a short delay
-        }, 50); // Adjust delay if needed
+            setAnimateCard(false); 
+        }, 50); 
         return () => clearTimeout(timerId);
     }
   }, [isLoading, currentQuestion, showSolution, typesetMathJax]);
@@ -183,6 +184,41 @@ export default function DppLessonPage() {
       setShowSolution(false);
   };
 
+  const checkDailyGoalAndNotify = async () => {
+    if (!user || !user.id) return;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const goalAchievedKey = `dailyGoalAchieved_${user.id}_${today}`;
+
+    if (localStorage.getItem(goalAchievedKey)) {
+        return; // Goal already achieved and notified today
+    }
+
+    const todayStart = new Date(today + 'T00:00:00.000Z').toISOString();
+    const todayEnd = new Date(today + 'T23:59:59.999Z').toISOString();
+    
+    try {
+        const todayProgressData = await getDppProgressForDateRange(user.id, todayStart, todayEnd);
+        let solvedToday = 0;
+        todayProgressData.forEach(lessonProg => {
+            Object.values(lessonProg.questionAttempts).forEach(attempts => {
+                if (attempts.length > 0) solvedToday++;
+            });
+        });
+
+        if (solvedToday >= DAILY_DPP_GOAL) {
+            toast({
+                title: "🎉 Daily Goal Achieved! 🎉",
+                description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} DPP questions. Keep it up!`,
+                duration: 7000,
+            });
+            localStorage.setItem(goalAchievedKey, 'true');
+        }
+    } catch (error) {
+        console.error("Error checking daily goal:", error);
+    }
+  };
+
+
    const checkAnswer = async () => {
        if (!currentQuestion || !user?.id || !subject || !lesson) return;
        const selected = userAnswers[currentQuestion.id];
@@ -193,19 +229,17 @@ export default function DppLessonPage() {
 
        const correct = selected === currentQuestion.correct;
        setIsCorrect(correct);
-       setShowSolution(true); // Show solution immediately
+       setShowSolution(true); 
 
-       // Animate feedback
        const feedbackElement = document.getElementById('answer-feedback');
         if (feedbackElement) {
-            feedbackElement.classList.remove('animate-pulse', 'animate-bounce'); // Reset previous animations
+            feedbackElement.classList.remove('animate-pulse', 'animate-bounce'); 
             if (correct) {
-                feedbackElement.classList.add('animate-bounce'); // Example: bounce for correct
+                feedbackElement.classList.add('animate-bounce'); 
             } else {
-                feedbackElement.classList.add('animate-pulse'); // Example: pulse for incorrect
+                feedbackElement.classList.add('animate-pulse'); 
             }
         }
-
 
        setIsSaving(true);
        try {
@@ -223,6 +257,7 @@ export default function DppLessonPage() {
                    lastAccessed: Date.now()
                };
            });
+           await checkDailyGoalAndNotify(); // Check and notify after saving attempt
 
        } catch (error: any) {
            toast({ variant: "destructive", title: "Save Failed", description: error.message });
@@ -236,7 +271,7 @@ export default function DppLessonPage() {
            setCurrentQuestionIndex(prev => prev + 1);
            setShowSolution(false);
            setIsCorrect(null);
-           setAnimateCard(true); // Trigger animation for next card
+           setAnimateCard(true); 
            const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
            if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
                setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));

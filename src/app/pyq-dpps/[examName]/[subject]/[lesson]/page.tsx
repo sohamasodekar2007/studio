@@ -11,8 +11,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Skeleton } from '@/components/ui/skeleton';
 import { getPyqQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { savePyqDppAttempt, getPyqDppProgress } from '@/actions/pyq-dpp-progress-actions';
+import { getDppProgressForDateRange } from '@/actions/dpp-progress-actions'; // For daily goal check
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, ArrowLeft, Lock, Sparkles } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, ArrowLeft, Lock, Sparkles, FileText, ImageIcon } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -21,9 +22,10 @@ import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/actions/notebook-actions';
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // For Locked Content
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; 
 
 type DifficultyFilter = DifficultyLevel | 'All';
+const DAILY_DPP_GOAL = 10; // Define the daily goal here or import from a config
 
 const constructImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
     if (!filename) return null;
@@ -106,30 +108,28 @@ export default function PyqDppPracticePage() {
       setIsContentLocked(false);
       try {
         const fetchedQuestions = await getPyqQuestionsForLesson(examName, subject, lesson);
-        setAllQuestionsFromLesson(fetchedQuestions); // Store all for reference if needed
+        setAllQuestionsFromLesson(fetchedQuestions); 
 
-        if (!user) { // User not logged in or still loading
-            if (!authLoading) { // If auth is done and still no user
+        if (!user) { 
+            if (!authLoading) { 
                 setIsContentLocked(true); 
                 setAccessibleQuestions([]);
             }
-            // If authLoading, wait for user status
             return;
         }
 
-        const currentYear = new Date().getFullYear();
-        const allowedYearForFreeUsers = currentYear - 1;
+        const currentYearVal = new Date().getFullYear();
+        const allowedYearForFreeUsers = currentYearVal - 1;
         const isPremiumUser = user.model !== 'free';
 
         const userAccessibleQuestions = fetchedQuestions.filter(q => {
-            if (!q.isPyq || !q.pyqDetails?.date) return false; // Only PYQs with dates
+            if (!q.isPyq || !q.pyqDetails?.date) return false; 
             const questionYear = new Date(q.pyqDetails.date).getFullYear();
-            if (isPremiumUser) return true; // Premium users see all years
-            return questionYear === allowedYearForFreeUsers; // Free users see last year's
+            if (isPremiumUser) return true; 
+            return questionYear === allowedYearForFreeUsers; 
         });
 
         if (userAccessibleQuestions.length === 0 && fetchedQuestions.length > 0 && !isPremiumUser) {
-            // Lesson has PYQs, but none accessible to free user this year
             setIsContentLocked(true);
         }
         
@@ -147,11 +147,11 @@ export default function PyqDppPracticePage() {
       }
     };
 
-    if (!authLoading) { // Ensure user state is resolved before fetching
+    if (!authLoading) { 
         fetchAndFilterQuestions();
     }
 
-  }, [examName, subject, lesson, user, authLoading]); // Add user and authLoading to dependencies
+  }, [examName, subject, lesson, user, authLoading]); 
 
   useEffect(() => {
        if (user?.id && examName && subject && lesson) {
@@ -190,6 +190,52 @@ export default function PyqDppPracticePage() {
       setShowSolution(false);
   };
 
+  const checkDailyGoalAndNotify = async () => {
+    if (!user || !user.id) return;
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const goalAchievedKey = `dailyGoalAchieved_${user.id}_${today}`;
+
+    if (localStorage.getItem(goalAchievedKey)) {
+        return; // Goal already achieved and notified today
+    }
+
+    const todayStart = new Date(today + 'T00:00:00.000Z').toISOString();
+    const todayEnd = new Date(today + 'T23:59:59.999Z').toISOString();
+    
+    try {
+        // Fetch both regular and PYQ DPP progress for today
+        const [todayRegularProgress, todayPyqProgress] = await Promise.all([
+            getDppProgressForDateRange(user.id, todayStart, todayEnd),
+            // Assuming a similar function exists or can be created for PYQ DPPs
+            // For now, let's simulate by using the regular one, adjust if you have a specific PYQ one
+            getDppProgressForDateRange(user.id, todayStart, todayEnd) // Replace with actual PYQ progress if different
+        ]);
+        
+        let solvedToday = 0;
+        const countSolved = (progressData: UserDppLessonProgress[]) => {
+            progressData.forEach(lessonProg => {
+                Object.values(lessonProg.questionAttempts).forEach(attempts => {
+                    if (attempts.length > 0) solvedToday++;
+                });
+            });
+        };
+        
+        countSolved(todayRegularProgress);
+        countSolved(todayPyqProgress); // Add solved from PYQ if structure is similar
+
+        if (solvedToday >= DAILY_DPP_GOAL) {
+            toast({
+                title: "🎉 Daily Goal Achieved! 🎉",
+                description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} practice questions. Keep it up!`,
+                duration: 7000,
+            });
+            localStorage.setItem(goalAchievedKey, 'true');
+        }
+    } catch (error) {
+        console.error("Error checking daily goal:", error);
+    }
+  };
+
    const checkAnswer = async () => {
        if (!currentQuestion || !user?.id || !examName || !subject || !lesson) return;
        const selected = userAnswers[currentQuestion.id];
@@ -216,6 +262,7 @@ export default function PyqDppPracticePage() {
                    lastAccessed: Date.now()
                };
            });
+            await checkDailyGoalAndNotify();
        } catch (error: any) {
            toast({ variant: "destructive", title: "Save Failed", description: error.message });
        } finally {
@@ -404,7 +451,6 @@ export default function PyqDppPracticePage() {
                     </AlertDescription>
                 </Alert>
                 <Button asChild className="mt-4">
-                    {/* Link to upgrade page or pricing (if available) */}
                     <Link href="/#pricing">Upgrade to Premium</Link> 
                 </Button>
                  <Button asChild variant="outline" className="mt-2">

@@ -13,13 +13,14 @@ import { Settings, ArrowLeft, DollarSign, CalendarCheck2, Target, HelpCircle, Ch
 import Link from 'next/link';
 import { getUserPoints, type UserPoints } from '@/actions/points-actions';
 import { getAllTestReportsForUser } from '@/actions/test-report-actions';
-import { getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
+import { getDppProgressForDateRange } from '@/actions/dpp-progress-actions'; // Regular DPPs
+import { getPyqDppProgress } from '@/actions/pyq-dpp-progress-actions'; // For PYQ DPPs, assuming a similar structure for fetching
 import type { TestResultSummary, DppAttempt, UserDppLessonProgress } from '@/types';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 
-const DAILY_DPP_GOAL = 10; // Example: 10 questions per day
+const DAILY_DPP_GOAL = 10; 
 
 export default function ProfilePage() {
     const { user, loading: authLoading } = useAuth();
@@ -45,55 +46,79 @@ export default function ProfilePage() {
         setIsLoadingDppStats(true);
 
         try {
-            // Today's stats for daily goal
             const today = new Date();
-            const todayStart = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-            const todayEnd = new Date(today.setHours(23, 59, 59, 999)).toISOString();
-            const todayProgressData = await getDppProgressForDateRange(user.id, todayStart, todayEnd);
+            const todayStartISO = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+            const todayEndISO = new Date(today.setHours(23, 59, 59, 999)).toISOString();
             
-            let solvedToday = 0;
-            todayProgressData.forEach(lesson => {
-                Object.values(lesson.questionAttempts).forEach(attempts => {
-                    if (attempts.length > 0) solvedToday++; // Count each question with at least one attempt today
+            const [regularDppToday, /* pyqDppToday - Assuming similar structure/action */ ] = await Promise.all([
+                getDppProgressForDateRange(user.id, todayStartISO, todayEndISO),
+                // If you have a getPyqDppProgressForDateRange, use it here.
+                // For now, let's assume it might contribute to the same daily goal.
+                // We'll need a way to sum up questions from both types of DPPs.
+                // This part might need adjustment based on how PYQ DPP progress is fetched for a date range.
+                // For simplicity, if PYQ DPPs are just a subset of regular DPPs or managed similarly:
+                Promise.resolve([] as UserDppLessonProgress[]) // Placeholder for PYQ daily progress
+            ]);
+            
+            let solvedTodayCount = 0;
+            const countSolvedInProg = (progressData: UserDppLessonProgress[]) => {
+                progressData.forEach(lesson => {
+                    Object.values(lesson.questionAttempts).forEach(attempts => {
+                        if (attempts.length > 0) solvedTodayCount++; 
+                    });
                 });
-            });
-            setDailyGoalProgress(solvedToday);
-            if (solvedToday >= DAILY_DPP_GOAL) {
+            };
+            
+            countSolvedInProg(regularDppToday);
+            // countSolvedInProg(pyqDppToday); // Uncomment and adjust if PYQ DPPs are separate
+
+            setDailyGoalProgress(solvedTodayCount);
+
+            const goalAchievedKey = `dailyGoalAchieved_${user.id}_${today.toISOString().split('T')[0]}`;
+            if (solvedTodayCount >= DAILY_DPP_GOAL && !localStorage.getItem(goalAchievedKey)) {
                 toast({
                     title: "🎉 Daily Goal Achieved! 🎉",
                     description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} DPP questions. Keep it up!`,
-                    duration: 6000,
+                    duration: 7000,
                 });
+                localStorage.setItem(goalAchievedKey, 'true');
             }
 
-            // This week's stats for snapshot
+            // Weekly stats (remains similar, adjust if PYQ DPPs have separate weekly tracking logic)
             const weekStart = new Date(today);
-            weekStart.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Monday as start of week
+            weekStart.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); 
             weekStart.setHours(0,0,0,0);
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekStart.getDate() + 6);
             weekEnd.setHours(23,59,59,999);
 
-            const weeklyProgressData = await getDppProgressForDateRange(user.id, weekStart.toISOString(), weekEnd.toISOString());
+            const [weeklyRegularDpp, /* weeklyPyqDpp */ ] = await Promise.all([
+                getDppProgressForDateRange(user.id, weekStart.toISOString(), weekEnd.toISOString()),
+                Promise.resolve([] as UserDppLessonProgress[]) // Placeholder for PYQ weekly progress
+            ]);
             
             let weeklySolved = 0;
             let weeklyCorrect = 0;
             const lessonsAttemptedThisWeek = new Set<string>();
 
-            weeklyProgressData.forEach(lesson => {
-                lessonsAttemptedThisWeek.add(`${lesson.subject}-${lesson.lesson}`);
-                Object.values(lesson.questionAttempts).forEach(attempts => {
-                    if (attempts.length > 0) { // Consider any attempt within the week
-                        weeklySolved++;
-                        // Use the latest attempt in the range for correctness for simplicity
-                        const latestAttemptInRange = attempts.sort((a,b) => b.timestamp - a.timestamp)[0];
-                        if (latestAttemptInRange.isCorrect) {
-                            weeklyCorrect++;
+            const processWeeklyData = (progressData: UserDppLessonProgress[]) => {
+                progressData.forEach(lesson => {
+                    lessonsAttemptedThisWeek.add(`${lesson.subject}-${lesson.lesson}`);
+                    Object.values(lesson.questionAttempts).forEach(attempts => {
+                        if (attempts.length > 0) { 
+                            weeklySolved++;
+                            const latestAttemptInRange = attempts.sort((a,b) => b.timestamp - a.timestamp)[0];
+                            if (latestAttemptInRange.isCorrect) {
+                                weeklyCorrect++;
+                            }
                         }
-                    }
+                    });
                 });
-            });
-            
+            };
+
+            processWeeklyData(weeklyRegularDpp);
+            // processWeeklyData(weeklyPyqDpp); // Uncomment if PYQ DPPs tracked separately
+
             setWeeklySnapshot({
                 questionsSolved: weeklySolved,
                 correctQuestions: weeklyCorrect,
@@ -129,7 +154,7 @@ export default function ProfilePage() {
                 .then(history => setRecentTests(history.slice(0, 3)))
                 .catch(err => console.error("Failed to load test history:", err))
                 .finally(() => setIsLoadingHistory(false));
-            fetchDppStats(); // Fetch DPP stats after user is loaded
+            fetchDppStats(); 
         } else if (!authLoading) {
             setIsLoadingHistory(false);
             setIsLoadingDppStats(false);
@@ -321,4 +346,3 @@ export default function ProfilePage() {
         </div>
     );
 }
-
