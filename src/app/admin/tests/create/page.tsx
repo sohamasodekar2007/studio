@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from 'react';
-import { useForm, Controller, useFieldArray, FormProvider } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,12 @@ import Script from 'next/script';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
-import { Badge } from "@/components/ui/badge"; // Added Badge import
+import { Badge } from "@/components/ui/badge";
 
 // --- Zod Schemas ---
 
 const ChapterwiseSchema = z.object({
-  testType: z.literal('chapterwise'),
+  testType: z.literal('chapterwise'), // Added discriminator
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
@@ -54,7 +54,7 @@ const SubjectConfigSchema = z.object({
 });
 
 const FullLengthSchema = z.object({
-  testType: z.literal('full_length'),
+  testType: z.literal('full_length'), // Added discriminator
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
@@ -235,7 +235,7 @@ export default function CreateTestPage() {
             totalSubjectQuestions: existingConfig?.totalSubjectQuestions || 0,
             };
       });
-      replaceSubjectConfigs(newConfigs as any); // Casting as 'any' might hide type errors, ensure type consistency
+      replaceSubjectConfigs(newConfigs as any); 
     } else {
       replaceSubjectConfigs([]);
     }
@@ -330,6 +330,13 @@ export default function CreateTestPage() {
     }
   }, [testType, chapterwiseSubject, chapterwiseLessons, toast, typesetMathJax]);
 
+  const constructPublicImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
+      if (!filename) return null;
+      const basePath = '/question_bank_images'; 
+      return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
+  };
+
+
   const onSubmit = async (data: TestCreationFormValues) => {
     setIsLoading(true);
     let testToSave: Omit<GeneratedTest, 'test_code' | 'createdAt'>;
@@ -375,6 +382,7 @@ export default function CreateTestPage() {
           lessons: chapterwiseData.lessons,
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '),
           questions: finalQuestions,
+          // ChapterwiseSchema does not define examFilter, ensure it's not expected unless added
         };
       } else { // Full Length
         const fullLengthData = data; 
@@ -411,15 +419,13 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
-            // Potentially adjust overallTotalQuestions if not enough questions were found, or show an error
-            // For now, we'll use the actual number of selected questions
         }
 
         testToSave = {
           testType: 'full_length',
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length, // Use actual selected count
+          total_questions: allSelectedQuestionsForFLT.length,
           type: fullLengthData.accessType,
           audience: finalAudience,
           test_subject: fullLengthData.subjectsConfig?.map(s => s.subjectName) || [], 
@@ -465,11 +471,6 @@ export default function CreateTestPage() {
 
   const totalAvailableCount = useMemo(() => availableQuestions.length, [availableQuestions]);
     
-  const constructPublicImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
-      if (!filename) return null;
-      const basePath = '/question_bank_images'; 
-      return `${basePath}/${encodeURIComponent(subject)}/${encodeURIComponent(lesson)}/images/${encodeURIComponent(filename)}`;
-  };
 
   const renderQuestionPreviewItem = (q: QuestionBankItem) => {
     const imagePath = constructPublicImagePath(q.subject, q.lesson, q.question.image);
