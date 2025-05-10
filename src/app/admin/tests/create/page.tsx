@@ -1,4 +1,3 @@
-// src/app/admin/tests/create/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from 'react';
@@ -29,74 +28,88 @@ import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
 
 // --- Zod Schemas ---
 
+// Base schema without testType, as testType will be a literal in specific schemas
 const BaseTestSchema = z.object({
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(audienceTypes).nullable(),
-  testType: z.string(), // Placeholder for discriminator
 });
 
+// Schema specific to Chapterwise tests, including the testType literal
 const ChapterwiseDetailsSchema = z.object({
+  testType: z.literal('chapterwise'),
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
   questionCount: z.number().min(1, "Min 1 question").max(100, "Max 100 questions for chapterwise."),
 });
-
-// Explicitly ensure testType is a literal for discriminated union
-const ChapterwiseSchema = BaseTestSchema.merge(ChapterwiseDetailsSchema).extend({
-  testType: z.literal('chapterwise'),
-});
+// Final Chapterwise schema by merging Base and Details
+const ChapterwiseSchema = BaseTestSchema.merge(ChapterwiseDetailsSchema);
 
 
+// Schema for configuring subjects within a Full-Length test
 const SubjectConfigSchema = z.object({
   subjectName: z.string(),
   lessons: z.array(z.object({
     lessonName: z.string(),
     weightage: z.number().min(0).max(100).default(0),
-    questionCount: z.number().min(0).default(0),
+    questionCount: z.number().min(0).default(0), // Auto-calculated based on weightage
   })).default([]),
-  totalSubjectWeightage: z.number().min(0).max(100).default(0),
-  totalSubjectQuestions: z.number().min(0).default(0),
+  totalSubjectWeightage: z.number().min(0).max(100).default(0), // User input
+  totalSubjectQuestions: z.number().min(0).default(0), // Auto-calculated
 });
 
-
+// Schema specific to Full-Length tests, including the testType literal
 const FullLengthDetailsSchema = z.object({
-  exam: z.enum(allExams),
-  stream: z.enum(testStreams).optional(),
+  testType: z.literal('full_length'),
+  exam: z.enum(allExams), // Use imported allExams
+  stream: z.enum(testStreams).optional(), // Optional for exams like BITSAT
   overallTotalQuestions: z.number().min(10, "Min 10 questions.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
 });
+// Final Full-Length schema (object part, without refinements yet)
+const FullLengthObjectSchema = BaseTestSchema.merge(FullLengthDetailsSchema);
 
-
-// Explicitly ensure testType is a literal for discriminated union
-const FullLengthSchema = BaseTestSchema.merge(FullLengthDetailsSchema).extend({
-  testType: z.literal('full_length'),
-}).refine(data => {
-  if (data.subjectsConfig && data.subjectsConfig.length > 0) {
-    const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
-    return Math.abs(totalWeightageSum - 100) < 0.1;
-  }
-  return true;
-}, { message: "Total subject weightages must sum to approximately 100% if subjects are configured.", path: ['subjectsConfig'] })
-.refine(data => {
-  if (data.subjectsConfig) {
-    for(const subject of data.subjectsConfig) {
-      if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
-        const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
-        if (Math.abs(lessonWeightageSum - 100) > 0.1) return false;
-      }
-    }
-  }
-  return true;
-}, { message: "Lesson weightages within each subject must sum to approximately 100% if specified for that subject.", path: ['subjectsConfig'] });
-
-// Discriminated union schema
-const TestCreationSchema = z.discriminatedUnion("testType", [
+// Discriminated union schema using the ZodObject versions
+const TestCreationSchemaBase = z.discriminatedUnion("testType", [
     ChapterwiseSchema,
-    FullLengthSchema,
+    FullLengthObjectSchema,
 ]);
+
+// Now, apply refinements that are specific to the 'full_length' case
+// by checking the discriminator within a superRefine on the union.
+const TestCreationSchema = TestCreationSchemaBase.superRefine((data, ctx) => {
+    if (data.testType === 'full_length') {
+        // Apply FullLength specific refinements here
+        if (data.subjectsConfig && data.subjectsConfig.length > 0) {
+            const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
+            if (Math.abs(totalWeightageSum - 100) >= 0.1) { // Use >= 0.1 to catch deviations
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: "Total subject weightages must sum to approximately 100%.",
+                    path: ['subjectsConfig'],
+                });
+            }
+        }
+
+        if (data.subjectsConfig) {
+            data.subjectsConfig.forEach((subject, subjectIndex) => {
+                if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
+                    const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
+                    if (Math.abs(lessonWeightageSum - 100) >= 0.1) { // Use >= 0.1
+                        ctx.addIssue({
+                            code: z.ZodIssueCode.custom,
+                            message: `Lesson weightages within ${subject.subjectName} must sum to approximately 100% if specified.`,
+                            path: [`subjectsConfig`, subjectIndex, 'lessons'], // Path to specific subject's lessons
+                        });
+                    }
+                }
+            });
+        }
+    }
+});
+
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
@@ -110,9 +123,9 @@ const examSubjectMap: Record<ExamOption, string[]> = {
     "KCET": ["Physics", "Chemistry", "Mathematics", "Biology"],
     "BITSAT": ["Physics", "Chemistry", "Mathematics", "English Proficiency", "Logical Reasoning"],
     "VITEEE": ["Physics", "Chemistry", "Mathematics", "Biology", "English"],
-    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"], // Example, CUET subjects vary widely
-    "AIEEE": ["Physics", "Chemistry", "Mathematics"], // AIEEE is now JEE Main
-    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"], // Generic
+    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"], 
+    "AIEEE": ["Physics", "Chemistry", "Mathematics"], 
+    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"], 
 };
 
 
@@ -204,7 +217,7 @@ export default function CreateTestPage() {
     if (testType === 'chapterwise' && chapterwiseSubject) {
         fetchAllLessonsForSubject(chapterwiseSubject);
     } else if (testType === 'full_length' && fullLengthExam) {
-        const subjectsForExam = examSubjectMap[fullLengthExam] || [];
+        const subjectsForExam = examSubjectMap[fullLengthExam as ExamOption] || [];
         subjectsForExam.forEach(sub => {
            if(dbSubjects.includes(sub)) fetchAllLessonsForSubject(sub);
         });
@@ -213,7 +226,7 @@ export default function CreateTestPage() {
 
   useEffect(() => {
     if (testType === 'full_length' && fullLengthExam) {
-      let subjectsForStream = examSubjectMap[fullLengthExam] || [];
+      let subjectsForStream = examSubjectMap[fullLengthExam as ExamOption] || [];
       if ((fullLengthExam === 'MHT-CET' || fullLengthExam === 'KCET' || fullLengthExam === 'VITEEE' || fullLengthExam === 'CUET') && fullLengthStream) {
         if (fullLengthStream === 'PCM') {
           subjectsForStream = subjectsForStream.filter(s => s !== 'Biology');
@@ -284,7 +297,7 @@ export default function CreateTestPage() {
                      const diff = questionsForSubject - lessonsQuestionsSumInSubject;
                      const lastLessonIndex = config.lessons.length -1;
                      const currentVal = form.getValues(`subjectsConfig.${subjectIndex}.lessons.${lastLessonIndex}.questionCount`);
-                     form.setValue(`subjectsConfig.${subjectIndex}.lessons.${lastLessonIndex}.questionCount`, Math.max(0, (currentVal || 0) + diff));
+                     form.setValue(`subjectsConfig.${subjectIndex}.lessons.${lessonIndex}.questionCount`, Math.max(0, (currentVal || 0) + diff));
                 }
             }
             return { ...config, totalSubjectQuestions: questionsForSubject };
@@ -373,7 +386,7 @@ export default function CreateTestPage() {
           audience: chapterwiseData.audience,
           test_subject: [chapterwiseData.subject],
           lessons: chapterwiseData.lessons,
-          lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '),
+          lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '), // Keep for backward compatibility
           questions: finalQuestions,
         };
       } else { 
@@ -411,7 +424,6 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
-            // Optionally adjust overallTotalQuestions to match actual count or show error
         }
 
         testToSave = {
@@ -440,7 +452,7 @@ export default function CreateTestPage() {
         };
       }
 
-      const result = await saveGeneratedTest(testToSave as GeneratedTest); // Type assertion
+      const result = await saveGeneratedTest(testToSave as GeneratedTest); 
 
       if (result.success && result.test_code) {
         toast({ title: 'Test Created!', description: `Test "${testToSave.name}" (Code: ${result.test_code}) saved.` });
@@ -714,5 +726,3 @@ export default function CreateTestPage() {
     </>
   );
 }
-
-    
