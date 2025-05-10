@@ -70,7 +70,8 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
         if (initialTestData.maths_questions && initialTestData.maths_questions.length > 0) return 'Mathematics';
         if (initialTestData.biology_questions && initialTestData.biology_questions.length > 0) return 'Biology';
     }
-    return initialTestData.test_subject[0] || 'Overall';
+    // For chapterwise or if no subjects above, use the first subject or 'Overall'
+    return initialTestData.test_subject[0] || 'Overall'; 
   }, [initialTestData]);
 
   const [currentSection, setCurrentSection] = useState<string>(initialSection);
@@ -83,7 +84,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const [timeLeft, setTimeLeft] = useState(initialTestData.duration * 60);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isResuming, setIsResuming] = useState(true); // To control initial load effect
+  const [isResuming, setIsResuming] = useState(true); 
 
   const allQuestionsInOrder = useMemo(() => {
     if (testData.testType === 'chapterwise') {
@@ -102,7 +103,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const questionsBySection = useMemo(() => {
     const sections: Record<string, TestQuestion[]> = {};
     if (testData.testType === 'chapterwise' && testData.questions) {
-        sections[testData.test_subject[0] || 'Questions'] = testData.questions;
+        // For chapterwise, if there's a primary subject, use it. Otherwise, default.
+        const sectionName = testData.test_subject[0] || 'Questions';
+        sections[sectionName] = testData.questions;
     } else if (testData.testType === 'full_length') {
         if (testData.physics_questions && testData.physics_questions.length > 0) sections['Physics'] = testData.physics_questions;
         if (testData.chemistry_questions && testData.chemistry_questions.length > 0) sections['Chemistry'] = testData.chemistry_questions;
@@ -141,7 +144,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   }, []);
 
   useEffect(() => {
-    if (currentQuestion && !showInstructions && !isLoading) { // Ensure not loading test data initially
+    if (currentQuestion && !showInstructions && !isLoading) { 
       typesetMathJax();
     }
   }, [currentQuestion, showInstructions, typesetMathJax, isLoading]);
@@ -163,36 +166,34 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
                 setCurrentSection(savedState.currentSection || initialSection);
                 setCurrentQuestionIndexInSection(savedState.currentQuestionIndexInSection || 0);
                 setUserAnswers(savedState.userAnswers || {});
-                setQuestionStatuses(savedState.questionStatuses || {};
-                setShowInstructions(false); // Resuming, so skip instructions
+                setQuestionStatuses(savedState.questionStatuses || {});
+                setShowInstructions(false); 
                 toast({ title: "Test Resumed", description: "Your previous progress has been loaded." });
             }
         } catch (e) {
             console.error("Failed to parse saved session, starting fresh:", e);
-            localStorage.removeItem(savedSessionKey); // Clear corrupted data
-             // Initialize statuses for fresh start if resuming fails but questions exist
-            if (allQuestionsInOrder.length > 0 && currentQuestion?.id) {
+            localStorage.removeItem(savedSessionKey); 
+            if (allQuestionsInOrder.length > 0 && allQuestionsInOrder[0]?.id) { // Check if first question ID exists
                 const initialStatuses: Record<string, QuestionStatus> = {};
                 allQuestionsInOrder.forEach(q => {
                     if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
                 });
-                initialStatuses[currentQuestion.id] = QuestionStatusEnum.Unanswered;
+                initialStatuses[allQuestionsInOrder[0].id] = QuestionStatusEnum.Unanswered;
                 setQuestionStatuses(initialStatuses);
             }
         }
     } else {
-        // No saved session, initialize statuses for fresh start if questions exist
-        if (allQuestionsInOrder.length > 0 && currentQuestion?.id && !showInstructions) {
+        if (allQuestionsInOrder.length > 0 && allQuestionsInOrder[0]?.id && !showInstructions) {
             const initialStatuses: Record<string, QuestionStatus> = {};
             allQuestionsInOrder.forEach(q => {
                 if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
             });
-            initialStatuses[currentQuestion.id] = QuestionStatusEnum.Unanswered; // Set first q as unanswered
+            initialStatuses[allQuestionsInOrder[0].id] = QuestionStatusEnum.Unanswered; 
             setQuestionStatuses(initialStatuses);
         }
     }
-    setIsResuming(false); // Mark resuming attempt as complete
-  }, [user?.id, testCode, authLoading, isResuming, allQuestionsInOrder, initialSection, currentQuestion?.id, toast]);
+    setIsResuming(false); 
+  }, [user?.id, testCode, authLoading, isResuming, allQuestionsInOrder, initialSection, toast]);
 
   // Save to local storage on state change
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
       userId: user.id,
       startTime,
       timeLeft,
-      currentGlobalIndex: globalQuestionIndex, // Save global index too for easier resume
+      currentGlobalIndex: globalQuestionIndex, 
       currentSection,
       currentQuestionIndexInSection,
       userAnswers,
@@ -224,7 +225,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
         router.push('/');
         return;
     }
-    if (!authLoading && user && !queryUserId) { // If userId is missing from query, add it
+    if (!authLoading && user && !queryUserId) { 
          router.replace(`/test-interface/${testCode}?userId=${user.id}`);
          return;
      }
@@ -246,7 +247,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     const endTime = Date.now();
 
     const submittedAnswers: UserAnswer[] = allQuestionsInOrder.map((q, globalIdx) => ({
-      questionId: q.id || `q-${globalIdx}`, // Ensure ID is present
+      questionId: q.id || `q-${globalIdx}`, 
       selectedOption: userAnswers[q.id!] || null,
       status: questionStatuses[q.id!] || QuestionStatusEnum.NotVisited,
     }));
@@ -262,9 +263,13 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     try {
       const result = await saveTestReport(sessionData, testData);
       if (result.success && result.results) {
-        localStorage.removeItem(`test-session-${user.id}-${testCode}`); // Clear session on successful submit
+        localStorage.removeItem(`test-session-${user.id}-${testCode}`); 
         toast({ title: "Test Submitted!", description: "Your responses have been saved." });
-        router.push(`/chapterwise-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`);
+        // Determine redirect path based on test type
+        const resultPath = testData.testType === 'chapterwise' 
+            ? `/chapterwise-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`
+            : `/full-length-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`; // Placeholder for full-length
+        router.push(resultPath);
       } else {
         throw new Error(result.message || "Failed to save test report.");
       }
@@ -280,7 +285,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-          if (!isSubmitting) handleSubmitTest(true); // Auto-submit if not already submitting
+          if (!isSubmitting) handleSubmitTest(true); 
           return 0;
         }
         return prevTime - 1;
@@ -303,7 +308,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const navigateToQuestion = (globalIdx: number) => {
     if (globalIdx < 0 || globalIdx >= allQuestionsInOrder.length) return;
 
-    // Mark current question as unanswered if it was just visited and not answered
     const currentQ = allQuestionsInOrder[globalQuestionIndex];
     if (currentQ?.id && questionStatuses[currentQ.id] === QuestionStatusEnum.NotVisited && !userAnswers[currentQ.id]){
          setQuestionStatuses(prev => ({...prev, [currentQ.id!]: QuestionStatusEnum.Unanswered}));
@@ -316,9 +320,8 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
             const indexInSection = globalIdx - cumulativeIndex;
             setCurrentSection(sectionName);
             setCurrentQuestionIndexInSection(indexInSection);
-            // Mark new question as unanswered if it's being visited for the first time
             const newQ = sectionQuestionsList[indexInSection];
-            if (newQ?.id && questionStatuses[newQ.id] === QuestionStatusEnum.NotVisited) {
+            if (newQ?.id && (questionStatuses[newQ.id] === QuestionStatusEnum.NotVisited || !questionStatuses[newQ.id])) { // Also check if status is undefined
                 setQuestionStatuses(prev => ({...prev, [newQ.id!]: QuestionStatusEnum.Unanswered}));
             }
             return;
@@ -328,7 +331,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   };
 
   const handleSaveAndNext = () => {
-    if (currentQuestion?.id && questionStatuses[currentQuestion.id] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestion.id]){
+    if (currentQuestion?.id && (questionStatuses[currentQuestion.id] === QuestionStatusEnum.NotVisited || !questionStatuses[currentQuestion.id]) && !userAnswers[currentQuestion.id]){
          setQuestionStatuses(prev => ({...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered}));
     }
     if (globalQuestionIndex < allQuestionsInOrder.length - 1) {
@@ -364,27 +367,31 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   };
 
   const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-            toast({variant: 'destructive', title: 'Fullscreen Error', description: `Could not enter fullscreen: ${err.message}`});
-        });
-        setIsFullScreen(true);
-    } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-            setIsFullScreen(false);
+    if (typeof window !== 'undefined' && document.documentElement) {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                toast({variant: 'destructive', title: 'Fullscreen Error', description: `Could not enter fullscreen: ${err.message}`});
+            });
+            setIsFullScreen(true);
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullScreen(false);
+            }
         }
     }
   };
 
   useEffect(() => {
-    const handleFullScreenChange = () => setIsFullScreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', handleFullScreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    if (typeof window !== 'undefined') {
+        const handleFullScreenChange = () => setIsFullScreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', handleFullScreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    }
   }, []);
 
 
-  if (authLoading || isResuming) { // Show loading while auth or session resuming is in progress
+  if (authLoading || isResuming) { 
     return <div className="flex items-center justify-center min-h-screen bg-background"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
