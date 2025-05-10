@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, ArrowRight, Tag, BookOpen, CalendarDays, CheckSquare, Loader2, Clock, HelpCircle } from "lucide-react";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Corrected import
 import { Checkbox } from "@/components/ui/checkbox";
 import type { GeneratedTest, ExamOption, PricingType, UserModel } from '@/types';
 import { exams, pricingTypes } from '@/types';
@@ -60,48 +60,45 @@ export default function TestsPage() {
     const userModel = user?.model || 'free';
 
     return allTestItems
-        .filter(item => {
-            const searchLower = searchTerm.toLowerCase();
-            const nameMatch = item.name.toLowerCase().includes(searchLower);
-            const subjectMatch = item.test_subject.some(sub => sub.toLowerCase().includes(searchLower));
-            const codeMatch = item.test_code.toLowerCase().includes(searchLower);
-            const searchPass = nameMatch || subjectMatch || codeMatch;
+      .filter(item => { // Initial search and subject filtering
+        const searchLower = searchTerm.toLowerCase();
+        const nameMatch = item.name.toLowerCase().includes(searchLower);
+        const subjectMatchArray = Array.isArray(item.test_subject) ? item.test_subject : [item.test_subject];
+        const subjectMatch = subjectMatchArray.some(sub => sub.toLowerCase().includes(searchLower));
+        const codeMatch = item.test_code.toLowerCase().includes(searchLower);
+        const searchPass = nameMatch || subjectMatch || codeMatch;
 
-            const subjectFilterPass = selectedSubjects.length === 0 || item.test_subject.some(sub => selectedSubjects.includes(sub));
+        const subjectFilterPass = selectedSubjects.length === 0 || subjectMatchArray.some(sub => selectedSubjects.includes(sub));
+        
+        const pricingFilterPass = selectedPricingFilter === 'all' || item.type === selectedPricingFilter;
 
-            if (!searchPass || !subjectFilterPass) {
-                return false;
+        return searchPass && subjectFilterPass && pricingFilterPass;
+      })
+      .filter(item => { // Plan-based filtering logic
+        switch (userModel) {
+          case 'free':
+            return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
+          case 'chapterwise':
+            if (item.testType === 'chapterwise') {
+              return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
+            } else if (item.testType === 'full_length') {
+              return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
             }
-            return true;
-        })
-        .filter(item => { // Apply plan-based filtering
-            switch (userModel) {
-                case 'free':
-                    return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
-                case 'chapterwise':
-                    if (item.testType === 'chapterwise') {
-                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
-                    } else if (item.testType === 'full_length') {
-                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
-                    }
-                    return false;
-                case 'full_length':
-                    if (item.testType === 'full_length') {
-                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
-                    } else if (item.testType === 'chapterwise') {
-                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
-                    }
-                    return false;
-                case 'combo':
-                    return true; // Sees all tests that pass search/subject filters
-                default:
-                    return false;
+            return false;
+          case 'full_length':
+            if (item.testType === 'full_length') {
+              return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
+            } else if (item.testType === 'chapterwise') {
+              return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
             }
-        })
-        .filter(item => { // Finally, apply the selectedPricingFilter if user chose one
-            return selectedPricingFilter === 'all' || item.type === selectedPricingFilter;
-        });
-
+            return false;
+          case 'combo':
+            return true; // Combo users see all tests that passed previous filters
+          default:
+            // Fallback for unknown userModel, show only free tests
+            return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
+        }
+      });
   }, [searchTerm, selectedSubjects, selectedPricingFilter, allTestItems, user, authLoading, isLoadingTests]);
 
 
@@ -223,12 +220,12 @@ export default function TestsPage() {
                                 checked={selectedSubjects.includes(sub)}
                                 onCheckedChange={() => handleSubjectFilterChange(sub)}
                             />
-                            <label
+                            <Label
                                 htmlFor={`subject-${sub.replace(/\s+/g, '-')}`}
                                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                             >
                                 {sub}
-                            </label>
+                            </Label>
                         </div>
                        ))}
                  </div>
@@ -256,7 +253,7 @@ export default function TestsPage() {
                 <CardContent className="p-4 flex flex-col flex-grow space-y-2">
                     <div className="flex justify-between items-start mb-2">
                         <div className="flex flex-wrap gap-1 flex-grow mr-2">
-                            {item.test_subject.map(sub => (
+                            {Array.isArray(item.test_subject) && item.test_subject.map(sub => (
                                 <Badge key={sub} variant="secondary" className="text-xs capitalize">
                                     <BookOpen className="h-3 w-3 mr-1" />{sub}
                                 </Badge>
@@ -283,13 +280,18 @@ export default function TestsPage() {
                          </div>
                            <div className="flex items-center gap-1.5 col-span-2">
                             <CheckSquare className="h-4 w-4 text-primary" />
-                            <span>For: {item.audience} {item.testType === 'full_length' && item.stream ? `(${item.stream})` : ''}</span>
+                            <span>For: {item.audience} {item.testType === 'full_length' && item.stream ? `(${item.stream})` : item.testType === 'chapterwise' ? '(Chapterwise)' : ''}</span>
                            </div>
                     </div>
 
 
                     <div className="pt-2 mt-auto">
-                         <StartTestButton test={item} />
+                         {/* Updated Link construction for test details page */}
+                         <Link href={`/tests/${item.test_code}`} passHref>
+                           <Button variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                               View Details <ArrowRight className="ml-2 h-4 w-4" />
+                           </Button>
+                         </Link>
                     </div>
                 </CardContent>
                 </Card>
@@ -305,3 +307,4 @@ export default function TestsPage() {
     </div>
   );
 }
+
