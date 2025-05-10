@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { QuestionBankItem } from '@/types';
 import { updateQuestionDetails } from '@/actions/question-bank-actions';
 import Script from 'next/script'; 
+import { ScrollArea } from '@/components/ui/scroll-area'; // Import ScrollArea
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -277,135 +278,138 @@ export default function EditQuestionDialog({ question, isOpen, onClose, onQuesti
         }}
       />
     <Dialog open={isOpen} onOpenChange={(open) => {if (!open) onClose();}}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col"> {/* Allow more height */}
         <DialogHeader>
           <DialogTitle>Edit Question: {question.id}</DialogTitle>
           <DialogDescription>
             Update the correct answer, explanation, and marks. Question content cannot be changed here.
           </DialogDescription>
         </DialogHeader>
+        
+        <ScrollArea className="flex-grow p-1 pr-3 -mr-3"> {/* Added ScrollArea wrapper here */}
+          <div className="my-4 p-4 border rounded-md bg-muted/30">
+              <h4 className="text-base font-semibold mb-2">Question Preview</h4>
+              {renderQuestionPreview(question)}
+          </div>
 
-         <div className="my-4 p-4 border rounded-md bg-muted/30 max-h-60 overflow-y-auto">
-             <h4 className="text-base font-semibold mb-2">Question Preview</h4>
-            {renderQuestionPreview(question)}
-         </div>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-             <FormField
-                control={form.control}
-                name="correctAnswer"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Correct Answer *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                    <FormControl>
-                        <SelectTrigger className="w-full md:w-[180px]">
-                        <SelectValue placeholder="Select Correct Option" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {["A", "B", "C", "D"].map((opt) => <SelectItem key={opt} value={opt}>Option {opt}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="marks"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Marks *</FormLabel>
-                        <FormControl>
-                            <Input
-                                type="number"
-                                {...field}
-                                onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} 
-                                min="1"
-                                placeholder="Marks for correct answer"
-                                disabled={isLoading}
-                                className="w-full md:w-[180px]"
-                             />
-                         </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-             />
-             <FormField
-                control={form.control}
-                name="explanationText"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Explanation Text</FormLabel>
-                    <FormControl>
-                       <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={4} disabled={isLoading} className="mathjax-dialog-preview"/>
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="explanationImage"
-                render={() => ( 
-                <FormItem>
-                    <FormLabel>Explanation Image (Optional)</FormLabel>
-                    <FormControl>
-                        <div className="flex flex-wrap items-center gap-4">
-                            <Input
-                                id="explanation-image-edit-upload"
-                                type="file"
-                                accept={ACCEPTED_IMAGE_TYPES.join(',')}
-                                ref={explanationFileInputRef}
-                                onChange={(e) => handleFileChange(e, setExplanationImagePreview)}
-                                className="hidden"
-                                disabled={isLoading}
-                            />
-                             <Button type="button" variant="outline" size="sm" onClick={() => explanationFileInputRef.current?.click()} disabled={isLoading}>
-                                <Upload className="mr-2 h-4 w-4" /> Upload New
-                            </Button>
-                            <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage(setExplanationImagePreview)} disabled={isLoading}>
-                                <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
-                            </Button>
-                             {explanationImagePreview && (
-                                <div className="relative h-24 w-auto border rounded-md overflow-hidden group">
-                                    <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} data-ai-hint="explanation image" unoptimized/>
-                                    <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="icon"
-                                        className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
-                                        onClick={removeImage} 
-                                        disabled={isLoading}
-                                        title="Remove Image"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
-                    </FormControl>
-                    <FormMessage />
-                     <p className="text-xs text-muted-foreground">Uploading or pasting will replace the existing image. Click remove (X) to delete it.</p>
-                </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="removeExplanationImage"
-                render={({ field }) => <input type="hidden" {...field} value={field.value ? 'true' : 'false'} />}
-             />
-            <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
-                <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Changes
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
+              <FormField
+                  control={form.control}
+                  name="correctAnswer"
+                  render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Correct Answer *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                      <FormControl>
+                          <SelectTrigger className="w-full md:w-[180px]">
+                          <SelectValue placeholder="Select Correct Option" />
+                          </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                          {["A", "B", "C", "D"].map((opt) => <SelectItem key={opt} value={opt}>Option {opt}</SelectItem>)}
+                      </SelectContent>
+                      </Select>
+                      <FormMessage />
+                  </FormItem>
+                  )}
+              />
+              <FormField
+                  control={form.control}
+                  name="marks"
+                  render={({ field }) => (
+                      <FormItem>
+                          <FormLabel>Marks *</FormLabel>
+                          <FormControl>
+                              <Input
+                                  type="number"
+                                  {...field}
+                                  onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} 
+                                  min="1"
+                                  placeholder="Marks for correct answer"
+                                  disabled={isLoading}
+                                  className="w-full md:w-[180px]"
+                                />
+                          </FormControl>
+                          <FormMessage />
+                      </FormItem>
+                  )}
+              />
+              <FormField
+                  control={form.control}
+                  name="explanationText"
+                  render={({ field }) => (
+                  <FormItem>
+                      <FormLabel>Explanation Text</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Provide a detailed explanation. Use $...$ or $$...$$ for MathJax." {...field} value={field.value ?? ''} rows={4} disabled={isLoading} className="mathjax-dialog-preview"/>
+                      </FormControl>
+                      <FormMessage />
+                  </FormItem>
+                  )}
+              />
+              <FormField
+                  control={form.control}
+                  name="explanationImage"
+                  render={() => ( 
+                  <FormItem>
+                      <FormLabel>Explanation Image (Optional)</FormLabel>
+                      <FormControl>
+                          <div className="flex flex-wrap items-center gap-4">
+                              <Input
+                                  id="explanation-image-edit-upload"
+                                  type="file"
+                                  accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                                  ref={explanationFileInputRef}
+                                  onChange={(e) => handleFileChange(e, setExplanationImagePreview)}
+                                  className="hidden"
+                                  disabled={isLoading}
+                              />
+                              <Button type="button" variant="outline" size="sm" onClick={() => explanationFileInputRef.current?.click()} disabled={isLoading}>
+                                  <Upload className="mr-2 h-4 w-4" /> Upload New
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => handlePasteImage(setExplanationImagePreview)} disabled={isLoading}>
+                                  <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
+                              </Button>
+                              {explanationImagePreview && (
+                                  <div className="relative h-24 w-auto border rounded-md overflow-hidden group">
+                                      <Image src={explanationImagePreview} alt="Explanation Preview" height={96} width={150} style={{ objectFit: 'contain' }} data-ai-hint="explanation image" unoptimized/>
+                                      <Button
+                                          type="button"
+                                          variant="destructive"
+                                          size="icon"
+                                          className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-70 hover:!opacity-100 z-10"
+                                          onClick={removeImage} 
+                                          disabled={isLoading}
+                                          title="Remove Image"
+                                      >
+                                          <X className="h-3 w-3" />
+                                      </Button>
+                                  </div>
+                              )}
+                          </div>
+                      </FormControl>
+                      <FormMessage />
+                      <p className="text-xs text-muted-foreground">Uploading or pasting will replace the existing image. Click remove (X) to delete it.</p>
+                  </FormItem>
+                  )}
+              />
+              <FormField
+                  control={form.control}
+                  name="removeExplanationImage"
+                  render={({ field }) => <input type="hidden" {...field} value={field.value ? 'true' : 'false'} />}
+              />
+              {/* DialogFooter is outside ScrollArea, placed at the bottom of DialogContent */}
+            </form>
+          </Form>
+        </ScrollArea>
+        <DialogFooter className="pt-4 border-t">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
+            <Button onClick={form.handleSubmit(onSubmit)} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+            </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
     </>
