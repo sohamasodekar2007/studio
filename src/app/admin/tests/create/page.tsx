@@ -1,4 +1,3 @@
-// src/app/admin/tests/create/page.tsx
 'use client';
 
 import { useState, useEffect, useMemo, useCallback, ChangeEvent } from 'react';
@@ -30,7 +29,6 @@ import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
-// Base properties shared by both test types, defined as a Zod schema
 const BasePropsSchema = z.object({
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
@@ -39,7 +37,7 @@ const BasePropsSchema = z.object({
 });
 
 const ChapterwiseSchema = BasePropsSchema.extend({
-  testType: z.literal('chapterwise'), // Discriminator
+  testType: z.literal('chapterwise'),
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
@@ -58,7 +56,7 @@ const SubjectConfigSchema = z.object({
 });
 
 const FullLengthSchema = BasePropsSchema.extend({
-  testType: z.literal('full_length'), // Discriminator
+  testType: z.literal('full_length'),
   exam: z.enum(exams),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
@@ -66,7 +64,7 @@ const FullLengthSchema = BasePropsSchema.extend({
 }).superRefine((data, ctx) => {
     if (data.subjectsConfig && data.subjectsConfig.length > 0) {
         const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
-        if (Math.abs(totalWeightageSum - 100) >= 0.01 && totalWeightageSum !== 0) { // Allow 0 if no weightages are set
+        if (Math.abs(totalWeightageSum - 100) >= 0.01 && totalWeightageSum !== 0) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: `Total subject weightages must sum to 100% or all be 0 if distributing equally. Current sum: ${totalWeightageSum.toFixed(1)}%`,
@@ -78,7 +76,7 @@ const FullLengthSchema = BasePropsSchema.extend({
         data.subjectsConfig.forEach((subject, subjectIndex) => {
             if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
                 const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
-                if (Math.abs(lessonWeightageSum - 100) >= 0.01 && lessonWeightageSum !== 0) { // Allow 0 if no lesson weightages
+                if (Math.abs(lessonWeightageSum - 100) >= 0.01 && lessonWeightageSum !== 0) {
                     ctx.addIssue({
                         code: z.ZodIssueCode.custom,
                         message: `Lesson weightages for ${subject.subjectName} must sum to 100% or all be 0. Current sum: ${lessonWeightageSum.toFixed(1)}%`,
@@ -135,12 +133,10 @@ export default function CreateTestPage() {
       duration: 60,
       accessType: 'FREE',
       audience: null, 
-      // Chapterwise specific
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
-      // Full-length specific
       exam: 'MHT-CET', 
       stream: null,
       overallTotalQuestions: 50,
@@ -382,7 +378,7 @@ export default function CreateTestPage() {
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '), 
           questions: finalQuestions,
         };
-      } else { // Full Length Test
+      } else { 
         const fullLengthData = data; 
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
         let physicsQs: TestQuestion[] = [];
@@ -416,6 +412,7 @@ export default function CreateTestPage() {
         
         if (allSelectedQuestionsForFLT.length !== fullLengthData.overallTotalQuestions) {
             console.warn(`Actual questions selected (${allSelectedQuestionsForFLT.length}) for FLT does not match target (${fullLengthData.overallTotalQuestions}). Check question availability and distribution logic.`);
+            // Potentially show a toast here or adjust logic if this mismatch is critical
         }
 
         testToSave = {
