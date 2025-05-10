@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Corrected import
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -38,7 +38,7 @@ const BasePropsSchema = z.object({
 });
 
 const ChapterwiseSchema = BasePropsSchema.extend({
-  testType: z.literal('chapterwise'),
+  testType: z.literal('chapterwise'), // Added discriminator field
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
@@ -57,7 +57,7 @@ const SubjectConfigSchema = z.object({
 });
 
 const FullLengthSchema = BasePropsSchema.extend({
-  testType: z.literal('full_length'),
+  testType: z.literal('full_length'), // Added discriminator field
   exam: z.enum(exams, { required_error: "Target Exam is required."}),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
@@ -382,7 +382,7 @@ export default function CreateTestPage() {
           lesson: chapterwiseData.lessons.length === 1 ? chapterwiseData.lessons[0] : chapterwiseData.lessons.join(', '), 
           questions: finalQuestions,
         } as Omit<ChapterwiseTestJson, 'test_code' | 'createdAt'>;
-      } else { 
+      } else { // Full-Length Test
         const fullLengthData = data; 
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
         let physicsQs: TestQuestion[] = [];
