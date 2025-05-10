@@ -1,3 +1,4 @@
+// src/app/layout.tsx
 'use client';
 
 import type { ReactNode } from 'react';
@@ -10,7 +11,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/context/auth-context';
 import Script from 'next/script';
 import { ThemeProvider } from 'next-themes';
-// SidebarProvider is now managed within AppLayout for main app and AdminLayout for admin panel
+import { useEffect } from 'react'; // Import useEffect
 
 export default function RootLayout({
   children,
@@ -22,6 +23,31 @@ export default function RootLayout({
   const isAuthRoute = pathname.startsWith('/auth');
 
   const showAppLayout = !isAdminRoute && !isAuthRoute;
+
+  useEffect(() => {
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+
+    const handleSelectStart = (event: Event) => {
+      // For older IEs and non-standard browsers, `Event` might not have `preventDefault`.
+      // However, modern browsers support it on `Event`.
+      // For robust text selection prevention, CSS `user-select: none` is also recommended.
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('selectstart', handleSelectStart); // For text selection
+
+    // Cleanup function to remove event listeners
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('selectstart', handleSelectStart);
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount and unmount
+
 
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
@@ -58,13 +84,10 @@ export default function RootLayout({
          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
            <AuthProvider>
               {showAppLayout ? (
-                // AppLayout internally handles its SidebarProvider
                 <AppLayout>
                   {children}
                 </AppLayout>
               ) : (
-                // For admin/auth routes, their specific layouts will handle structure
-                // Admin layout will also have its own SidebarProvider
                 <>{children}</>
               )}
               <Toaster />
