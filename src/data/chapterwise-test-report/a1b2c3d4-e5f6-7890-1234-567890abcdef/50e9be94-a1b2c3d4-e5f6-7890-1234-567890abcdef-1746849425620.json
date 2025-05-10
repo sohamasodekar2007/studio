@@ -1,0 +1,77 @@
+{
+  "testCode": "50e9be94",
+  "userId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "testName": "Mathematics in Physics",
+  "attemptTimestamp": 1746849425620,
+  "submittedAt": 1746849436400,
+  "duration": 60,
+  "totalQuestions": 3,
+  "attempted": 3,
+  "correct": 1,
+  "incorrect": 2,
+  "unanswered": 0,
+  "score": 1,
+  "totalMarks": 3,
+  "percentage": 33.33333333333333,
+  "timeTakenMinutes": 0,
+  "detailedAnswers": [
+    {
+      "questionId": "q-0",
+      "questionIndex": 0,
+      "questionText": "Q_1746514262070_626e41.png",
+      "questionImageUrl": null,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "userAnswer": "A",
+      "correctAnswer": "C",
+      "isCorrect": false,
+      "status": "answered",
+      "explanationText": null,
+      "explanationImageUrl": null,
+      "marks": 1
+    },
+    {
+      "questionId": "q-1",
+      "questionIndex": 1,
+      "questionText": "Q_1746514548611_7ce26a.png",
+      "questionImageUrl": null,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "userAnswer": "C",
+      "correctAnswer": "C",
+      "isCorrect": true,
+      "status": "answered",
+      "explanationText": null,
+      "explanationImageUrl": null,
+      "marks": 1
+    },
+    {
+      "questionId": "q-2",
+      "questionIndex": 2,
+      "questionText": "Q_1746514913471_bd0a04.png",
+      "questionImageUrl": null,
+      "options": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "userAnswer": "B",
+      "correctAnswer": "D",
+      "isCorrect": false,
+      "status": "answered",
+      "explanationText": null,
+      "explanationImageUrl": null,
+      "marks": 1
+    }
+  ],
+  "pointsEarned": 6
+}

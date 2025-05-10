@@ -5,37 +5,35 @@ import { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ArrowRight, Tag, BookOpen, CalendarDays, CheckSquare, Loader2, Clock, HelpCircle } from "lucide-react"; // Added Clock, HelpCircle
+import { Search, Filter, ArrowRight, Tag, BookOpen, CalendarDays, CheckSquare, Loader2, Clock, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { GeneratedTest, ExamOption, PricingType, UserModel } from '@/types'; // Use new GeneratedTest type
-import { exams, pricingTypes } from '@/types'; // Import options
-import { getAllGeneratedTests } from '@/actions/generated-test-actions'; // Import action to get new tests
+import type { GeneratedTest, ExamOption, PricingType, UserModel } from '@/types';
+import { exams, pricingTypes } from '@/types';
+import { getAllGeneratedTests } from '@/actions/generated-test-actions';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/context/auth-context'; // Import useAuth to get user model
-import StartTestButton from '@/components/test-interface/start-test-button'; // Import the StartTestButton component
+import { useAuth } from '@/context/auth-context';
+import StartTestButton from '@/components/test-interface/start-test-button';
 
-// Define default filter options
-const defaultPricings: PricingType[] = ["FREE", "PAID", "FREE_PREMIUM"]; // Updated pricing types
+const defaultPricings: PricingType[] = ["FREE", "PAID", "FREE_PREMIUM"];
 
 export default function TestsPage() {
-  const { user, loading: authLoading } = useAuth(); // Get user and auth loading state
-  const [allTestItems, setAllTestItems] = useState<GeneratedTest[]>([]); // State holds GeneratedTest[] now
+  const { user, loading: authLoading } = useAuth();
+  const [allTestItems, setAllTestItems] = useState<GeneratedTest[]>([]);
   const [isLoadingTests, setIsLoadingTests] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]); // Filter by subject string array
-  const [selectedPricingFilter, setSelectedPricingFilter] = useState<PricingType | 'all'>('all'); // Filter by PricingType
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedPricingFilter, setSelectedPricingFilter] = useState<PricingType | 'all'>('all');
 
-  // Fetch generated tests on component mount
   useEffect(() => {
     setIsLoadingTests(true);
     setError(null);
-    getAllGeneratedTests() // Use the new action
+    getAllGeneratedTests()
       .then(data => {
         setAllTestItems(data);
       })
@@ -48,7 +46,6 @@ export default function TestsPage() {
       });
   }, []);
 
-   // Extract unique subjects from loaded tests for filtering
    const availableSubjects = useMemo(() => {
        const subjects = new Set<string>();
        allTestItems.forEach(test => {
@@ -57,49 +54,53 @@ export default function TestsPage() {
        return Array.from(subjects).sort();
    }, [allTestItems]);
 
-
-  // Filter logic based on search, subject filters, pricing, and user model permissions
   const filteredTestItems = useMemo(() => {
-    if (authLoading || isLoadingTests) return []; // Don't filter until everything is loaded
+    if (authLoading || isLoadingTests) return [];
 
-    // Filter by search term, selected subjects, and pricing dropdown first
-    let initiallyFiltered = allTestItems
+    const userModel = user?.model || 'free';
+
+    return allTestItems
         .filter(item => {
             const searchLower = searchTerm.toLowerCase();
             const nameMatch = item.name.toLowerCase().includes(searchLower);
             const subjectMatch = item.test_subject.some(sub => sub.toLowerCase().includes(searchLower));
             const codeMatch = item.test_code.toLowerCase().includes(searchLower);
-            return nameMatch || subjectMatch || codeMatch;
+            const searchPass = nameMatch || subjectMatch || codeMatch;
+
+            const subjectFilterPass = selectedSubjects.length === 0 || item.test_subject.some(sub => selectedSubjects.includes(sub));
+
+            if (!searchPass || !subjectFilterPass) {
+                return false;
+            }
+            return true;
         })
-        .filter(item => {
-            return selectedSubjects.length === 0 || item.test_subject.some(sub => selectedSubjects.includes(sub));
+        .filter(item => { // Apply plan-based filtering
+            switch (userModel) {
+                case 'free':
+                    return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
+                case 'chapterwise':
+                    if (item.testType === 'chapterwise') {
+                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
+                    } else if (item.testType === 'full_length') {
+                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
+                    }
+                    return false;
+                case 'full_length':
+                    if (item.testType === 'full_length') {
+                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM' || item.type === 'PAID';
+                    } else if (item.testType === 'chapterwise') {
+                        return item.type === 'FREE' || item.type === 'FREE_PREMIUM';
+                    }
+                    return false;
+                case 'combo':
+                    return true; // Sees all tests that pass search/subject filters
+                default:
+                    return false;
+            }
         })
-        .filter(item => {
+        .filter(item => { // Finally, apply the selectedPricingFilter if user chose one
             return selectedPricingFilter === 'all' || item.type === selectedPricingFilter;
         });
-
-    // Now, apply filtering based on the user's access permissions
-    const userModel = user?.model || 'free'; // Default to free if no user or model
-
-    return initiallyFiltered.filter(item => {
-        switch (item.type) {
-            case 'FREE':
-                return true; // Everyone sees FREE tests
-            case 'FREE_PREMIUM':
-                // Visible to any premium user OR free users
-                // Changed logic: free_premium should be accessible by premium and free
-                return true;
-                // return userModel !== 'free'; // Old logic: Only premium users can access FREE_PREMIUM
-            case 'PAID':
-                 // Only visible to users with specific premium plans or combo
-                 if (userModel === 'combo') return true; // Combo sees all paid
-                 if (item.testType === 'chapterwise' && userModel === 'chapterwise') return true;
-                 if (item.testType === 'full_length' && userModel === 'full_length') return true;
-                 return false; // Free users or mismatched premium users don't see this PAID test
-            default:
-                return false; // Unknown type, hide
-        }
-    });
 
   }, [searchTerm, selectedSubjects, selectedPricingFilter, allTestItems, user, authLoading, isLoadingTests]);
 
@@ -113,7 +114,6 @@ export default function TestsPage() {
   const renderSkeletons = (count: number) => {
      return Array.from({ length: count }).map((_, index) => (
          <Card key={`skeleton-${index}`} className="overflow-hidden flex flex-col group bg-card">
-             {/* No Skeleton for image */}
              <CardContent className="p-4 flex flex-col flex-grow space-y-2">
                  <div className="flex flex-wrap gap-1">
                      <Skeleton className="h-5 w-16" />
@@ -136,17 +136,17 @@ export default function TestsPage() {
    const formatPricing = (pricing: PricingType) => {
      switch (pricing) {
        case 'FREE': return 'Free';
-       case 'PAID': return 'Premium'; // Changed 'Paid' to 'Premium' for consistency
-       case 'FREE_PREMIUM': return 'Free Premium'; // Display "Free Premium" clearly
+       case 'PAID': return 'Premium';
+       case 'FREE_PREMIUM': return 'Free Premium';
        default: return pricing;
      }
    };
 
    const getPricingBadgeVariant = (pricing: PricingType): "default" | "secondary" | "destructive" | "outline" => {
       switch (pricing) {
-          case 'FREE': return 'default'; // Often green, but use default primary here
-          case 'PAID': return 'destructive'; // Red for premium/paid
-          case 'FREE_PREMIUM': return 'secondary'; // Blue/purple for free_premium
+          case 'FREE': return 'default';
+          case 'PAID': return 'destructive';
+          case 'FREE_PREMIUM': return 'secondary';
           default: return 'outline';
       }
    }
@@ -155,11 +155,10 @@ export default function TestsPage() {
        switch (pricing) {
            case 'FREE': return 'bg-green-600 text-white border-green-600';
            case 'PAID': return 'bg-red-600 text-white border-red-600';
-           case 'FREE_PREMIUM': return 'bg-blue-600 text-white border-blue-600'; // Example: Blue for FREE_PREMIUM
+           case 'FREE_PREMIUM': return 'bg-blue-600 text-white border-blue-600';
            default: return '';
        }
    }
-
 
   const totalLoading = authLoading || isLoadingTests;
 
@@ -186,7 +185,6 @@ export default function TestsPage() {
                onChange={(e) => setSearchTerm(e.target.value)}
              />
            </div>
-            {/* Pricing Filter Dropdown */}
             <div className="w-full sm:w-auto">
              <Select onValueChange={(value) => setSelectedPricingFilter(value as PricingType | 'all')} value={selectedPricingFilter}>
                <SelectTrigger className="w-full sm:w-[180px]">
@@ -202,7 +200,6 @@ export default function TestsPage() {
                </SelectContent>
              </Select>
            </div>
-           {/* Subject Filter Popover */}
            <Popover>
              <PopoverTrigger asChild>
                <Button variant="outline">
@@ -222,7 +219,7 @@ export default function TestsPage() {
                     {availableSubjects.map((sub) => (
                          <div key={sub} className="flex items-center space-x-2">
                             <Checkbox
-                                id={`subject-${sub.replace(/\s+/g, '-')}`} // Create unique ID
+                                id={`subject-${sub.replace(/\s+/g, '-')}`}
                                 checked={selectedSubjects.includes(sub)}
                                 onCheckedChange={() => handleSubjectFilterChange(sub)}
                             />
@@ -242,7 +239,6 @@ export default function TestsPage() {
          </div>
       </div>
 
-       {/* Error Display */}
        {error && (
          <Card className="md:col-span-2 lg:col-span-3 xl:col-span-4 border-destructive bg-destructive/10">
             <CardContent className="p-6 text-center text-destructive">
@@ -251,16 +247,14 @@ export default function TestsPage() {
         </Card>
        )}
 
-      {/* Test Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:col-span-4">
          {totalLoading ? (
-             renderSkeletons(8) // Show skeletons while loading tests or auth state
+             renderSkeletons(6) 
          ) : filteredTestItems.length > 0 ? (
              filteredTestItems.map((item) => (
                 <Card key={item.test_code} className="overflow-hidden hover:shadow-lg transition-shadow duration-200 flex flex-col group bg-card">
                 <CardContent className="p-4 flex flex-col flex-grow space-y-2">
                     <div className="flex justify-between items-start mb-2">
-                         {/* Test Subjects Badges */}
                         <div className="flex flex-wrap gap-1 flex-grow mr-2">
                             {item.test_subject.map(sub => (
                                 <Badge key={sub} variant="secondary" className="text-xs capitalize">
@@ -268,7 +262,6 @@ export default function TestsPage() {
                                 </Badge>
                             ))}
                         </div>
-                        {/* Pricing Badge */}
                          <Badge
                             variant={getPricingBadgeVariant(item.type)}
                             className={`text-xs flex-shrink-0 ${getPricingBadgeClasses(item.type)}`}
@@ -290,14 +283,12 @@ export default function TestsPage() {
                          </div>
                            <div className="flex items-center gap-1.5 col-span-2">
                             <CheckSquare className="h-4 w-4 text-primary" />
-                            {/* Display audience or stream depending on test type */}
-                            <span>For: {item.audience} {item.stream ? `(${item.stream})` : ''}</span>
+                            <span>For: {item.audience} {item.testType === 'full_length' && item.stream ? `(${item.stream})` : ''}</span>
                            </div>
                     </div>
 
 
                     <div className="pt-2 mt-auto">
-                        {/* Start Test Button */}
                          <StartTestButton test={item} />
                     </div>
                 </CardContent>
