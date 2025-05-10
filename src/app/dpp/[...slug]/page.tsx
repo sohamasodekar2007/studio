@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress, getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowLeft, ArrowRight, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress'; 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const DAILY_DPP_GOAL = 10; // Define the daily goal here or import from a config
+const DAILY_DPP_GOAL = 10; 
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
@@ -186,11 +186,11 @@ export default function DppLessonPage() {
 
   const checkDailyGoalAndNotify = async () => {
     if (!user || !user.id) return;
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0]; 
     const goalAchievedKey = `dailyGoalAchieved_${user.id}_${today}`;
 
     if (localStorage.getItem(goalAchievedKey)) {
-        return; // Goal already achieved and notified today
+        return; 
     }
 
     const todayStart = new Date(today + 'T00:00:00.000Z').toISOString();
@@ -198,14 +198,18 @@ export default function DppLessonPage() {
     
     try {
         const todayProgressData = await getDppProgressForDateRange(user.id, todayStart, todayEnd);
-        let solvedToday = 0;
+        let solvedTodayCount = 0;
         todayProgressData.forEach(lessonProg => {
-            Object.values(lessonProg.questionAttempts).forEach(attempts => {
-                if (attempts.length > 0) solvedToday++;
+            Object.values(lessonProg.questionAttempts).forEach(attemptsArray => {
+                if (attemptsArray.length > 0) { 
+                    // Consider a question solved if it has any attempt today
+                    // More refined logic could check if *new* distinct questions were solved today
+                    solvedTodayCount++;
+                }
             });
         });
 
-        if (solvedToday >= DAILY_DPP_GOAL) {
+        if (solvedTodayCount >= DAILY_DPP_GOAL) {
             toast({
                 title: "🎉 Daily Goal Achieved! 🎉",
                 description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} DPP questions. Keep it up!`,
@@ -257,7 +261,7 @@ export default function DppLessonPage() {
                    lastAccessed: Date.now()
                };
            });
-           await checkDailyGoalAndNotify(); // Check and notify after saving attempt
+           await checkDailyGoalAndNotify(); 
 
        } catch (error: any) {
            toast({ variant: "destructive", title: "Save Failed", description: error.message });
@@ -266,23 +270,35 @@ export default function DppLessonPage() {
        }
    };
 
+  const navigateToQuestion = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < filteredQuestions.length) {
+        const newQuestionId = filteredQuestions[newIndex]?.id;
+
+        if (newQuestionId) {
+            // Clear the user's current session answer for the question being navigated to.
+            setUserAnswers(prev => ({
+                ...prev,
+                [newQuestionId]: null 
+            }));
+        }
+        
+        setCurrentQuestionIndex(newIndex);
+        setShowSolution(false); 
+        setIsCorrect(null);     
+        setAnimateCard(true);  
+    }
+  };
+
    const goToNextQuestion = () => {
        if (currentQuestionIndex < filteredQuestions.length - 1) {
-           setCurrentQuestionIndex(prev => prev + 1);
-           setShowSolution(false);
-           setIsCorrect(null);
-           setAnimateCard(true); 
-           const nextQuestionId = filteredQuestions[currentQuestionIndex + 1]?.id;
-           if (nextQuestionId && userAnswers[nextQuestionId] === undefined) {
-               setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null }));
-           }
+           navigateToQuestion(currentQuestionIndex + 1);
        } else {
            toast({ title: "DPP Set Completed!", description: "You've reached the end of this set. Great job!", duration: 5000 });
            router.push('/dpp');
        }
    };
 
-   const renderQuestionContent = (q: QuestionBankItem) => {
+    const renderQuestionContent = (q: QuestionBankItem) => {
        const imagePath = constructImagePath(q.subject, q.lesson, q.question.image);
 
        if (q.type === 'image' && imagePath) {
@@ -375,7 +391,7 @@ export default function DppLessonPage() {
               <Card className="mt-8 bg-muted/40 dark:bg-background border-border shadow-inner transform transition-all duration-500 ease-out animate-in fade-in slide-in-from-bottom-5">
                   <CardHeader className="pb-3 pt-4">
                     <CardTitle className="text-md font-semibold flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-primary"/>
+                        <Lightbulb className="h-5 w-5 text-primary"/>
                         Detailed Explanation
                     </CardTitle>
                   </CardHeader>
@@ -572,7 +588,7 @@ export default function DppLessonPage() {
                 )}>
                     {showSolution && isCorrect !== null && (
                         <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm shadow-md", isCorrect ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : "bg-red-50 border-red-300 dark:bg-red-900/30 dark:border-red-700")}>
-                            {isCorrect ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                            {isCorrect ? <ThumbsUp className="h-5 w-5" /> : <ThumbsDown className="h-5 w-5" />}
                             <AlertTitle className={cn("font-semibold",isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
                             {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
                         </Alert>
