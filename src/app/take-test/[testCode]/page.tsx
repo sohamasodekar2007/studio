@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import StartTestButton from '@/components/test-interface/start-test-button'; 
 import type { PricingType } from '@/types';
 import Image from "next/image";
+import { Badge } from "@/components/ui/badge"; // Ensure Badge is imported
 
 const formatPricing = (pricing: PricingType) => {
     switch (pricing) {
@@ -56,17 +57,10 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
       </div>
 
       <Card className="overflow-hidden bg-card">
-         <CardHeader className="relative p-0">
-           <Image
-                src={`https://picsum.photos/seed/${testData.test_code}/800/300`}
-                alt={testData.name}
-                width={800}
-                height={300}
-                className="w-full h-48 object-cover"
-                data-ai-hint={testData.test_subject.join(' ') + " test"}
-                priority
-            />
-             <div className="absolute top-4 right-4 flex gap-1">
+        {/* Removed CardHeader that contained the Image */}
+        <CardContent className="p-6 space-y-4">
+            {/* Moved pricing badge here */}
+            <div className="flex justify-end mb-2">
                 <Badge
                    variant={getPricingBadgeVariant(testData.type)}
                    className={`text-xs ${getPricingBadgeClasses(testData.type)}`}
@@ -74,8 +68,7 @@ export default async function TakeTestPage({ params }: { params: { testCode: str
                    <Tag className="h-3 w-3 mr-1"/> {formatPricing(testData.type)}
                 </Badge>
              </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-4">
+
             <div className="flex flex-wrap gap-2 mb-2">
                  <Badge variant="outline"><CalendarDays className="h-4 w-4 mr-1"/>For: {testData.audience}</Badge>
                  <Badge variant="secondary" className="capitalize"><CheckSquare className="h-4 w-4 mr-1"/>{testData.testType === 'full_length' && testData.stream ? testData.stream : testData.testType.replace('_', ' ')}</Badge>
