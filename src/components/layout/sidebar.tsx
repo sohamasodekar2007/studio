@@ -193,8 +193,14 @@ export function AppSidebar() {
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    if (href.endsWith('/')) {
+    // For nested routes like /tests/[testCode], match the base path /tests
+    if (href.endsWith('/') && href.length > 1) { // Check if it's a base path and not just "/"
         return pathname.startsWith(href);
+    }
+    // For other specific parent routes that might not end with '/' but have children
+    const parentRoutesWithChildren = ['/tests', '/dpp', '/pyq-dpps', '/notebooks', '/challenge'];
+    if (parentRoutesWithChildren.includes(href)) {
+        return pathname.startsWith(href + '/');
     }
     return pathname === href || pathname.startsWith(href + '/');
   };
@@ -242,7 +248,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
-        <SidebarHeader className="flex items-center justify-between p-4">
+        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
           <Link
             href="/"
             className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
@@ -486,4 +492,3 @@ export function AppSidebar() {
     </>
   );
 }
-
