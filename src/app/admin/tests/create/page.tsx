@@ -30,13 +30,11 @@ import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
 // --- Zod Schemas ---
 
 const ChapterwiseSchema = z.object({
-  testType: z.literal('chapterwise'), // Discriminator
-  // Base properties
+  testType: z.literal('chapterwise'),
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(audienceTypes).nullable().or(z.literal("_any_")),
-  // Chapterwise specific properties
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
@@ -54,51 +52,54 @@ const SubjectConfigSchema = z.object({
   totalSubjectQuestions: z.number().min(0).default(0),
 });
 
-const FullLengthSchema = z.object({
-  testType: z.literal('full_length'), // Discriminator
-  // Base properties
+// Define the base FullLengthSchema as a ZodObject without superRefine
+const FullLengthSchemaObject = z.object({
+  testType: z.literal('full_length'),
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
   accessType: z.enum(pricingTypes),
   audience: z.enum(audienceTypes).nullable().or(z.literal("_any_")),
-  // Full-length specific properties
   exam: z.enum(allExams),
   stream: z.enum(testStreams).optional(),
-  overallTotalQuestions: z.number().min(10, "Min 10 questions.").max(200, "Max 200 questions."),
+  overallTotalQuestions: z.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
   subjectsConfig: z.array(SubjectConfigSchema).default([]),
-}).superRefine((data, ctx) => {
-    if (data.subjectsConfig && data.subjectsConfig.length > 0) {
-        const totalWeightageSum = data.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
-        if (Math.abs(totalWeightageSum - 100) >= 0.1) { // Allow for minor float inaccuracies
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Total subject weightages must sum to approximately 100%. Current sum: " + totalWeightageSum.toFixed(1) + "%",
-                path: ['subjectsConfig'], // Path to the array itself or a specific field
+});
+
+// Discriminated union schema using the base ZodObject schemas
+const TestCreationSchema = z.discriminatedUnion("testType", [
+    ChapterwiseSchema,
+    FullLengthSchemaObject, // Use the ZodObject here
+]).superRefine((data, ctx) => {
+    if (data.testType === 'full_length') {
+        // Apply FullLengthSchema's superRefine logic here
+        const fullLengthData = data; // Zod infers the type correctly here
+        if (fullLengthData.subjectsConfig && fullLengthData.subjectsConfig.length > 0) {
+            const totalWeightageSum = fullLengthData.subjectsConfig.reduce((sum, subj) => sum + (subj.totalSubjectWeightage || 0), 0);
+            if (Math.abs(totalWeightageSum - 100) >= 0.01) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Total subject weightages must sum to 100%. Current sum: ${totalWeightageSum.toFixed(1)}%`,
+                    path: ['subjectsConfig'],
+                });
+            }
+        }
+        if (fullLengthData.subjectsConfig) {
+            fullLengthData.subjectsConfig.forEach((subject, subjectIndex) => {
+                if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
+                    const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
+                    if (Math.abs(lessonWeightageSum - 100) >= 0.01) {
+                        ctx.addIssue({
+                            code: z.ZodIssueCode.custom,
+                            message: `Lesson weightages for ${subject.subjectName} must sum to 100%. Current sum: ${lessonWeightageSum.toFixed(1)}%`,
+                            path: [`subjectsConfig`, subjectIndex, 'lessons'],
+                        });
+                    }
+                }
             });
         }
     }
-    if (data.subjectsConfig) {
-        data.subjectsConfig.forEach((subject, subjectIndex) => {
-            if (subject.lessons && subject.lessons.length > 0 && subject.lessons.some(l => (l.weightage || 0) > 0)) {
-                const lessonWeightageSum = subject.lessons.reduce((sum, lesson) => sum + (lesson.weightage || 0), 0);
-                if (Math.abs(lessonWeightageSum - 100) >= 0.1) { // Allow for minor float inaccuracies
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        message: `Lesson weightages within ${subject.subjectName} must sum to approximately 100% if specified. Current sum: ` + lessonWeightageSum.toFixed(1) + "%",
-                        path: [`subjectsConfig`, subjectIndex, 'lessons'],
-                    });
-                }
-            }
-        });
-    }
 });
 
-
-// Discriminated union schema
-const TestCreationSchema = z.discriminatedUnion("testType", [
-    ChapterwiseSchema,
-    FullLengthSchema,
-]);
 
 type TestCreationFormValues = z.infer<typeof TestCreationSchema>;
 
@@ -660,7 +661,7 @@ export default function CreateTestPage() {
                                 {(fullLengthExam === 'MHT-CET' || fullLengthExam === 'KCET' || fullLengthExam === 'VITEEE' || fullLengthExam === 'CUET') && (
                                     <FormField control={form.control} name="stream" render={({ field }) => (<FormItem><FormLabel>Stream *</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Stream" /></SelectTrigger></FormControl><SelectContent>{testStreams.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 )}
-                                <FormField control={form.control} name="overallTotalQuestions" render={({ field }) => (<FormItem><FormLabel>Total Questions in Test *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || 0)} min="10" max="200" /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="overallTotalQuestions" render={({ field }) => (<FormItem><FormLabel>Total Questions in Test *</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10) || 0)} min="1" max="200" /></FormControl><FormMessage /></FormItem>)} />
                                 
                                 <Separator/>
                                 <h3 className="text-md font-semibold">Subject &amp; Lesson Weightages</h3>
