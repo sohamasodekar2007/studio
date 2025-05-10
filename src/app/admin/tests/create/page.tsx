@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -124,7 +124,7 @@ export default function CreateTestPage() {
         count: 20,
         stream: 'PCM',
         totalQuestions: 50,
-        weightagePhysics: 33, // Default weightage, sums to 99, user should adjust
+        weightagePhysics: 33, 
         weightageChemistry: 33,
         weightageMaths: 34,
         weightageBiology: undefined,
@@ -393,7 +393,6 @@ export default function CreateTestPage() {
                 Biology: fullLengthData.stream === 'PCB' ? fullLengthData.weightageBiology : undefined,
              };
              
-             // Default weightages if none are set for the stream
              if (fullLengthData.stream === 'PCM' && weightages.Physics === undefined && weightages.Chemistry === undefined && weightages.Maths === undefined) {
                  weightages = { Physics: 33, Chemistry: 33, Maths: 34 };
              } else if (fullLengthData.stream === 'PCB' && weightages.Physics === undefined && weightages.Chemistry === undefined && weightages.Biology === undefined) {
@@ -517,8 +516,8 @@ export default function CreateTestPage() {
         onLoad={handleMathJaxLoad}
       />
       <div className="space-y-6">
-            <h1 className="text-3xl font-bold tracking-tight">Create New Test</h1>
-            <p className="text-muted-foreground">Generate chapterwise or full-length tests from the question bank.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Create New Test</h1>
+        <p className="text-muted-foreground">Generate chapterwise or full-length tests from the question bank.</p>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
