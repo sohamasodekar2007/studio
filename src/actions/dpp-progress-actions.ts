@@ -56,21 +56,18 @@ export async function getDppProgress(
     return null;
   }
 
-  // Use the helper function to get the correct path including userId
   const filePath = getProgressFilePath(userId, subject, lesson);
 
   try {
-    await fs.access(filePath); // Check if file exists
+    await fs.access(filePath); 
     const fileContent = await fs.readFile(filePath, 'utf-8');
     const progressData: UserDppLessonProgress = JSON.parse(fileContent);
     return progressData;
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      // File doesn't exist, which is normal for first attempt
       return null;
     }
     console.error(`Error reading DPP progress file ${filePath}:`, error);
-    // Return null or throw depending on how critical this is
     return null;
   }
 }
@@ -99,15 +96,13 @@ export async function saveDppAttempt(
   }
 
   const filePath = getProgressFilePath(userId, subject, lesson);
-  const dirPath = path.dirname(filePath); // Get directory path for ensureDirExists
+  const dirPath = path.dirname(filePath); 
 
-  let pointsAwarded = 0; // Track points for this attempt
+  let pointsAwarded = 0; 
 
   try {
-    // Ensure directory exists
     await ensureDirExists(dirPath);
 
-    // Read existing progress or initialize new object
     let progressData: UserDppLessonProgress | null = await getDppProgress(userId, subject, lesson);
 
     if (!progressData) {
@@ -119,50 +114,40 @@ export async function saveDppAttempt(
         questionAttempts: {},
       };
     } else {
-        progressData.lastAccessed = Date.now(); // Update last accessed time
+        progressData.lastAccessed = Date.now(); 
     }
 
-    // Check if this question has been answered correctly before in this lesson
     const previousAttempts = progressData.questionAttempts[questionId] || [];
     const previouslyCorrect = previousAttempts.some(attempt => attempt.isCorrect);
 
-    // Award points only if it wasn't answered correctly before
     if (!previouslyCorrect) {
       pointsAwarded = isCorrect ? POINTS_FOR_CORRECT_DPP : POINTS_FOR_INCORRECT_DPP;
     } else if (previouslyCorrect && !isCorrect) {
-        // Optional: Penalize if user changes a correct answer to incorrect?
         // pointsAwarded = POINTS_FOR_INCORRECT_DPP;
     } else {
-        // No points awarded if already correct, or changing from incorrect to incorrect.
         pointsAwarded = 0;
     }
 
-    // Initialize attempts array for the question if it doesn't exist
     if (!progressData.questionAttempts[questionId]) {
       progressData.questionAttempts[questionId] = [];
     }
 
-    // Create the new attempt object
     const newAttempt: DppAttempt = {
       timestamp: Date.now(),
       selectedOption,
       isCorrect,
     };
 
-    // Add the new attempt to the beginning of the array for that question
     progressData.questionAttempts[questionId].unshift(newAttempt);
 
-    // Write the updated progress data back to the file
     await fs.writeFile(filePath, JSON.stringify(progressData, null, 2), 'utf-8');
     console.log(`DPP attempt saved for user ${userId}, lesson ${lesson}, question ${questionId}`);
 
-    // Update total user points if points were awarded/deducted
     if (pointsAwarded !== 0) {
          try {
              await updateUserPoints(userId, pointsAwarded);
          } catch (pointsError: any) {
              console.error(`Failed to update points for user ${userId} after DPP attempt:`, pointsError);
-             // Decide how to handle: Log, return partial success? Returning success for the attempt save.
          }
      }
 
@@ -173,3 +158,81 @@ export async function saveDppAttempt(
     return { success: false, message: `Failed to save DPP attempt. Reason: ${error.message}` };
   }
 }
+
+
+/**
+ * Retrieves all DPP progress for a user within a specific date range.
+ * This involves reading all subject and lesson progress files for the user
+ * and filtering attempts by timestamp.
+ * @param userId The ID of the user.
+ * @param startDateISO The start date of the range (ISO string).
+ * @param endDateISO The end date of the range (ISO string).
+ * @returns A promise resolving to an array of UserDppLessonProgress objects,
+ *          where each object only contains attempts within the specified date range.
+ */
+export async function getDppProgressForDateRange(
+  userId: string,
+  startDateISO: string,
+  endDateISO: string
+): Promise<UserDppLessonProgress[]> {
+  if (!userId || !startDateISO || !endDateISO) {
+    console.warn("getDppProgressForDateRange: Missing required parameters.");
+    return [];
+  }
+
+  const startDate = new Date(startDateISO).getTime();
+  const endDate = new Date(endDateISO).getTime();
+  const userDirPath = path.join(dppProgressBasePath, userId);
+  const results: UserDppLessonProgress[] = [];
+
+  try {
+    await ensureDirExists(userDirPath);
+    const subjectDirs = await fs.readdir(userDirPath, { withFileTypes: true });
+
+    for (const subjectDir of subjectDirs) {
+      if (subjectDir.isDirectory()) {
+        const subjectName = subjectDir.name;
+        const subjectPath = path.join(userDirPath, subjectName);
+        const lessonFiles = await fs.readdir(subjectPath, { withFileTypes: true });
+
+        for (const lessonFile of lessonFiles) {
+          if (lessonFile.isFile() && lessonFile.name.endsWith('.json')) {
+            const lessonName = lessonFile.name.replace('.json', '');
+            const lessonProgress = await getDppProgress(userId, subjectName, lessonName);
+
+            if (lessonProgress) {
+              const filteredAttempts: Record<string, DppAttempt[]> = {};
+              let hasAttemptsInRange = false;
+
+              for (const questionId in lessonProgress.questionAttempts) {
+                const attempts = lessonProgress.questionAttempts[questionId];
+                const attemptsInRange = attempts.filter(attempt => 
+                  attempt.timestamp >= startDate && attempt.timestamp <= endDate
+                );
+                if (attemptsInRange.length > 0) {
+                  filteredAttempts[questionId] = attemptsInRange;
+                  hasAttemptsInRange = true;
+                }
+              }
+
+              if (hasAttemptsInRange) {
+                results.push({
+                  ...lessonProgress,
+                  questionAttempts: filteredAttempts,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && error.path === userDirPath) {
+      // User has no DPP data yet, which is fine.
+      return [];
+    }
+    console.error(`Error reading DPP progress for user ${userId} in date range:`, error);
+  }
+  return results;
+}
+
