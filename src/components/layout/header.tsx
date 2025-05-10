@@ -157,7 +157,7 @@ export function AppHeader() {
       <SidebarTrigger className="sm:hidden" />
       <div className="sm:hidden group-data-[state=collapsed]:flex items-center gap-2">
           <Image
-              src="/EduNexus-logo-black.jpg"
+              src="EduNexus-logo-black.jpg"
               alt="EduNexus Logo"
               width={28}
               height={28}
@@ -165,7 +165,7 @@ export function AppHeader() {
               unoptimized
           />
           <Image
-              src="/EduNexus-logo-white.jpg"
+              src="EduNexus-logo-white.jpg"
               alt="EduNexus Logo"
               width={28}
               height={28}
