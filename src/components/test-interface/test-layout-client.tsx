@@ -9,9 +9,10 @@ import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, CheckSquare, Maximize } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, ArrowRight, Flag, XSquare, Send, CheckSquare } from 'lucide-react';
 import InstructionsDialog from '@/components/test-interface/instructions-dialog';
 import TestHeaderBar from '@/components/test-interface/test-header-bar';
+import QuestionPalette from '@/components/test-interface/question-palette';
 import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -35,10 +36,22 @@ interface TestLayoutClientProps {
   initialTestData: GeneratedTest;
 }
 
+interface InProgressTestState {
+  testCode: string;
+  userId: string;
+  startTime: number;
+  timeLeft: number;
+  currentGlobalIndex: number;
+  currentSection: string;
+  currentQuestionIndexInSection: number;
+  userAnswers: Record<string, string | null>; // questionId -> selectedOption
+  questionStatuses: Record<string, QuestionStatus>; // questionId -> status
+}
+
 export default function TestLayoutClient({ initialTestData }: TestLayoutClientProps) {
   const router = useRouter();
-  const searchParams = useSearchParams(); // For userId
-  const params = useParams(); // For testCode
+  const searchParams = useSearchParams(); 
+  const params = useParams(); 
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
@@ -46,27 +59,37 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const queryUserId = searchParams.get('userId');
 
   const [testData, setTestData] = useState<GeneratedTest>(initialTestData);
-  const [isLoading, setIsLoading] = useState(false); // For actions, not initial load
+  const [isLoading, setIsLoading] = useState(false); 
   const [error, setError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
   
-  const [currentSection, setCurrentSection] = useState<string>(initialTestData.test_subject[0] || 'Overall');
+  const initialSection = useMemo(() => {
+    if (initialTestData.testType === 'full_length') {
+        if (initialTestData.physics_questions && initialTestData.physics_questions.length > 0) return 'Physics';
+        if (initialTestData.chemistry_questions && initialTestData.chemistry_questions.length > 0) return 'Chemistry';
+        if (initialTestData.maths_questions && initialTestData.maths_questions.length > 0) return 'Mathematics';
+        if (initialTestData.biology_questions && initialTestData.biology_questions.length > 0) return 'Biology';
+    }
+    return initialTestData.test_subject[0] || 'Overall';
+  }, [initialTestData]);
+
+  const [currentSection, setCurrentSection] = useState<string>(initialSection);
   const [currentQuestionIndexInSection, setCurrentQuestionIndexInSection] = useState(0);
   
-  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); // questionId -> selectedOption
-  const [questionStatuses, setQuestionStatuses] = useState<Record<string, QuestionStatus>>({}); // questionId -> status
+  const [userAnswers, setUserAnswers] = useState<Record<string, string | null>>({}); 
+  const [questionStatuses, setQuestionStatuses] = useState<Record<string, QuestionStatus>>({}); 
   
   const [startTime, setStartTime] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(initialTestData.duration * 60);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isResuming, setIsResuming] = useState(true); // To control initial load effect
 
   const allQuestionsInOrder = useMemo(() => {
     if (testData.testType === 'chapterwise') {
       return testData.questions || [];
     } else if (testData.testType === 'full_length') {
       const questions: TestQuestion[] = [];
-      // Order matters for full-length tests typically
       if (testData.physics_questions) questions.push(...testData.physics_questions);
       if (testData.chemistry_questions) questions.push(...testData.chemistry_questions);
       if (testData.maths_questions) questions.push(...testData.maths_questions);
@@ -81,10 +104,10 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     if (testData.testType === 'chapterwise' && testData.questions) {
         sections[testData.test_subject[0] || 'Questions'] = testData.questions;
     } else if (testData.testType === 'full_length') {
-        if (testData.physics_questions) sections['Physics'] = testData.physics_questions;
-        if (testData.chemistry_questions) sections['Chemistry'] = testData.chemistry_questions;
-        if (testData.maths_questions) sections['Mathematics'] = testData.maths_questions;
-        if (testData.biology_questions) sections['Biology'] = testData.biology_questions;
+        if (testData.physics_questions && testData.physics_questions.length > 0) sections['Physics'] = testData.physics_questions;
+        if (testData.chemistry_questions && testData.chemistry_questions.length > 0) sections['Chemistry'] = testData.chemistry_questions;
+        if (testData.maths_questions && testData.maths_questions.length > 0) sections['Mathematics'] = testData.maths_questions;
+        if (testData.biology_questions && testData.biology_questions.length > 0) sections['Biology'] = testData.biology_questions;
     }
     return sections;
   }, [testData]);
@@ -96,7 +119,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const currentQuestion = useMemo(() => {
     return currentSectionQuestions[currentQuestionIndexInSection];
   }, [currentSectionQuestions, currentQuestionIndexInSection]);
-
 
   const globalQuestionIndex = useMemo(() => {
     let globalIdx = 0;
@@ -119,10 +141,76 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   }, []);
 
   useEffect(() => {
-    if (currentQuestion && !showInstructions) {
+    if (currentQuestion && !showInstructions && !isLoading) { // Ensure not loading test data initially
       typesetMathJax();
     }
-  }, [currentQuestion, showInstructions, typesetMathJax]);
+  }, [currentQuestion, showInstructions, typesetMathJax, isLoading]);
+
+
+  // Load from local storage on mount
+  useEffect(() => {
+    if (!user?.id || !testCode || authLoading || !isResuming) return;
+
+    const savedSessionKey = `test-session-${user.id}-${testCode}`;
+    const savedSessionJson = localStorage.getItem(savedSessionKey);
+
+    if (savedSessionJson) {
+        try {
+            const savedState: InProgressTestState = JSON.parse(savedSessionJson);
+            if (savedState.testCode === testCode && savedState.userId === user.id) {
+                setStartTime(savedState.startTime);
+                setTimeLeft(savedState.timeLeft);
+                setCurrentSection(savedState.currentSection || initialSection);
+                setCurrentQuestionIndexInSection(savedState.currentQuestionIndexInSection || 0);
+                setUserAnswers(savedState.userAnswers || {});
+                setQuestionStatuses(savedState.questionStatuses || {};
+                setShowInstructions(false); // Resuming, so skip instructions
+                toast({ title: "Test Resumed", description: "Your previous progress has been loaded." });
+            }
+        } catch (e) {
+            console.error("Failed to parse saved session, starting fresh:", e);
+            localStorage.removeItem(savedSessionKey); // Clear corrupted data
+             // Initialize statuses for fresh start if resuming fails but questions exist
+            if (allQuestionsInOrder.length > 0 && currentQuestion?.id) {
+                const initialStatuses: Record<string, QuestionStatus> = {};
+                allQuestionsInOrder.forEach(q => {
+                    if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
+                });
+                initialStatuses[currentQuestion.id] = QuestionStatusEnum.Unanswered;
+                setQuestionStatuses(initialStatuses);
+            }
+        }
+    } else {
+        // No saved session, initialize statuses for fresh start if questions exist
+        if (allQuestionsInOrder.length > 0 && currentQuestion?.id && !showInstructions) {
+            const initialStatuses: Record<string, QuestionStatus> = {};
+            allQuestionsInOrder.forEach(q => {
+                if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
+            });
+            initialStatuses[currentQuestion.id] = QuestionStatusEnum.Unanswered; // Set first q as unanswered
+            setQuestionStatuses(initialStatuses);
+        }
+    }
+    setIsResuming(false); // Mark resuming attempt as complete
+  }, [user?.id, testCode, authLoading, isResuming, allQuestionsInOrder, initialSection, currentQuestion?.id, toast]);
+
+  // Save to local storage on state change
+  useEffect(() => {
+    if (!user?.id || !testCode || showInstructions || startTime === null || authLoading || isResuming) return;
+
+    const sessionState: InProgressTestState = {
+      testCode,
+      userId: user.id,
+      startTime,
+      timeLeft,
+      currentGlobalIndex: globalQuestionIndex, // Save global index too for easier resume
+      currentSection,
+      currentQuestionIndexInSection,
+      userAnswers,
+      questionStatuses,
+    };
+    localStorage.setItem(`test-session-${user.id}-${testCode}`, JSON.stringify(sessionState));
+  }, [user?.id, testCode, startTime, timeLeft, globalQuestionIndex, currentSection, currentQuestionIndexInSection, userAnswers, questionStatuses, showInstructions, authLoading, isResuming]);
 
 
   useEffect(() => {
@@ -136,32 +224,21 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
         router.push('/');
         return;
     }
-    if (!authLoading && user && !queryUserId) {
+    if (!authLoading && user && !queryUserId) { // If userId is missing from query, add it
          router.replace(`/test-interface/${testCode}?userId=${user.id}`);
          return;
      }
-
-    if (allQuestionsInOrder.length > 0 && !showInstructions) {
-        const initialStatuses: Record<string, QuestionStatus> = {};
-        allQuestionsInOrder.forEach(q => {
-            if (q.id) initialStatuses[q.id] = QuestionStatusEnum.NotVisited;
-        });
-        if (currentQuestion?.id) {
-            initialStatuses[currentQuestion.id] = QuestionStatusEnum.Unanswered;
-        }
-        setQuestionStatuses(initialStatuses);
-    }
-
-  }, [testCode, queryUserId, authLoading, user, router, toast, allQuestionsInOrder, showInstructions, currentQuestion?.id]);
+  }, [testCode, queryUserId, authLoading, user, router, toast]);
 
 
   const handleStartTest = useCallback(() => {
     setShowInstructions(false);
     setStartTime(Date.now());
-    if (currentQuestion?.id) {
-        setQuestionStatuses(prev => ({...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered}));
+    const firstQuestionId = allQuestionsInOrder[0]?.id;
+    if (firstQuestionId) {
+        setQuestionStatuses(prev => ({...prev, [firstQuestionId]: QuestionStatusEnum.Unanswered}));
     }
-  }, [currentQuestion?.id]);
+  }, [allQuestionsInOrder]);
 
   const handleSubmitTest = useCallback(async (autoSubmit = false) => {
     if (!user || !queryUserId || isSubmitting || !startTime) return;
@@ -169,7 +246,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     const endTime = Date.now();
 
     const submittedAnswers: UserAnswer[] = allQuestionsInOrder.map((q, globalIdx) => ({
-      questionId: q.id || `q-${globalIdx}`,
+      questionId: q.id || `q-${globalIdx}`, // Ensure ID is present
       selectedOption: userAnswers[q.id!] || null,
       status: questionStatuses[q.id!] || QuestionStatusEnum.NotVisited,
     }));
@@ -185,6 +262,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     try {
       const result = await saveTestReport(sessionData, testData);
       if (result.success && result.results) {
+        localStorage.removeItem(`test-session-${user.id}-${testCode}`); // Clear session on successful submit
         toast({ title: "Test Submitted!", description: "Your responses have been saved." });
         router.push(`/chapterwise-test-results/${testCode}?userId=${queryUserId}&attemptTimestamp=${startTime}`);
       } else {
@@ -192,7 +270,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Submission Failed', description: e.message });
-      setIsSubmitting(false);
+      setIsSubmitting(false); 
     }
   }, [testData, user, queryUserId, isSubmitting, startTime, testCode, userAnswers, questionStatuses, toast, router, allQuestionsInOrder]);
 
@@ -202,7 +280,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
       setTimeLeft((prevTime) => {
         if (prevTime <= 1) {
           clearInterval(timerId);
-          if (!isSubmitting) handleSubmitTest(true);
+          if (!isSubmitting) handleSubmitTest(true); // Auto-submit if not already submitting
           return 0;
         }
         return prevTime - 1;
@@ -225,24 +303,31 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const navigateToQuestion = (globalIdx: number) => {
     if (globalIdx < 0 || globalIdx >= allQuestionsInOrder.length) return;
 
+    // Mark current question as unanswered if it was just visited and not answered
+    const currentQ = allQuestionsInOrder[globalQuestionIndex];
+    if (currentQ?.id && questionStatuses[currentQ.id] === QuestionStatusEnum.NotVisited && !userAnswers[currentQ.id]){
+         setQuestionStatuses(prev => ({...prev, [currentQ.id!]: QuestionStatusEnum.Unanswered}));
+    }
+
     let cumulativeIndex = 0;
     for (const sectionName in questionsBySection) {
-        const sectionQuestions = questionsBySection[sectionName];
-        if (globalIdx < cumulativeIndex + sectionQuestions.length) {
+        const sectionQuestionsList = questionsBySection[sectionName];
+        if (globalIdx < cumulativeIndex + sectionQuestionsList.length) {
             const indexInSection = globalIdx - cumulativeIndex;
             setCurrentSection(sectionName);
             setCurrentQuestionIndexInSection(indexInSection);
-            if (questionStatuses[allQuestionsInOrder[globalIdx]?.id!] === QuestionStatusEnum.NotVisited) {
-                setQuestionStatuses(prev => ({...prev, [allQuestionsInOrder[globalIdx]?.id!]: QuestionStatusEnum.Unanswered}));
+            // Mark new question as unanswered if it's being visited for the first time
+            const newQ = sectionQuestionsList[indexInSection];
+            if (newQ?.id && questionStatuses[newQ.id] === QuestionStatusEnum.NotVisited) {
+                setQuestionStatuses(prev => ({...prev, [newQ.id!]: QuestionStatusEnum.Unanswered}));
             }
             return;
         }
-        cumulativeIndex += sectionQuestions.length;
+        cumulativeIndex += sectionQuestionsList.length;
     }
   };
 
   const handleSaveAndNext = () => {
-    // Logic to save current state if needed (auto-save is implied by state updates)
     if (currentQuestion?.id && questionStatuses[currentQuestion.id] === QuestionStatusEnum.NotVisited && !userAnswers[currentQuestion.id]){
          setQuestionStatuses(prev => ({...prev, [currentQuestion.id!]: QuestionStatusEnum.Unanswered}));
     }
@@ -299,8 +384,8 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   }, []);
 
 
-  if (authLoading) {
-    return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
+  if (authLoading || isResuming) { // Show loading while auth or session resuming is in progress
+    return <div className="flex items-center justify-center min-h-screen bg-background"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
 
   if (showInstructions) {
@@ -309,7 +394,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center bg-destructive/5">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-destructive font-semibold text-lg">Error Loading Test</p>
         <p className="text-muted-foreground mb-4">{error}</p>
@@ -320,9 +405,9 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
   if (!testData || !currentQuestion) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 text-center bg-background">
         <AlertTriangle className="h-12 w-12 text-amber-500 mb-4" />
-        <p className="text-muted-foreground">Test data or current question is unavailable.</p>
+        <p className="text-muted-foreground">Test data or current question is unavailable. This might happen if the test has no questions.</p>
          <Button onClick={() => router.push('/tests')}>Back to Test Series</Button>
       </div>
     );
@@ -331,7 +416,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
   const optionKeys = ["A", "B", "C", "D"];
   const renderQuestionContent = (question: TestQuestion) => {
      const imageUrl = question.question_image_url;
-     if (imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
+     if (question.type === 'image' && imageUrl && (imageUrl.startsWith('/') || imageUrl.startsWith('http'))) {
        return <Image src={imageUrl} alt={`Question ${globalQuestionIndex + 1}`} width={600} height={400} className="rounded-md border max-w-full h-auto mx-auto my-4 object-contain" data-ai-hint="question diagram" priority={globalQuestionIndex < 3} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized />;
      } else if (question.question_text) {
        return <div className="prose dark:prose-invert max-w-none mathjax-content" dangerouslySetInnerHTML={{ __html: question.question_text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }} />;
@@ -351,23 +436,22 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
     <>
       <Script id="mathjax-script-test-interface" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={typesetMathJax} />
       <div className="flex flex-col h-screen max-h-screen bg-muted/20 dark:bg-background overflow-hidden">
-        <TestHeaderBar
+        {user && <TestHeaderBar
           testName={testData.name}
           timeLeft={timeLeft}
           user={user}
           onFullScreenToggle={toggleFullScreen}
           isFullScreen={isFullScreen}
-        />
+        />}
         
-        {/* Section Tabs for Full Length Test */}
         {testData.testType === 'full_length' && Object.keys(questionsBySection).length > 1 && (
-            <div className="bg-card border-b px-2 py-1.5 flex gap-1 overflow-x-auto no-scrollbar">
+            <div className="bg-card border-b px-2 py-1.5 flex gap-1 overflow-x-auto no-scrollbar shadow-sm">
                 {Object.keys(questionsBySection).map(sectionName => (
                     <Button 
                         key={sectionName}
                         variant={currentSection === sectionName ? "secondary" : "ghost"}
                         size="sm"
-                        className={cn("text-xs h-7 px-3 rounded-md", currentSection === sectionName && "bg-primary/10 text-primary font-semibold")}
+                        className={cn("text-xs h-7 px-3 rounded-md flex-shrink-0", currentSection === sectionName && "bg-primary/10 text-primary font-semibold shadow-sm")}
                         onClick={() => {setCurrentSection(sectionName); setCurrentQuestionIndexInSection(0);}}
                     >
                         {sectionName}
@@ -378,7 +462,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
 
         <div className="flex flex-1 overflow-hidden">
           <main className="flex-1 p-3 md:p-4 overflow-y-auto">
-            <Card className="mb-4 shadow-sm">
+            <Card className="mb-4 shadow-sm border-border">
               <CardHeader className="pb-3 pt-4 px-4">
                 <CardTitle className="flex justify-between items-center text-base md:text-lg">
                   <span>Question {currentQuestionIndexInSection + 1} <span className="text-muted-foreground text-sm">of {currentSectionQuestions.length} ({currentSection})</span></span>
@@ -395,6 +479,7 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
               value={userAnswers[currentQuestion.id!] || undefined}
               onValueChange={(val) => handleOptionChange(currentQuestion.id!, val)}
               className="space-y-2.5 mb-4"
+              disabled={isSubmitting}
             >
               {currentQuestion.options.map((optionText, idx) => {
                 const optionKey = optionKeys[idx];
@@ -430,7 +515,6 @@ export default function TestLayoutClient({ initialTestData }: TestLayoutClientPr
                    <Button variant="secondary" size="sm" onClick={handleSaveAndNext} disabled={isSubmitting}>
                       Save & Next <ArrowRight className="ml-1.5 h-4 w-4" />
                   </Button>
-                  {/* Submit button is now in the palette or via TestHeaderBar */}
               </div>
             </div>
           </main>

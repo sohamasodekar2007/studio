@@ -28,27 +28,28 @@ const QUESTION_STATUS_COLORS: Record<QuestionStatus, string> = {
 };
 
 interface QuestionPaletteProps {
-  questions: TestQuestion[];
+  questions: TestQuestion[]; // All questions in order for global indexing
   questionStatuses: Record<string, QuestionStatus>; // questionId -> status
   currentGlobalIndex: number;
   onQuestionSelect: (globalIndex: number) => void;
   onSubmitTest: () => void;
   isSubmitting: boolean;
-  questionsBySection: Record<string, TestQuestion[]>;
-  currentSection: string;
+  questionsBySection: Record<string, TestQuestion[]>; // Questions grouped by section name
+  currentSection: string; // Name of the current active section
 }
 
 export default function QuestionPalette({
-  questions,
+  questions, // These are all questions in their global order
   questionStatuses,
   currentGlobalIndex,
   onQuestionSelect,
   onSubmitTest,
   isSubmitting,
-  questionsBySection,
-  currentSection
+  questionsBySection, // Used for displaying section-wise palette
+  currentSection // Used to highlight active section if needed
 }: QuestionPaletteProps) {
 
+  // Helper to find the global index of a question given its section and index within that section
   const getGlobalIndex = (sectionName: string, indexInSection: number): number => {
     let globalIdx = 0;
     for (const secName in questionsBySection) {
@@ -58,30 +59,31 @@ export default function QuestionPalette({
         }
         globalIdx += questionsBySection[secName].length;
     }
-    return -1; // Should not happen
+    return -1; // Should ideally not happen if data is consistent
   };
 
-
   return (
-    <aside className="w-60 md:w-72 border-l bg-card p-3 md:p-4 flex flex-col">
+    <aside className="w-60 md:w-72 border-l bg-card p-3 md:p-4 flex flex-col shadow-lg">
       <h3 className="font-semibold mb-2 text-center text-sm md:text-base">Question Palette</h3>
-      <ScrollArea className="flex-grow mb-3">
+      <ScrollArea className="flex-grow mb-3 pr-1"> {/* Added pr-1 for scrollbar visibility */}
         {Object.entries(questionsBySection).map(([sectionName, sectionQuestions]) => (
             <div key={sectionName} className="mb-3">
-                 <p className="text-xs font-medium text-muted-foreground mb-1.5 px-1">{sectionName} ({sectionQuestions.length})</p>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5 px-1 capitalize">{sectionName} ({sectionQuestions.length})</p>
                 <div className="grid grid-cols-5 md:grid-cols-6 gap-1.5">
                 {sectionQuestions.map((q, indexInSection) => {
                     const globalIdx = getGlobalIndex(sectionName, indexInSection);
-                    const status = q.id ? questionStatuses[q.id] : QuestionStatusEnum.NotVisited;
+                    const questionId = q.id || `q_palette_${globalIdx}`; // Fallback ID for key if q.id is undefined
+                    const status = questionStatuses[q.id!] || QuestionStatusEnum.NotVisited;
+                    
                     return (
                     <Button
-                        key={q.id || `q_palette_${globalIdx}`}
+                        key={questionId}
                         variant="outline"
                         size="icon"
                         className={cn(
-                        "h-7 w-7 md:h-8 md:w-8 text-xs font-medium",
+                        "h-7 w-7 md:h-8 md:w-8 text-xs font-medium transition-all",
                         QUESTION_STATUS_COLORS[status],
-                        currentGlobalIndex === globalIdx && "ring-2 ring-offset-1 ring-primary dark:ring-offset-card"
+                        currentGlobalIndex === globalIdx && "ring-2 ring-offset-1 ring-primary dark:ring-offset-card scale-110 shadow-md"
                         )}
                         onClick={() => onQuestionSelect(globalIdx)}
                         disabled={isSubmitting}
@@ -96,8 +98,8 @@ export default function QuestionPalette({
       </ScrollArea>
 
       <div className="mt-auto space-y-2 text-xs">
-        <div className="p-2 border rounded-md bg-muted/30">
-            <p className="font-medium mb-1">Legend:</p>
+        <div className="p-2 border rounded-md bg-muted/30 dark:bg-muted/10">
+            <p className="font-medium mb-1 text-muted-foreground">Legend:</p>
             <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                 <div className="flex items-center gap-1.5"><span className={cn("inline-block w-2.5 h-2.5 rounded-sm", QUESTION_STATUS_COLORS[QuestionStatusEnum.Answered])}></span> Answered</div>
                 <div className="flex items-center gap-1.5"><span className={cn("inline-block w-2.5 h-2.5 rounded-sm", QUESTION_STATUS_COLORS[QuestionStatusEnum.Unanswered])}></span> Not Answered</div>
