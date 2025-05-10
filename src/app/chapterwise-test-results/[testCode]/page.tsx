@@ -9,7 +9,7 @@
  import { Progress } from '@/components/ui/progress';
  import { AlertTriangle, Award, BarChart2, CheckCircle, Clock, HelpCircle, MessageSquare, RefreshCw, Share2, XCircle, Sparkles, Star, Info, BarChartBig, BrainCircuit, TrendingUp, Loader2, ListOrdered, Gauge, UserCircle, LineChart, Edit3, Timer, Target, Eye, Users } from 'lucide-react'; // Added Users icon
  import Link from 'next/link';
- import type { TestResultSummary, GeneratedTest, UserProfile, ChapterwiseTestJson } from '@/types'; // Import ChapterwiseTestJson
+ import type { TestResultSummary, GeneratedTest, UserProfile, ChapterwiseTestJson } from '@/types';
  import { Skeleton } from '@/components/ui/skeleton';
  import { getGeneratedTestByCode } from '@/actions/generated-test-actions';
  import { getTestReport, getAllReportsForTest } from '@/actions/test-report-actions';
@@ -19,19 +19,19 @@
  import { predictRank, type PredictRankOutput } from '@/ai/flows/predict-rank-flow';
  import { useToast } from '@/hooks/use-toast';
  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
- import { ResponsiveContainer, PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Label } from 'recharts';
+ import { ResponsiveContainer, PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Label as RechartsLabel } from 'recharts';
  import {
    ChartContainer,
    ChartTooltip,
    ChartTooltipContent,
-   type ChartConfig, // Import ChartConfig type
- } from "@/components/ui/chart"; // Import ShadCN chart components
+   type ChartConfig, 
+ } from "@/components/ui/chart"; 
 
  const chartConfig = {
    value: { label: "Questions" },
-   Correct: { label: "Correct", color: "hsl(var(--chart-2))" }, // Green
-   Incorrect: { label: "Incorrect", color: "hsl(var(--chart-5))" }, // Red
-   Unattempted: { label: "Unattempted", color: "hsl(var(--chart-3))" }, // Gray/Orange
+   Correct: { label: "Correct", color: "hsl(var(--chart-2))" }, 
+   Incorrect: { label: "Incorrect", color: "hsl(var(--chart-5))" }, 
+   Unattempted: { label: "Unattempted", color: "hsl(var(--chart-3))" }, 
  } satisfies ChartConfig;
 
 
@@ -47,8 +47,8 @@
    const attemptTimestampStr = searchParams.get('attemptTimestamp');
 
    const [results, setResults] = useState<TestResultSummary | null>(null);
-   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null); // Use GeneratedTest type
-   const [allAttempts, setAllAttempts] = useState<Array<TestResultSummary & { rank?: number }>>([]); // Store all attempts
+   const [testDefinition, setTestDefinition] = useState<GeneratedTest | null>(null); 
+   const [allAttempts, setAllAttempts] = useState<Array<TestResultSummary & { rank?: number }>>([]); 
    const [isLoading, setIsLoading] = useState(true);
    const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
    const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,7 @@
        if (!testCode || !userId || !attemptTimestampStr) {
          setError("Missing test information to load results.");
          setIsLoading(false);
-         setIsLoadingLeaderboard(false); // Stop leaderboard loading too
+         setIsLoadingLeaderboard(false); 
          return;
        }
        const attemptTimestamp = parseInt(attemptTimestampStr, 10);
@@ -77,23 +77,21 @@
        setError(null);
        setRankPrediction(null);
        try {
-         // Fetch report and definition in parallel
+         
          const [reportData, testDefData] = await Promise.all([
            getTestReport(userId, testCode, attemptTimestamp),
-           getGeneratedTestByCode(testCode).catch(() => null) // Don't fail if definition is missing
+           getGeneratedTestByCode(testCode).catch(() => null) 
          ]);
 
          if (!reportData) throw new Error(`Could not find results for this attempt.`);
 
-         // Ensure it's a chapterwise test for this page (or handle differently if needed)
+         
          if (testDefData && testDefData.testType !== 'chapterwise') {
-             console.warn("Viewing non-chapterwise results on chapterwise page. Redirecting...");
-             // Redirect to a generic results page or dashboard might be better
-             router.push('/progress'); // Example redirect
-             return;
+             console.warn("Viewing non-chapterwise results on chapterwise page. This page might need to be generalized or removed.");
+             // This page might need to be updated or redirected if it's strictly for chapterwise
          }
 
-         setTestDefinition(testDefData as ChapterwiseTestJson | null); // Cast to specific type if needed
+         setTestDefinition(testDefData as ChapterwiseTestJson | null); 
          setResults(reportData);
 
        } catch (err: any) {
@@ -103,21 +101,21 @@
        } finally {
          setIsLoading(false);
        }
-   }, [testCode, userId, attemptTimestampStr, router]); // Added router to dependencies
+   }, [testCode, userId, attemptTimestampStr, router]); 
 
-   // Fetch ALL attempts for ranking and stats
+   
    const fetchAllAttemptsData = useCallback(async () => {
        if (!testCode) return;
-       setIsLoadingLeaderboard(true); // Use this state to indicate loading all attempts
+       setIsLoadingLeaderboard(true); 
        try {
            const attempts = await getAllReportsForTest(testCode);
            const sorted = attempts.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
                                   .map((att, index) => ({ ...att, rank: index + 1 }));
-           setAllAttempts(sorted); // Store all ranked attempts
+           setAllAttempts(sorted); 
            console.log(`Fetched ${sorted.length} total attempts for ranking.`);
        } catch (err) {
             console.error("Error fetching all attempts:", err);
-           // Don't set main error, just log it or show a subtle indicator
+           
            toast({ variant: "destructive", title: "Ranking Error", description: "Could not load full ranking data."})
        } finally {
            setIsLoadingLeaderboard(false);
@@ -137,33 +135,33 @@
       }
       if (user) {
           fetchTestAndResults();
-          fetchAllAttemptsData(); // Fetch all attempts after main data
+          fetchAllAttemptsData(); 
       }
    }, [testCode, userId, attemptTimestampStr, authLoading, user, router, fetchTestAndResults, fetchAllAttemptsData]);
 
 
-   // --- Calculations & Placeholders ---
+   
    const testName = results?.testName || testDefinition?.name || 'Test Results';
    const duration = results?.duration || testDefinition?.duration || 0;
    const totalQs = results?.totalQuestions ?? 0;
    const totalPossibleMarks = results?.totalMarks || totalQs || 0;
 
-    // Calculate Rank and Percentile from all attempts
+    
     const userRankData = useMemo(() => allAttempts.find(entry => entry.userId === userId && entry.attemptTimestamp === parseInt(attemptTimestampStr ?? '0', 10)), [allAttempts, userId, attemptTimestampStr]);
     const userRank = userRankData?.rank ?? 'N/A';
     const totalStudents = allAttempts.length;
     const percentile = useMemo(() => {
        if (typeof userRank === 'number' && totalStudents > 0) {
-           return (((totalStudents - userRank) / totalStudents) * 100).toFixed(1); // Common percentile formula
+           return (((totalStudents - userRank) / totalStudents) * 100).toFixed(1); 
        }
        return 'N/A';
     }, [userRank, totalStudents]);
 
-   const accuracy = results?.percentage ? results.percentage.toFixed(1) : 'N/A'; // Use actual percentage
+   const accuracy = results?.percentage ? results.percentage.toFixed(1) : 'N/A'; 
    const timePerQues = totalQs > 0 && results?.timeTakenMinutes ? `${(results.timeTakenMinutes * 60 / totalQs).toFixed(0)}s` : 'N/A';
-   const chapterwiseSubject = (testDefinition as ChapterwiseTestJson)?.test_subject?.[0] || 'Subject'; // Get the single subject
+   const chapterwiseSubject = (testDefinition as ChapterwiseTestJson)?.test_subject?.[0] || 'Subject'; 
 
-   // Dynamic chart data
+   
    const overviewChartData = useMemo(() => [
         { name: 'Correct', value: results?.correct ?? 0, fill: 'hsl(var(--chart-2))' },
         { name: 'Incorrect', value: results?.incorrect ?? 0, fill: 'hsl(var(--chart-5))' },
@@ -171,13 +169,13 @@
    ], [results]);
 
 
-    // Top 5 Leaderboard Data (derived from all attempts)
+    
     const topLeaderboardData = useMemo(() => allAttempts.slice(0, 5), [allAttempts]);
 
-    // Topper Data (derived from all attempts)
+    
     const topperData = useMemo(() => {
         if (allAttempts.length === 0) return null;
-        const topper = allAttempts[0]; // Already sorted
+        const topper = allAttempts[0]; 
         return {
             name: topper.user?.name ?? 'Topper',
             score: topper.score ?? 0,
@@ -189,15 +187,15 @@
     }, [allAttempts]);
 
 
-    if (isLoading || authLoading || isLoadingLeaderboard) { // Combine loading states
-        // More detailed skeleton matching the new layout
+    if (isLoading || authLoading || isLoadingLeaderboard) { 
+        
         return (
             <div className="container mx-auto py-6 px-4 max-w-7xl space-y-6">
-                {/* Header Skeleton */}
+                
                 <Skeleton className="h-8 w-1/3 mb-4" />
                 <Skeleton className="h-6 w-1/2 mb-6" />
 
-                {/* Top Metrics Skeleton */}
+                
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <Skeleton className="h-24 w-full" />
                     <Skeleton className="h-24 w-full" />
@@ -205,17 +203,17 @@
                     <Skeleton className="h-24 w-full" />
                 </div>
 
-                 {/* Leaderboard & Overview Skeleton */}
+                 
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                     <Skeleton className="h-64 md:col-span-1" /> {/* Leaderboard */}
-                     <Skeleton className="h-64 md:col-span-1" /> {/* Overview Chart */}
-                     <Skeleton className="h-64 md:col-span-1" /> {/* You vs Topper */}
+                     <Skeleton className="h-64 md:col-span-1" /> 
+                     <Skeleton className="h-64 md:col-span-1" /> 
+                     <Skeleton className="h-64 md:col-span-1" /> 
                  </div>
 
-                 {/* Section Analysis Skeleton */}
-                 <Skeleton className="h-40 w-full" /> {/* Adjusted height */}
+                 
+                 <Skeleton className="h-40 w-full" /> 
 
-                  {/* Attempted Efficiency Skeleton */}
+                  
                  <Skeleton className="h-60 w-full" />
              </div>
         );
@@ -250,15 +248,15 @@
    return (
       <>
        <Script
-          id="mathjax-script-results" // Unique ID
+          id="mathjax-script-results" 
           src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
           strategy="lazyOnload"
         />
-     <div className="container mx-auto py-6 px-4 max-w-7xl space-y-6"> {/* Increased max-width */}
-       {/* Header Area */}
+     <div className="container mx-auto py-6 px-4 max-w-7xl space-y-6"> 
+       
         <div className="flex justify-between items-center flex-wrap gap-y-2">
             <div>
-                {/* Breadcrumbs */}
+                
                 <p className="text-sm text-muted-foreground">
                     <Link href="/" className="hover:text-primary">Home</Link> &gt;
                     <Link href="/progress" className="hover:text-primary"> My Tests</Link> &gt;
@@ -276,7 +274,7 @@
              </div>
         </div>
 
-        {/* Top Metrics Cards */}
+        
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="text-center p-4 bg-card border hover:shadow-md transition-shadow">
                 <CardDescription className="text-xs mb-1 flex items-center justify-center gap-1 text-muted-foreground"><BarChart2 className="h-3 w-3"/> SCORE</CardDescription>
@@ -299,9 +297,9 @@
             </Card>
         </div>
 
-        {/* Leaderboard, Overview, You vs Topper Section */}
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             {/* Leaderboard */}
+             
              <Card className="md:col-span-1">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="text-base font-semibold">Leaderboard</CardTitle>
@@ -325,7 +323,7 @@
                  </CardContent>
              </Card>
 
-            {/* Overview Chart */}
+            
             <Card className="md:col-span-1 flex flex-col">
                 <CardHeader className="items-center pb-0">
                     <CardTitle>Overview</CardTitle>
@@ -336,7 +334,7 @@
                         <PieChart>
                             <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                             <Pie data={overviewChartData} dataKey="value" nameKey="name" innerRadius={60} strokeWidth={5}>
-                                <Label
+                                <RechartsLabel
                                     content={({ viewBox }) => {
                                     if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                                         return (
@@ -350,13 +348,13 @@
                                         </text>
                                         )
                                     }
+                                    return null;
                                     }}
                                 />
                             </Pie>
-                        </PieChart>
-                     </ChartContainer>
+                         </ChartContainer>
                 </CardContent>
-                 <CardFooter className="flex-col gap-2 text-sm pt-4"> {/* Increased pt */}
+                 <CardFooter className="flex-col gap-2 text-sm pt-4"> 
                     <div className="flex items-center gap-2 font-medium leading-none">
                         Hover over chart for details
                      </div>
@@ -366,7 +364,7 @@
                  </CardFooter>
             </Card>
 
-            {/* You vs Topper */}
+            
             <Card className="md:col-span-1">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold">You vs Topper</CardTitle>
@@ -398,14 +396,14 @@
              </Card>
         </div>
 
-        {/* Subject Performance Card (Chapterwise) */}
+        
         <Card>
             <CardHeader>
                 <CardTitle>Subject Performance: {chapterwiseSubject}</CardTitle>
                  <CardDescription>Your performance in this specific chapter test.</CardDescription>
              </CardHeader>
              <CardContent className="space-y-4">
-                {/* Simplified Performance Summary */}
+                
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                      <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20">
                          <Edit3 className="h-5 w-5 text-blue-600 mx-auto mb-1"/>
@@ -428,7 +426,7 @@
                          <p className="text-xs text-muted-foreground">TIME TAKEN</p>
                      </div>
                  </div>
-                {/* Simple message */}
+                
                  <p className="text-sm text-muted-foreground my-4 text-center">
                     You scored <span className="font-semibold text-primary">{results.score?.toFixed(0)}/{totalPossibleMarks}</span> with an accuracy of <span className="font-semibold text-primary">{accuracy}%</span>. Keep practicing!
                 </p>
@@ -436,7 +434,7 @@
             </CardContent>
         </Card>
 
-        {/* Attempted Efficiency - Simplified for Chapterwise */}
+        
         <Card>
              <CardHeader>
                 <CardTitle>Attempt Breakdown</CardTitle>
@@ -444,19 +442,19 @@
              </CardHeader>
              <CardContent className="space-y-4">
                  <div className="grid grid-cols-3 gap-4 text-center">
-                    {/* Correct */}
+                    
                     <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
                          <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.correct} <span className="text-xs font-normal">of {totalQs}</span></p>
                          <p className="text-xs text-muted-foreground">CORRECT</p>
                     </div>
-                    {/* Incorrect */}
+                    
                     <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
                          <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.incorrect} <span className="text-xs font-normal">of {totalQs}</span></p>
                          <p className="text-xs text-muted-foreground">INCORRECT</p>
                     </div>
-                     {/* Unattempted */}
+                     
                     <div className="p-3 rounded-lg border bg-gray-100 dark:bg-gray-800/20">
                          <HelpCircle className="h-5 w-5 text-gray-500 mx-auto mb-1"/>
                         <p className="font-semibold">{results.unanswered} <span className="text-xs font-normal">of {totalQs}</span></p>
@@ -467,7 +465,7 @@
         </Card>
 
 
-        {/* Action Buttons */}
+        
         <div className="flex justify-center gap-4 mt-8">
             <Button variant="outline" asChild>
                 <Link href={`/chapterwise-test-review/${results.testCode}?userId=${user?.id}&attemptTimestamp=${results.attemptTimestamp}`}>
@@ -480,13 +478,13 @@
         </div>
 
 
-        {/* Ranking Dialog - If testDefinition exists */}
+        
         {testDefinition && (
             <TestRankingDialog
               isOpen={isRankingDialogOpen}
               onClose={() => setIsRankingDialogOpen(false)}
               test={testDefinition}
-              // Pass function to fetch ALL attempts for the ranking dialog
+              
               fetchTestAttempts={() => getAllReportsForTest(testCode)}
             />
          )}
