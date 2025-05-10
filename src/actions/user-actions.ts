@@ -1,7 +1,7 @@
 // src/actions/user-actions.ts
 'use server';
 
-import type { UserProfile, AcademicStatus, UserModel, ContextUser } from '@/types';
+import type { UserProfile, AcademicStatus, UserModel, ContextUser, UserReferralStats } from '@/types';
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -21,35 +21,28 @@ const defaultAdminPassword = process.env.ADMIN_PASSWORD || 'Soham@1234';
 async function ensureDirExists(dirPath: string): Promise<boolean> {
   try {
     await fs.mkdir(dirPath, { recursive: true });
-    // console.log(`Directory ensured: ${dirPath}`); // Reduced logging
     return true;
   } catch (error: any) {
     if (error.code !== 'EEXIST') {
-      // Special handling for publicAvatarsPath in serverless-like environments
       if (dirPath === publicAvatarsPath && (error.code === 'EACCES' || error.code === 'EROFS' || (process.env.NETLIFY || process.env.VERCEL))) {
         console.warn(`Warning: Could not create directory ${dirPath} (likely serverless environment, read-only filesystem for public assets at runtime). Avatar uploads requiring server-side directory creation will fail.`);
-        return false; // Indicate failure to create, but don't throw for this specific path
+        return false; 
       }
       console.error(`Error creating directory ${dirPath}:`, error);
-      // For critical data paths, still throw.
       if (dirPath === dataBasePath || dirPath === path.dirname(usersFilePath)) {
            throw new Error(`Failed to create critical data directory: ${dirPath}. Reason: ${error.message}`);
       }
       return false;
     }
-    // console.log(`Directory already exists: ${dirPath}`); // Reduced logging
     return true; 
   }
 }
 
 
-// Renamed to writeUsersToFile to avoid conflict with the internal user-actions.ts writeUsers
 async function writeUsersToFile(users: UserProfile[]): Promise<boolean> {
   try {
-    // Ensure the 'src/data' directory exists before trying to write users.json
     if (!await ensureDirExists(path.dirname(usersFilePath))) {
         console.error('Failed to ensure users directory exists for users.json');
-        // This is a critical failure if users.json cannot be written.
         throw new Error('Fatal: Cannot create directory for users.json.');
     }
     await fs.writeFile(usersFilePath, JSON.stringify(users, null, 2), 'utf-8');
@@ -59,7 +52,6 @@ async function writeUsersToFile(users: UserProfile[]): Promise<boolean> {
     return false;
   }
 }
-// Export for potential direct use if absolutely necessary, but prefer specific actions
 export { writeUsersToFile as internalWriteUsers };
 
 
@@ -69,29 +61,32 @@ const getRoleFromEmail = (email: string | null): 'Admin' | 'User' => {
     return emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower) ? 'Admin' : 'User';
 };
 
+// Helper function to generate a unique referral code
+function generateReferralCode(): string {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) { // 8-character code
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return `NEXUS-${result}`;
+}
 
-// Renamed to avoid conflict and make it clear this is internal
 async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
-    // console.log("Reading and initializing users from users.json..."); // Reduced logging
     let users: UserProfile[] = [];
     let writeNeeded = false;
 
     try { 
-        await ensureDirExists(dataBasePath); // Critical, should succeed or throw
-
-        // Attempt to ensure publicAvatarsPath exists, but don't fail hard if it can't be created (e.g., serverless)
+        await ensureDirExists(dataBasePath); 
         const avatarsPathExistsOrCreatable = await ensureDirExists(publicAvatarsPath);
         if (!avatarsPathExistsOrCreatable) {
             console.warn("Public avatars directory could not be ensured. Local avatar saving might be disabled.");
         }
-
 
         try {
             await fs.access(usersFilePath);
             const fileContent = await fs.readFile(usersFilePath, 'utf-8');
             const parsedUsers = JSON.parse(fileContent);
             if (!Array.isArray(parsedUsers)) {
-                console.error('users.json does not contain a valid array. Re-initializing.');
                 users = []; 
                 writeNeeded = true;
             } else {
@@ -99,11 +94,9 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             }
         } catch (error: any) {
             if (error.code === 'ENOENT') {
-                console.warn('users.json not found. Creating file with default admin.');
                 writeNeeded = true;
                 users = []; 
             } else {
-                console.error('Error reading or parsing users.json:', error);
                 users = [];
                 writeNeeded = true;
             }
@@ -112,7 +105,6 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
         const processedUsers: UserProfile[] = [];
         for (const user of users) {
             if (typeof user !== 'object' || user === null || (typeof user.id !== 'string' && typeof user.id !== 'number')) {
-                console.warn("Skipping invalid user entry:", user);
                 writeNeeded = true;
                 continue;
             }
@@ -135,7 +127,6 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
                 try {
                     const randomPassword = Math.random().toString(36).slice(-8);
                     currentUser.password = await bcrypt.hash(randomPassword, SALT_ROUNDS); userModified = true;
-                    console.log(`Generated and hashed new random password for user ${currentUser.email || currentUser.id}`);
                 } catch (hashError) { console.error(`CRITICAL: Failed to hash temporary password for ${currentUser.email || currentUser.id}`, hashError); }
             }
             if (currentUser.expiry_date && !(typeof currentUser.expiry_date === 'string' && !isNaN(Date.parse(currentUser.expiry_date)))) {
@@ -162,11 +153,17 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             if (currentUser.avatarUrl === undefined) { currentUser.avatarUrl = null; userModified = true; }
             if (currentUser.class === undefined) { currentUser.class = null; userModified = true; }
             if (currentUser.phone === undefined) { currentUser.phone = null; userModified = true; }
-            if (currentUser.referral === undefined) { currentUser.referral = ''; userModified = true; }
             if (currentUser.totalPoints === undefined) { currentUser.totalPoints = 0; userModified = true; }
             if (currentUser.targetYear === undefined) { currentUser.targetYear = null; userModified = true; }
             if (currentUser.telegramId === undefined) { currentUser.telegramId = null; userModified = true; }
             if (currentUser.telegramUsername === undefined) { currentUser.telegramUsername = null; userModified = true; }
+            // Initialize referral fields for existing users
+            if (currentUser.referralCode === undefined) { currentUser.referralCode = generateReferralCode(); userModified = true; }
+            if (currentUser.referredByCode === undefined) { currentUser.referredByCode = null; userModified = true;}
+            if (currentUser.referralStats === undefined) {
+                currentUser.referralStats = { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 };
+                userModified = true;
+            }
 
 
             processedUsers.push(currentUser);
@@ -199,6 +196,8 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             if (currentAdmin.role !== 'Admin') { currentAdmin.role = 'Admin'; adminModified = true; }
             if (currentAdmin.model !== 'combo') { currentAdmin.model = 'combo'; adminModified = true; }
             if (currentAdmin.expiry_date !== '2099-12-31T00:00:00.000Z') { currentAdmin.expiry_date = '2099-12-31T00:00:00.000Z'; adminModified = true; }
+            if (!currentAdmin.referralCode) { currentAdmin.referralCode = generateReferralCode(); adminModified = true; }
+            if (!currentAdmin.referralStats) { currentAdmin.referralStats = { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 }; adminModified = true; }
             if (adminModified) writeNeeded = true;
         } else {
             if (!adminPasswordHash) { 
@@ -208,8 +207,12 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             users.push({
                 id: uuidv4(), email: primaryAdminEmail, password: adminPasswordHash, name: 'Admin User (Primary)',
                 phone: '0000000000', class: 'Dropper', model: 'combo', role: 'Admin',
-                expiry_date: '2099-12-31T00:00:00.000Z', createdAt: new Date().toISOString(), avatarUrl: null, referral: '', totalPoints: 0, targetYear: null,
+                expiry_date: '2099-12-31T00:00:00.000Z', createdAt: new Date().toISOString(), avatarUrl: null,
+                totalPoints: 0, targetYear: null,
                 telegramId: null, telegramUsername: null,
+                referralCode: generateReferralCode(),
+                referredByCode: null,
+                referralStats: { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 },
             });
             writeNeeded = true;
         }
@@ -218,10 +221,6 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
             const writeSuccess = await writeUsersToFile(users);
             if (!writeSuccess) {
                 console.error("CRITICAL: Failed to write updated users.json file during initialization.");
-                // Depending on deployment, this might be acceptable if users.json is read-only after build
-                // but for local dev or systems that expect writes, this is an issue.
-                // For Netlify/Vercel, this write will likely fail at runtime for new users.
-                // For now, we throw only if critical data path creation failed earlier.
             }
         }
         return users;
@@ -230,7 +229,6 @@ async function readUsersWithPasswordsInternal(): Promise<UserProfile[]> {
         throw new Error(`User data system initialization failed: ${initError.message}`);
     }
 }
-// Export readUsersWithPasswordsInternal for internal use by AuthContext and other server actions
 export { readUsersWithPasswordsInternal };
 
 
@@ -256,6 +254,17 @@ export async function findUserByEmailInternal(email: string | null): Promise<Use
   }
 }
 
+export async function findUserByReferralCode(referralCode: string): Promise<UserProfile | null> {
+    if (!referralCode) return null;
+    try {
+        const users = await readUsersWithPasswordsInternal();
+        return users.find(u => u.referralCode === referralCode) || null;
+    } catch (error: any) {
+        console.error(`Error finding user by referral code ${referralCode}:`, error.message);
+        return null;
+    }
+}
+
 export async function findUserByTelegramIdInternal(telegramId: string): Promise<UserProfile | null> {
     if (!telegramId) return null;
     try {
@@ -269,7 +278,6 @@ export async function findUserByTelegramIdInternal(telegramId: string): Promise<
 
 async function saveAvatarLocally(userId: string, avatarFile: File): Promise<string | null> {
     try {
-        // Attempt to ensure directory, but don't fail hard if it's a serverless environment
         if (!await ensureDirExists(publicAvatarsPath)) {
              console.warn(`Public avatars directory (${publicAvatarsPath}) could not be ensured. Avatar for ${userId} will not be saved. This is expected in some serverless environments.`);
              return null;
@@ -281,11 +289,10 @@ async function saveAvatarLocally(userId: string, avatarFile: File): Promise<stri
         const filePath = path.join(publicAvatarsPath, filename);
 
         await fs.writeFile(filePath, fileBuffer);
-        console.log(`Avatar saved to public path for user ${userId}: ${filePath}`);
         return filename;
     } catch (error) {
         console.error(`Error saving avatar locally for user ${userId}:`, error);
-        return null; // Return null on any error during avatar saving
+        return null;
     }
 }
 
@@ -294,11 +301,9 @@ async function deleteAvatarLocally(filename: string): Promise<boolean> {
         const filePath = path.join(publicAvatarsPath, filename);
         await fs.access(filePath); 
         await fs.unlink(filePath);
-        // console.log(`Deleted local public avatar: ${filePath}`); // Reduced logging
         return true;
     } catch (error: any) {
         if (error.code === 'ENOENT') {
-            // console.warn(`Public avatar file not found for deletion: ${filename}`); // Reduced logging
             return true; 
         }
         console.error(`Error deleting local public avatar ${filename}:`, error);
@@ -307,7 +312,7 @@ async function deleteAvatarLocally(filename: string): Promise<boolean> {
 }
 
 export async function addUserToJson(
-    newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string }
+    newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string; referredByCode?: string | null }
 ): Promise<{ success: boolean; message?: string; user?: Omit<UserProfile, 'password'> }> {
     try {
         if (!newUserProfileData.email || !newUserProfileData.password) {
@@ -347,20 +352,39 @@ export async function addUserToJson(
             role: assignedRole, 
             expiry_date: expiryDate,
             createdAt: new Date().toISOString(),
-            avatarUrl: null, // Avatars are handled separately or not at all on initial add
-            referral: '',
+            avatarUrl: null, 
             totalPoints: 0,
             targetYear: newUserProfileData.targetYear || null,
             telegramId: null, 
             telegramUsername: null,
+            referralCode: generateReferralCode(),
+            referredByCode: newUserProfileData.referredByCode || null,
+            referralStats: { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 },
         };
 
-        let users = await readUsersWithPasswordsInternal(); // This also initializes avatars path if possible
+        let users = await readUsersWithPasswordsInternal();
         if (users.some(u => u.email?.toLowerCase() === emailLower)) {
             return { success: false, message: 'User with this email already exists.' };
         }
 
         users.push(userToAdd);
+
+        // Handle referral logic if a code was used
+        if (newUserProfileData.referredByCode) {
+            const referrerIndex = users.findIndex(u => u.referralCode === newUserProfileData.referredByCode);
+            if (referrerIndex !== -1) {
+                if (!users[referrerIndex].referralStats) { // Initialize if undefined
+                    users[referrerIndex].referralStats = { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 };
+                }
+                // Increment based on the new user's model (which is 'free' by default on signup)
+                users[referrerIndex].referralStats!.referred_free += 1; 
+                // Future: When userToAddupgrades plan, update referrer's specific tier count
+                console.log(`Referrer ${users[referrerIndex].email} stats updated for new ${userToAdd.model} referral.`);
+            } else {
+                console.warn(`Referral code ${newUserProfileData.referredByCode} used, but referrer not found.`);
+            }
+        }
+
         const success = await writeUsersToFile(users);
 
         if (success) {
@@ -375,12 +399,11 @@ export async function addUserToJson(
     }
 }
 
-// Modified to accept FormData for avatar updates
 export async function updateUserInJson(
-    userId: string, // Pass userId directly
-    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'>>, // Data excluding non-editable and password
-    avatarFile?: File | null, // Optional avatar file
-    removeAvatarFlag?: boolean // Flag to indicate avatar removal
+    userId: string, 
+    updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername'>>,
+    avatarFile?: File | null, 
+    removeAvatarFlag?: boolean 
 ): Promise<{ success: boolean; message?: string, user?: Omit<UserProfile, 'password'> }> {
     try {
         if (!userId || typeof userId !== 'string') {
@@ -401,10 +424,8 @@ export async function updateUserInJson(
             if (existingUser.avatarUrl) { await deleteAvatarLocally(existingUser.avatarUrl); }
             newAvatarFilename = await saveAvatarLocally(userId, avatarFile);
             if (!newAvatarFilename && existingUser.avatarUrl) {
-                 console.warn("Failed to save new avatar, old avatar was removed or save failed. Setting avatar to null.");
                  newAvatarFilename = null;
             } else if (!newAvatarFilename) {
-                 console.warn("Failed to save new avatar. Setting avatar to null.");
                  newAvatarFilename = null;
             }
         } else if (removeAvatarFlag && existingUser.avatarUrl) {
@@ -414,9 +435,8 @@ export async function updateUserInJson(
         
         const userWithUpdatesApplied: UserProfile = {
             ...existingUser,
-            ...updatedData, // Apply other updates
-            avatarUrl: newAvatarFilename, // Set the new avatar filename
-            // Ensure role isn't accidentally changed here unless explicitly part of updatedData
+            ...updatedData, 
+            avatarUrl: newAvatarFilename, 
             role: updatedData.role ?? existingUser.role,
         };
         
@@ -595,7 +615,6 @@ export async function checkUserPlanAndExpiry(userId: string): Promise<{ isPlanVa
     }
 }
 
-// Modified to accept UserProfile for easier direct saving, e.g., from Telegram auth
 export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
   try {
     let users = await readUsersWithPasswordsInternal();
@@ -604,14 +623,13 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
     if (userIndex !== -1) {
       const existingUser = users[userIndex];
       let newPasswordHash = userData.password ?? existingUser.password;
-      // Only re-hash if a new plain password is provided and it's not already a hash
       if (userData.password && !userData.password.startsWith('$2a$') && !userData.password.startsWith('$2b$')) {
           newPasswordHash = await bcrypt.hash(userData.password, SALT_ROUNDS);
       }
 
       users[userIndex] = {
           ...existingUser,
-          ...userData, // This will overwrite existing fields with userData's fields
+          ...userData, 
           password: newPasswordHash, 
           role: userData.role ?? existingUser.role ?? getRoleFromEmail(userData.email),
           totalPoints: userData.totalPoints ?? existingUser.totalPoints ?? 0,
@@ -620,9 +638,11 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
           targetYear: userData.targetYear !== undefined ? userData.targetYear : existingUser.targetYear,
           telegramId: userData.telegramId !== undefined ? userData.telegramId : existingUser.telegramId,
           telegramUsername: userData.telegramUsername !== undefined ? userData.telegramUsername : existingUser.telegramUsername,
+          referralCode: userData.referralCode ?? existingUser.referralCode ?? generateReferralCode(),
+          referredByCode: userData.referredByCode !== undefined ? userData.referredByCode : existingUser.referredByCode,
+          referralStats: userData.referralStats ?? existingUser.referralStats ?? { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 },
       };
     } else {
-      // New user, ensure password is hashed
       const assignedRole = userData.role || getRoleFromEmail(userData.email);
       let hashedPassword = userData.password;
        if (hashedPassword && !hashedPassword.startsWith('$2a$') && !hashedPassword.startsWith('$2b$')) {
@@ -630,7 +650,6 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
        } else if (!hashedPassword) {
             const randomPassword = uuidv4(); 
             hashedPassword = await bcrypt.hash(randomPassword, SALT_ROUNDS);
-            console.warn(`No password provided for new user ${userData.email || userData.id}. A random password has been generated.`);
        }
       users.push({
         ...userData,
@@ -642,6 +661,9 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
         targetYear: userData.targetYear !== undefined ? userData.targetYear : null,
         telegramId: userData.telegramId || null,
         telegramUsername: userData.telegramUsername || null,
+        referralCode: userData.referralCode || generateReferralCode(),
+        referredByCode: userData.referredByCode || null,
+        referralStats: userData.referralStats || { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 },
       });
     }
     return await writeUsersToFile(users);
@@ -650,4 +672,3 @@ export async function saveUserToJson(userData: UserProfile): Promise<boolean> {
     return false;
   }
 }
-

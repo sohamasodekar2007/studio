@@ -8,20 +8,19 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    readUsersWithPasswordsInternal, // Use the internal function to get hash
+    readUsersWithPasswordsInternal,
     saveUserToJson,
     readUsers,
     getUserById,
     addUserToJson,
-    updateUserInJson, // Already imported
-    deleteUserFromJson, // Already imported
-    updateUserPasswordInJson, // Already imported
-    updateUserRole, // Ensure updateUserRole is imported
+    updateUserInJson, 
+    deleteUserFromJson, 
+    updateUserPasswordInJson, 
+    updateUserRole, 
     findUserByEmailInternal,
-} from '@/actions/user-actions';
-// Removed direct findUserByEmail import from auth-actions
-// import { findUserByEmail as findUserByEmailFromAuth } from '@/actions/auth-actions';
-import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
+    findUserByReferralCode, // Import this new action
+} from '@/actions/user-actions'; 
+import { sendWelcomeEmail } from '@/actions/otp-actions'; 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -40,13 +39,14 @@ interface AuthContextProps {
     displayName?: string,
     phoneNumber?: string | null,
     academicStatus?: UserAcademicStatus | null,
-    targetYear?: string | null
+    targetYear?: string | null,
+    referralCodeUsed?: string | null // Added referralCodeUsed
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void;
-  setUser: React.Dispatch<React.SetStateAction<ContextUser>>; // Expose setUser for external auth providers
-  setLoading: React.Dispatch<React.SetStateAction<boolean>>; // Expose setLoading
-  mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; // Expose mapping function
+  setUser: React.Dispatch<React.SetStateAction<ContextUser>>; 
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>; 
+  mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; 
 
 }
 
@@ -93,7 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           targetYear: userProfile.targetYear,
           telegramId: userProfile.telegramId,
           telegramUsername: userProfile.telegramUsername,
-          totalPoints: userProfile.totalPoints
+          totalPoints: userProfile.totalPoints,
+          referralCode: userProfile.referralCode, // Ensure referralCode is mapped
+          referralStats: userProfile.referralStats, // Ensure referralStats are mapped
       };
   }, []);
 
@@ -117,62 +119,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkUserSession = async () => {
         setLoading(true);
-        console.log("AuthProvider: Checking local session...");
         try {
-            // Initialize users.json if needed - this ensures the file and admin user exist
-            await readUsersWithPasswordsInternal(); // This will also handle initial admin creation/validation
-            console.log("AuthProvider: users.json initialized/validated.");
+            await readUsersWithPasswordsInternal(); 
 
             const storedUserJson = localStorage.getItem('loggedInUser');
             if (!storedUserJson) {
-                console.log("AuthProvider: No user found in local storage.");
                 setUser(null);
                 setLoading(false);
                 return;
             }
 
-            console.log("AuthProvider: User found in local storage, validating...");
             const storedUser: Omit<UserProfile, 'password'> = JSON.parse(storedUserJson);
 
             if (!storedUser || !storedUser.id || !storedUser.email) {
-                 console.warn("AuthProvider: Invalid user data in local storage.");
                  await logoutCallback("Invalid session data. Please log in again.");
                  setLoading(false);
                  return;
             }
 
-            // Fetch the LATEST user profile from the backend (users.json)
-            console.log(`AuthProvider: Fetching latest profile for user ID: ${storedUser.id}`);
-            const latestProfile = await getUserById(storedUser.id); // getUserById returns Omit<UserProfile, 'password'>
+            const latestProfile = await getUserById(storedUser.id); 
 
             if (!latestProfile) {
-                 console.warn(`AuthProvider: User ID ${storedUser.id} not found in backend. Logging out.`);
                  await logoutCallback("Your account could not be found. Please log in again.");
                  setLoading(false);
                  return;
             }
-            console.log("AuthProvider: Latest profile fetched:", latestProfile.email, "Role:", latestProfile.role, "Model:", latestProfile.model);
 
-
-            // Compare critical fields that might force a re-login if changed by an admin
             const profileChangedCritically = storedUser.model !== latestProfile.model ||
                                    storedUser.role !== latestProfile.role ||
-                                   // Expiry date comparison needs care if one is null
                                    (storedUser.expiry_date || null) !== (latestProfile.expiry_date || null);
 
 
             if (profileChangedCritically) {
-                  console.warn("AuthProvider: Critical profile data (role, model, expiry) changed. Forcing re-login.");
                   await logoutCallback("Your account details have been updated. Please log in again for changes to take effect.");
                   setLoading(false);
                   return;
             }
-
-            // If only non-critical data like name or avatar changed, update context without forcing logout
              const updatedContextUser = mapUserProfileToContextUser(latestProfile);
              setUser(updatedContextUser);
-             localStorage.setItem('loggedInUser', JSON.stringify(latestProfile)); // Update local storage with latest non-critical info
-             console.log(`AuthProvider: Session loaded and validated for ${latestProfile.email}.`);
+             localStorage.setItem('loggedInUser', JSON.stringify(latestProfile)); 
 
         } catch (e: any) {
              console.error("AuthProvider: Error during session check:", e);
@@ -180,11 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              await logoutCallback("Session validation error. Please try logging in again.");
         } finally {
             setLoading(false);
-            console.log("AuthProvider: Session check complete.");
         }
     };
     checkUserSession();
-  }, [isMounted, mapUserProfileToContextUser, logoutCallback]); // logoutCallback is now a dependency
+  }, [isMounted, mapUserProfileToContextUser, logoutCallback]); 
 
 
   const refreshUser = useCallback(async () => {
@@ -209,7 +193,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
  const login = useCallback(async (email: string, password?: string) => {
     if (!isMounted) {
-        console.warn("Login attempt before component mount.");
         return;
     }
     if (!password) {
@@ -217,7 +200,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Password is required.');
     }
     setLoading(true);
-    console.log(`AuthProvider: Attempting login for ${email}`);
     try {
         const users = await readUsersWithPasswordsInternal();
         const foundUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
@@ -232,19 +214,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 const isAdmin = contextUser?.role === 'Admin';
                 const redirectPath = isAdmin ? '/admin' : '/';
-                console.log(`AuthProvider: Login successful for ${email}. Redirecting to ${redirectPath}.`);
                 router.push(redirectPath);
                 toast({ title: "Login Successful", description: `Welcome back, ${contextUser?.name || contextUser?.email}!` });
              } else {
-                 console.warn(`AuthProvider: Password mismatch for ${email}.`);
                  throw new Error('Login failed: Invalid email or password.');
              }
         } else {
-            console.warn(`AuthProvider: User ${email} not found or password not set.`);
             throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
-      console.error("Simulated login failed:", error); // Keep general log
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
       throw error;
     } finally {
@@ -259,7 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     displayName?: string,
     phoneNumber?: string | null,
     academicStatus?: UserAcademicStatus | null,
-    targetYear?: string | null
+    targetYear?: string | null,
+    referralCodeUsed?: string | null // Added referralCodeUsed
   ) => {
      if (!isMounted) return;
     if (!password) {
@@ -273,16 +252,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (existingUser) {
         throw new Error('Signup failed: Email already exists.');
       }
-      const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referral' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string } = {
+      const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string; referredByCode?: string | null } = {
         email: email,
         password: password,
         name: displayName || null,
         phone: phoneNumber || null,
         class: academicStatus || null,
-        model: 'free', // Default to free, admin can change later
-        role: 'User', // Default new signups to User
+        model: 'free', 
+        role: 'User', 
         expiry_date: null,
         targetYear: targetYear || null,
+        referredByCode: referralCodeUsed || null, // Pass the used referral code
       };
        const saveResult = await addUserToJson(newUserProfileData);
 
@@ -290,14 +270,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
          throw new Error(saveResult.message || 'Could not create user profile.');
        }
 
-      // Send welcome email (simulation)
-      if (saveResult.user.email) { // Check if email exists before sending
+      if (saveResult.user.email) { 
           await sendWelcomeEmail(saveResult.user.email, saveResult.user.name);
       }
 
        const contextUser = mapUserProfileToContextUser(saveResult.user);
        setUser(contextUser);
-        if (contextUser) { // Check if contextUser is not null
+        if (contextUser) { 
             localStorage.setItem('loggedInUser', JSON.stringify(saveResult.user));
         }
 
@@ -305,7 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.push('/');
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
-      throw error; // Re-throw for component to handle if needed
+      throw error; 
     } finally {
       setLoading(false);
     }
@@ -320,11 +299,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const publicRoutes = [
         '/', '/help', '/terms', '/privacy', '/tests', '/dpp', '/pyq-dpps', '/take-test',
         '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review',
-        '/challenge-test', '/challenge-test-result', '/challenge-test-review'
+        '/challenge-test', '/challenge-test-result', '/challenge-test-review',
+        '/find-friends', '/friends-followers', '/friends-following', '/friends-compare',
+        '/notebooks', '/leaderboard', '/profile', // Added profile, notebooks, leaderboard as public access (content shown conditionally)
     ];
 
      const isPublicRoute = publicRoutes.some(route => {
-         // Handle dynamic segments by checking if pathname starts with a public route that isn't just '/'
          if (route !== '/' && pathname.startsWith(route + '/')) return true;
          return pathname === route;
      });
@@ -337,9 +317,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access the admin panel." });
         router.push('/');
       }
-    } else { // No user logged in
+    } else { 
       if (!isAuthPage && !isPublicRoute) {
-        console.log(`AuthProvider: No user, not auth/public page. Current path: ${pathname}. Redirecting to login.`);
         const redirectQuery = pathname ? `?redirect=${encodeURIComponent(pathname)}` : '';
         router.push(`/auth/login${redirectQuery}`);
       }

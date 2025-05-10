@@ -21,27 +21,35 @@ export const classLevels = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "
 export type ClassLevel = typeof classLevels[number];
 
 // Interface for User Data (Stored in users.json)
+export interface UserReferralStats {
+  referred_free: number;
+  referred_chapterwise: number;
+  referred_full_length: number;
+  referred_combo: number;
+}
 export interface UserProfile {
   id: string;
   email: string | null;
-  password?: string; 
+  password?: string;
   name: string | null;
   phone: string | null;
-  avatarUrl?: string | null; 
-  referral?: string; 
+  avatarUrl?: string | null;
   class: AcademicStatus | null; // This is the academic status
-  model: UserModel; 
-  role: 'Admin' | 'User'; 
-  expiry_date: string | null; 
-  createdAt?: string; 
-  totalPoints?: number; 
-  targetYear?: string | null; 
-  telegramId?: string | null; // Added for Telegram integration
-  telegramUsername?: string | null; // Added for Telegram integration
+  model: UserModel;
+  role: 'Admin' | 'User';
+  expiry_date: string | null;
+  createdAt?: string;
+  totalPoints?: number;
+  targetYear?: string | null;
+  telegramId?: string | null;
+  telegramUsername?: string | null;
+  referralCode?: string | null; // Unique referral code for this user
+  referredByCode?: string | null; // Referral code this user signed up with
+  referralStats?: UserReferralStats; // Stats about users referred by this user
 }
 
 // Type for Context User (less sensitive data, includes avatar and points)
-export type ContextUser = Omit<UserProfile, 'password'> | null; 
+export type ContextUser = Omit<UserProfile, 'password'> | null;
 
 
 // ---- Question Bank Types ----
@@ -52,7 +60,7 @@ export type QuestionType = typeof questionTypes[number];
 export const difficultyLevels = ["Easy", "Medium", "Hard"] as const;
 export type DifficultyLevel = typeof difficultyLevels[number];
 
-export const pyqShifts = ["S1", "S2", "Single"] as const; 
+export const pyqShifts = ["S1", "S2", "Single"] as const;
 export type PyqShift = typeof pyqShifts[number];
 
 
@@ -62,13 +70,13 @@ export interface QuestionBankItem {
   subject: string;
   lesson: string;
   class: ClassLevel;
-  examType: ExamOption; 
+  examType: ExamOption;
   difficulty: DifficultyLevel;
   tags: string[];
   type: QuestionType;
   question: {
     text?: string | null;
-    image?: string | null; 
+    image?: string | null;
   };
   options: {
     A: string;
@@ -79,17 +87,17 @@ export interface QuestionBankItem {
   correct: "A" | "B" | "C" | "D";
   explanation: {
     text?: string | null;
-    image?: string | null; 
+    image?: string | null;
   };
-  marks: number; 
-  isPyq?: boolean; 
+  marks: number;
+  isPyq?: boolean;
   pyqDetails?: {
-    exam: ExamOption; 
-    date: string; 
-    shift: PyqShift; 
+    exam: ExamOption;
+    date: string;
+    shift: PyqShift;
   } | null;
-  created: string; 
-  modified: string; 
+  created: string;
+  modified: string;
 }
 
 // Interface for a single question object within a bulk uploaded JSON
@@ -115,7 +123,7 @@ export interface BulkQuestionInput {
 // ---- Generated Test Definition Types ----
 
 // Reusing Academic Status for Audience
-export type AudienceType = AcademicStatus; 
+export type AudienceType = AcademicStatus;
 
 // Define Test Streams
 export const testStreams = ["PCM", "PCB"] as const;
@@ -124,40 +132,40 @@ export type TestStream = typeof testStreams[number];
 
 // Interface for individual question within a generated test JSON
 export interface TestQuestion {
-    id?: string; 
-    type?: QuestionType; 
-    question_text?: string | null;        
-    question_image_url?: string | null;   
-    options: (string | null)[];           
-    answer: string;                       
+    id?: string;
+    type?: QuestionType;
+    question_text?: string | null;
+    question_image_url?: string | null;
+    options: (string | null)[];
+    answer: string;
     marks: number;
-    explanation_text?: string | null;     
+    explanation_text?: string | null;
     explanation_image_url?: string | null;
-    explanation?: string | null; 
-    question?: string | null; 
+    explanation?: string | null;
+    question?: string | null;
 }
 
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
-    testType: 'chapterwise' | 'full_length'; 
+    testType: 'chapterwise' | 'full_length';
     test_code: string;
     name: string;
-    duration: number; 
-    count: number; 
-    total_questions: number; 
-    type: PricingType; 
-    audience: AudienceType | null; 
-    createdAt?: string; 
-    test_subject: string[]; 
+    duration: number;
+    count: number;
+    total_questions: number;
+    type: PricingType;
+    audience: AudienceType | null;
+    createdAt?: string;
+    test_subject: string[];
 }
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
-    testType: 'chapterwise'; 
+    testType: 'chapterwise';
     lesson: string;
-    examFilter?: ExamOption | 'all'; 
-    questions: TestQuestion[]; 
+    examFilter?: ExamOption | 'all';
+    questions: TestQuestion[];
 
     // Ensure fields from FullLengthTestJson are explicitly undefined
     stream?: undefined;
@@ -170,14 +178,14 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
-    testType: 'full_length'; 
+    testType: 'full_length';
     stream: TestStream;
-    examFilter?: ExamOption | 'all'; 
+    examFilter?: ExamOption | 'all';
     weightage?: {
         physics: number;
         chemistry: number;
-        maths?: number; 
-        biology?: number; 
+        maths?: number;
+        biology?: number;
     };
     // Subject-specific question arrays
     physics?: TestQuestion[];
@@ -204,19 +212,19 @@ export enum QuestionStatus {
 }
 
 export interface UserAnswer {
-  questionId: string; 
-  selectedOption: string | null; 
+  questionId: string;
+  selectedOption: string | null;
   status: QuestionStatus;
-  timeTaken?: number; 
+  timeTaken?: number;
 }
 
 // Data structure for the actual test taking session BEFORE saving the report
 export interface TestSession {
-  testId: string; 
+  testId: string;
   userId: string;
-  startTime: number; 
-  endTime?: number; 
-  answers: UserAnswer[]; 
+  startTime: number;
+  endTime?: number;
+  answers: UserAnswer[];
 }
 
 // Detailed answer structure stored within the test report
@@ -225,7 +233,7 @@ export interface DetailedAnswer {
   questionIndex: number;
   questionText?: string | null;
   questionImageUrl?: string | null;
-  options?: (string | null)[]; 
+  options?: (string | null)[];
   userAnswer: string | null;
   correctAnswer: string;
   isCorrect: boolean;
@@ -240,20 +248,20 @@ export interface TestResultSummary {
     testCode: string;
     userId: string;
     testName: string;
-    attemptTimestamp: number; 
-    submittedAt: number; 
-    duration: number; 
+    attemptTimestamp: number;
+    submittedAt: number;
+    duration: number;
     totalQuestions: number;
     attempted: number;
     correct: number;
     incorrect: number;
     unanswered: number;
     score: number;
-    totalMarks: number; 
+    totalMarks: number;
     percentage: number;
-    timeTakenMinutes: number; 
-    pointsEarned?: number; 
-    detailedAnswers: DetailedAnswer[]; 
+    timeTakenMinutes: number;
+    pointsEarned?: number;
+    detailedAnswers: DetailedAnswer[];
      user?: Omit<UserProfile, 'password'> | null;
      rank?: number;
 }
@@ -262,15 +270,15 @@ export interface TestResultSummary {
 
 // ---- Short Notes Types ----
 export interface ShortNote {
-    id: string; 
+    id: string;
     title: string;
     description: string;
     subject: string;
     examType: ExamOption;
     contentType: 'pdf' | 'html_php'; // Adjusted contentType
-    filePath: string; 
-    createdAt: string; 
-    modifiedAt: string; 
+    filePath: string;
+    createdAt: string;
+    modifiedAt: string;
 }
 
 // Interface for the JSON file storing note metadata per subject/exam
@@ -284,8 +292,8 @@ export interface ShortNotesMetadata {
 
 // Represents a single attempt on a DPP question
 export interface DppAttempt {
-  timestamp: number; 
-  selectedOption: string | null; 
+  timestamp: number;
+  selectedOption: string | null;
   isCorrect: boolean;
 }
 
@@ -294,7 +302,7 @@ export interface UserDppLessonProgress {
   userId: string;
   subject: string;
   lesson: string;
-  lastAccessed?: number; 
+  lastAccessed?: number;
   questionAttempts: Record<string, DppAttempt[]>;
 }
 
@@ -302,18 +310,18 @@ export interface UserDppLessonProgress {
 
 // Interface for a single Notebook created by the user
 export interface Notebook {
-  id: string; 
+  id: string;
   name: string;
-  createdAt: number; 
+  createdAt: number;
 }
 
 // Interface for a bookmarked question within a notebook
 export interface BookmarkedQuestion {
-  questionId: string; 
-  subject: string;    
-  lesson: string;     
-  addedAt: number;    
-  tags?: BookmarkTag[];    
+  questionId: string;
+  subject: string;
+  lesson: string;
+  addedAt: number;
+  tags?: BookmarkTag[];
 }
 
 // Interface for the user's entire notebook data structure
@@ -331,8 +339,8 @@ export type BookmarkTag = typeof bookmarkTags[number];
 // ---- User Follows Types ----
 export interface UserFollows {
   userId: string;
-  following: string[]; 
-  followers: string[]; 
+  following: string[];
+  followers: string[];
 }
 
 // ---- Challenge Test Types ----
@@ -340,13 +348,13 @@ export type ChallengeStatus = "pending" | "accepted" | "rejected" | "completed" 
 
 export interface ChallengeParticipant {
   userId: string;
-  name: string | null; 
+  name: string | null;
   avatarUrl?: string | null;
   status: ChallengeStatus;
   score?: number;
   timeTaken?: number; // in seconds
   rank?: number;
-  answers?: UserAnswer[]; 
+  answers?: UserAnswer[];
 }
 
 export interface ChallengeTestConfig {
@@ -358,16 +366,16 @@ export interface ChallengeTestConfig {
 }
 
 export interface Challenge {
-  challengeCode: string; 
+  challengeCode: string;
   creatorId: string;
-  creatorName: string | null; 
+  creatorName: string | null;
   participants: Record<string, ChallengeParticipant>; // Keyed by userId
   testConfig: ChallengeTestConfig;
   testStatus: "waiting" | "started" | "completed" | "expired";
-  questions: TestQuestion[]; 
-  createdAt: number; 
-  expiresAt: number; 
-  startedAt?: number; 
+  questions: TestQuestion[];
+  createdAt: number;
+  expiresAt: number;
+  startedAt?: number;
 }
 
 // For notifications/invites
@@ -375,9 +383,9 @@ export interface ChallengeInvite {
   challengeCode: string;
   creatorId: string;
   creatorName: string | null;
-  testName: string; 
+  testName: string;
   numQuestions: number;
-  status: "pending" | "accepted" | "rejected" | "expired"; 
+  status: "pending" | "accepted" | "rejected" | "expired";
   createdAt: number;
   expiresAt: number;
 }
@@ -407,14 +415,14 @@ export interface UserChallengeHistory {
 
 // ---- Notification Types (Basic for now) ----
 export interface AppNotification {
-    id: string; 
-    type: 'challenge_invite' | 'general_update' | 'test_result';
+    id: string;
+    type: 'challenge_invite' | 'general_update' | 'test_result' | 'referral_used'; // Added referral_used
     title: string;
     message: string;
-    link?: string; 
+    link?: string;
     isRead: boolean;
-    createdAt: number; 
-    icon?: React.ElementType; 
+    createdAt: number;
+    icon?: React.ElementType;
 }
 
 // ---- Platform Settings Type ----
@@ -443,4 +451,3 @@ export interface TelegramAuthData {
     hash: string; // Verification hash
     phone?: string; // If requested and granted
 }
-
