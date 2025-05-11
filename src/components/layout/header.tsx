@@ -5,7 +5,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Settings, LogOut, HelpCircle, Loader2, Trophy, Bell, X } from 'lucide-react';
+import { User, Settings, LogOut, HelpCircle, Loader2, Trophy, Bell, X, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import type { ChallengeInvite } from '@/types';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'; // Imported Badge
 
 // Helper function to request notification permission
 const requestNotificationPermission = async () => {
@@ -50,6 +50,7 @@ export function AppHeader() {
   const fetchPendingInvites = useCallback(async () => {
     if (user?.id && typeof window !== 'undefined') {
       try {
+        // This is a simulation. In a real app, you'd fetch from a backend.
         const invitesJson = localStorage.getItem(`userChallengeInvites_${user.id}`);
         if (invitesJson) {
           const allInvites: ChallengeInvite[] = JSON.parse(invitesJson);
@@ -63,7 +64,7 @@ export function AppHeader() {
              if (newInviteCount > 0) { // Only show if there are genuinely new invites
                 showBrowserNotification("New Challenge Invite!", { 
                     body: `You have ${newInviteCount} new challenge invite${newInviteCount > 1 ? 's' : ''}.`,
-                    icon: '/EduNexus-logo-black.jpg' 
+                    icon: '/EduNexus-logo-black.jpg' // Using EduNexus logo
                 });
                 toast({
                   title: "New Challenge Invite!",
@@ -157,7 +158,7 @@ export function AppHeader() {
       <SidebarTrigger className="sm:hidden" />
       <div className="sm:hidden group-data-[state=collapsed]:flex items-center gap-2">
           <Image
-              src="EduNexus-logo-black.jpg"
+              src="/EduNexus-logo-black.jpg"
               alt="EduNexus Logo"
               width={28}
               height={28}
@@ -165,7 +166,7 @@ export function AppHeader() {
               unoptimized
           />
           <Image
-              src="EduNexus-logo-white.jpg"
+              src="/EduNexus-logo-white.jpg"
               alt="EduNexus Logo"
               width={28}
               height={28}
@@ -181,7 +182,17 @@ export function AppHeader() {
       {loading ? (
          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       ) : user ? (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* Upgrade Button */}
+          {user.model !== 'combo' && (
+            <Button asChild size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
+              <Link href="/packages">
+                <Sparkles className="mr-1.5 h-4 w-4" />
+                Upgrade Now
+              </Link>
+            </Button>
+          )}
+
           {/* Notification Bell */}
           <DropdownMenu onOpenChange={(open) => { if (open) handleBellClick(); }}>
             <DropdownMenuTrigger asChild>
@@ -290,4 +301,3 @@ export function AppHeader() {
     </header>
   );
 }
-
