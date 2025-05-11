@@ -8,21 +8,21 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    internalReadUsersWithPasswords, // Use the internal function to get hash
-    saveUserToJson, 
+    internalReadUsersWithPasswords,
+    saveUserToJson,
     readUsers,
     getUserById,
-    addUserToJson, 
-    updateUserInJson, 
-    deleteUserFromJson, 
-    updateUserPasswordInJson, 
+    addUserToJson,
+    updateUserInJson,
+    deleteUserFromJson,
+    updateUserPasswordInJson,
     updateUserRole, 
-    findUserByEmailInternal, 
+    findUserByEmailInternal,
     findUserByReferralCode,
     findUserByTelegramIdInternal,
-} from '@/actions/user-actions'; 
+} from '@/actions/user-actions';
 
-import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
+import { sendWelcomeEmail } from '@/actions/otp-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -46,10 +46,10 @@ interface AuthContextProps {
     referralCodeUsed?: string | null
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
-  updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void; 
-  setUser: React.Dispatch<React.SetStateAction<ContextUser>>; 
-  setLoading: React.Dispatch<React.SetStateAction<boolean>>; 
-  mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; 
+  updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void;
+  setUser: React.Dispatch<React.SetStateAction<ContextUser>>;
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser;
 }
 
 const AuthContext = createContext<AuthContextProps>({
@@ -103,10 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutCallback = useCallback(async (message?: string, redirectPath: string = '/auth/login') => {
     if (!isMounted) return;
-    setLoading(true); 
+    setLoading(true);
 
     setUser(null);
-    setInitializationError(null); 
+    setInitializationError(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('loggedInUser');
     }
@@ -115,9 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
         toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
-    setLoading(false); 
+    setLoading(false);
     router.push(redirectPath);
-  }, [router, toast, isMounted, setLoading, setUser, setInitializationError]);
+  }, [router, toast, isMounted]);
 
 
   useEffect(() => {
@@ -125,11 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkUserSession = async () => {
         setLoading(true);
-        setInitializationError(null); 
+        setInitializationError(null);
         console.log("AuthProvider: Starting session check...");
         try {
             console.log("AuthProvider: Attempting to initialize user data store...");
-            await internalReadUsersWithPasswords(); 
+            await internalReadUsersWithPasswords();
             console.log("AuthProvider: User data store initialized/validated.");
 
             let storedUserJson: string | null = null;
@@ -163,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             
             console.log(`AuthProvider: Fetching latest profile for user ID: ${storedUser.id}`);
-            const latestProfile = await getUserById(storedUser.id); 
+            const latestProfile = await getUserById(storedUser.id);
 
             if (!latestProfile) {
                   console.warn(`AuthProvider: User ID ${storedUser.id} not found in backend. Logging out.`);
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             console.log("AuthProvider: Latest profile fetched:", latestProfile.email, "Role:", latestProfile.role, "Model:", latestProfile.model);
 
-            const profileChangedCritically = 
+            const profileChangedCritically =
                 storedUser.model !== latestProfile.model ||
                 storedUser.role !== latestProfile.role ||
                 (storedUser.expiry_date || null) !== (latestProfile.expiry_date || null);
@@ -201,19 +201,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     
     if (initializationError && !pathname.startsWith('/auth')) {
-        // If there's a critical error and we're not on an auth page, stop loading.
-        // The error UI will be shown by the main return.
         setLoading(false);
     } else if (initializationError && pathname.startsWith('/auth')) {
-        // If there's a critical error but we ARE on an auth page, allow auth page to render.
-        // Still stop loading so the auth page itself doesn't show its own loader indefinitely.
         setLoading(false);
     }
     else {
-        // No prior initialization error, proceed with session check.
         checkUserSession();
     }
-  }, [isMounted, pathname]); // Rerun if isMounted changes or if pathname changes (to handle initial load correctly)
+  }, [isMounted, pathname, logoutCallback, mapUserProfileToContextUser]);
 
 
   const refreshUser = useCallback(async () => {
@@ -242,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
        setLoading(false);
     }
-  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback, initializationError, setLoading, setUser]);
+  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback, initializationError]);
 
 
  const login = useCallback(async (email: string, passwordInput?: string) => {
@@ -275,23 +270,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const isAdmin = contextUser?.role === 'Admin';
                 const redirectPath = isAdmin ? '/admin' : '/';
                 toast({ title: "Login Successful", description: `Welcome back, ${contextUser?.name || contextUser?.email}!` });
-                setLoading(false); 
+                setLoading(false);
                 router.push(redirectPath);
+                return; // Added return to exit after successful login and redirect
              } else {
                  console.warn(`AuthProvider: Password mismatch for ${email}.`);
-                 throw new Error('Login failed: Invalid email or password.'); 
+                 throw new Error('Login failed: Invalid email or password.');
              }
         } else {
             console.warn(`AuthProvider: User not found or password not set for ${email}.`);
-            throw new Error('Login failed: Invalid email or password.'); 
+            throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
       console.error("Login failed:", error);
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
-      setLoading(false); 
-      throw error; 
+      setLoading(false);
+      throw error;
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError, setLoading, setUser]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
 
 
   const signUp = useCallback(async (
@@ -319,13 +315,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string; referredByCode?: string | null } = {
         email: email,
-        password: password, 
+        password: password,
         name: displayName || null,
         phone: phoneNumber || null,
         class: academicStatus || null,
-        model: 'free', 
-        role: 'User', 
-        expiry_date: null, 
+        model: 'free',
+        role: 'User',
+        expiry_date: null,
         targetYear: targetYear || null,
         referredByCode: referralCodeUsed || null,
       };
@@ -340,33 +336,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
        const contextUser = mapUserProfileToContextUser(saveResult.user);
        setUser(contextUser);
-        if (contextUser && typeof window !== 'undefined') { 
+        if (contextUser && typeof window !== 'undefined') {
             localStorage.setItem('loggedInUser', JSON.stringify(saveResult.user));
         }
 
       toast({ title: "Account Created!", description: `Welcome to EduNexus! You are now logged in.` });
-      setLoading(false); 
-      router.push('/'); 
+      setLoading(false);
+      router.push('/');
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
-      setLoading(false); 
-      throw error; 
+      setLoading(false);
+      throw error;
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError, setLoading, setUser]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
 
 
   useEffect(() => {
-    if (!isMounted || initializationError) return;
-    if (loading) return; 
+    if (!isMounted || initializationError || loading) return;
 
 
     const isAuthPage = pathname.startsWith('/auth');
     const isAdminRoute = pathname.startsWith('/admin');
-    const publicExactRoutes = ['/', '/help', '/terms', '/privacy', '/packages'];
-    const publicPrefixRoutes = ['/tests', '/dpp', '/pyq-dpps', '/take-test', '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review', '/challenge-test', '/challenge-test-result', '/challenge-test-review'];
-    const isTestInterfaceRoute = pathname.startsWith('/test-interface') || pathname.startsWith('/chapterwise-test');
+    const publicExactRoutes = ['/', '/help', '/terms', '/privacy', '/packages', '/referrals'];
+    const publicPrefixRoutes = ['/tests', '/dpp', '/pyq-dpps', '/take-test', '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review', '/challenge-test', '/challenge-test-result', '/challenge-test-review', '/challenge', '/find-friends', '/friends-followers', '/friends-following', '/friends-compare', '/leaderboard', '/profile', '/notebooks'];
+    const isTestInterfaceRoute = pathname.startsWith('/test-interface') || pathname.startsWith('/chapterwise-test') || pathname.startsWith('/challenge-test');
 
-    const isPublicRoute = publicExactRoutes.includes(pathname) || 
+    const isPublicRoute = publicExactRoutes.includes(pathname) ||
                           publicPrefixRoutes.some(route => pathname.startsWith(route + '/') || pathname === route) ||
                           isTestInterfaceRoute;
 
@@ -381,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access the admin panel." });
         router.push('/');
       }
-    } else { 
+    } else {
       if (!isAuthPage && !isPublicRoute) {
         console.log("AuthProvider: User not logged in and not on public/auth page, redirecting to login. Current pathname:", pathname);
         const redirectQuery = pathname && pathname !== '/' ? `?redirect=${encodeURIComponent(pathname)}` : '';
@@ -391,7 +386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, pathname, router, isMounted, toast, initializationError]);
 
   const updateUserData = (updatedUser: Omit<UserProfile, 'password'>) => {
-    if (user && user.id === updatedUser.id && isMounted) { 
+    if (user && user.id === updatedUser.id && isMounted) {
         const contextUser = mapUserProfileToContextUser(updatedUser);
         setUser(contextUser);
         if (typeof window !== 'undefined') {
@@ -416,14 +411,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             </AlertDescription>
          </Alert>
          <Button onClick={() => {
-             if(typeof window !== 'undefined') localStorage.removeItem('loggedInUser'); 
-             window.location.href = '/auth/login'; 
+             if(typeof window !== 'undefined') localStorage.removeItem('loggedInUser');
+             window.location.href = '/auth/login';
          }} className="mt-6">Go to Login</Button>
        </div>
      );
    }
 
-   if (loading) {
+   if (loading && !initializationError && !pathname.startsWith('/auth') && !user) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
          <div className="space-y-4 w-full max-w-md p-4 text-center">
@@ -442,4 +437,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-```
