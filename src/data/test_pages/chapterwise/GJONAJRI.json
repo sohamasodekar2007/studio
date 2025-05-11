@@ -1,0 +1,211 @@
+{
+  "testseriesType": "chapterwise",
+  "name": "MICROBES IN HUMAN WELFARE",
+  "duration": 60,
+  "total_questions": 12,
+  "type": "FREE",
+  "audience": null,
+  "test_subject": [
+    "Biology"
+  ],
+  "lessons": [
+    "Microbes in Human Welfare"
+  ],
+  "lesson": "Microbes in Human Welfare",
+  "questions": [
+    {
+      "id": "Q_1746808214311_19ce1f",
+      "type": "text",
+      "question_text": "Which microorganism is used in the production of Swiss cheese?",
+      "question_image_url": null,
+      "options": [
+        "Lactobacillus",
+        "Propionibacterium shermanii",
+        "Saccharomyces cerevisiae",
+        "Aspergillus niger"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "**Propionibacterium shermanii** produces CO<sub>2</sub> holes and propionic acid in Swiss cheese.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214312_3734a5",
+      "type": "text",
+      "question_text": "The 'Roquefort cheese' is ripened by:",
+      "question_image_url": null,
+      "options": [
+        "Bacteria",
+        "Viruses",
+        "Fungi",
+        "Algae"
+      ],
+      "answer": "C",
+      "marks": 1,
+      "explanation_text": "**Penicillium roqueforti** (fungus) gives Roquefort cheese its characteristic blue veins and flavor.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214347_4133d7",
+      "type": "text",
+      "question_text": "Which bacterium converts milk into curd?",
+      "question_image_url": null,
+      "options": [
+        "Clostridium butyricum",
+        "Lactobacillus acidophilus",
+        "Rhizobium",
+        "Methanobacterium"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "**Lactobacillus** spp. ferment lactose to lactic acid, coagulating milk proteins to form curd.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214352_11fff2",
+      "type": "text",
+      "question_text": "Which microbe produces cyclosporin A?",
+      "question_image_url": null,
+      "options": [
+        "Trichoderma polysporum",
+        "Monascus purpureus",
+        "Bacillus thuringiensis",
+        "Streptococcus"
+      ],
+      "answer": "A",
+      "marks": 1,
+      "explanation_text": "**Cyclosporin A** (immunosuppressant) is derived from the fungus *Trichoderma polysporum*.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214352_8b6302",
+      "type": "text",
+      "question_text": "The 'BOD' test measures:",
+      "question_image_url": null,
+      "options": [
+        "Bacterial count in water",
+        "Organic matter in water",
+        "Oxygen demand by microbes",
+        "Pesticide residues"
+      ],
+      "answer": "C",
+      "marks": 1,
+      "explanation_text": "**Biochemical Oxygen Demand (BOD)** estimates organic pollution by measuring O<sub>2</sub> consumed by microbes in 5 days.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214357_802ba4",
+      "type": "text",
+      "question_text": "The 'activated sludge' in sewage treatment contains:",
+      "question_image_url": null,
+      "options": [
+        "Viruses",
+        "Protozoans",
+        "Aerobic bacteria",
+        "Anaerobic bacteria"
+      ],
+      "answer": "C",
+      "marks": 1,
+      "explanation_text": "**Aerobic bacteria** in activated sludge digest organic matter during secondary sewage treatment.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214359_b5c25e",
+      "type": "text",
+      "question_text": "Which fungus is used to produce statins?",
+      "question_image_url": null,
+      "options": [
+        "Aspergillus terreus",
+        "Penicillium chrysogenum",
+        "Saccharomyces boulardii",
+        "Mucor"
+      ],
+      "answer": "A",
+      "marks": 1,
+      "explanation_text": "**Statins** (cholesterol-lowering drugs) are produced by *Aspergillus terreus* and *Monascus purpureus*.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214368_cd7e86",
+      "type": "text",
+      "question_text": "The 'starter' in idli/dosa fermentation is:",
+      "question_image_url": null,
+      "options": [
+        "Yeast",
+        "Lactic acid bacteria",
+        "Both yeast and LAB",
+        "Acetobacter"
+      ],
+      "answer": "C",
+      "marks": 1,
+      "explanation_text": "**Yeast** (CO<sub>2</sub> production) and **LAB** (souring) together ferment idli/dosa batter.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214379_4bad0d",
+      "type": "text",
+      "question_text": "Which microbe is used as a biofertilizer for soybean?",
+      "question_image_url": null,
+      "options": [
+        "Azospirillum",
+        "Rhizobium",
+        "Azotobacter",
+        "Nostoc"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "**Rhizobium** forms root nodules in legumes (e.g., soybean) for nitrogen fixation.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808214411_f171b2",
+      "type": "text",
+      "question_text": "The 'flocs' in sewage treatment are:",
+      "question_image_url": null,
+      "options": [
+        "Masses of algae",
+        "Bacterial + fungal aggregates",
+        "Virus clusters",
+        "Protozoan cysts"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "**Flocs** are mesh-like structures of bacteria/fungi that digest organic matter in sewage.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808804969_07ada1",
+      "type": "text",
+      "question_text": "Which microorganism produces citric acid commercially?",
+      "question_image_url": null,
+      "options": [
+        "Lactobacillus",
+        "Aspergillus niger",
+        "Acetobacter aceti",
+        "Clostridium"
+      ],
+      "answer": "B",
+      "marks": 1,
+      "explanation_text": "**Aspergillus niger** is used in industrial citric acid production via fermentation.",
+      "explanation_image_url": null
+    },
+    {
+      "id": "Q_1746808804976_5bd015",
+      "type": "text",
+      "question_text": "The 'Biogas' primarily contains:",
+      "question_image_url": null,
+      "options": [
+        "Methane + CO<sub>2</sub>",
+        "Ethane + H<sub>2</sub>S",
+        "Propane + N<sub>2</sub>",
+        "Butane + O<sub>2</sub>"
+      ],
+      "answer": "A",
+      "marks": 1,
+      "explanation_text": "**Biogas** is 50-70% methane (CH<sub>4</sub>) and 30-50% CO<sub>2</sub>, produced by methanogens like *Methanobacterium*.",
+      "explanation_image_url": null
+    }
+  ],
+  "test_code": "GJONAJRI",
+  "createdAt": "2025-05-11T16:16:49.145Z"
+}
