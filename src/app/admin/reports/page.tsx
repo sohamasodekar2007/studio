@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Eye, Printer, BarChartBig, Users, Info, Loader2, Search, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GeneratedTest, TestSession, TestResultSummary, UserProfile } from '@/types';
-import { getAllGeneratedTests } from '@/actions/generated-test-actions'; // Keep this
-import { getAllReportsForTest } from '@/actions/test-report-actions'; // Use this action to get reports with user data
+import { getAllGeneratedTests } from '@/actions/generated-test-actions';
+import { getAllReportsForTest } from '@/actions/test-report-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import TestHistoryDialog from '@/components/admin/test-history-dialog';
@@ -22,8 +22,8 @@ export default function AdminReportsPage() {
   const [allTests, setAllTests] = useState<GeneratedTest[]>([]);
   const [filteredTests, setFilteredTests] = useState<GeneratedTest[]>([]);
   const [selectedTestType, setSelectedTestType] = useState<'all' | 'chapterwise' | 'full_length'>('all');
-  const [isLoadingTests, setIsLoadingTests] = useState(true); // Renamed for clarity
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false); // For loading attempts/ranking/print
+  const [isLoadingTests, setIsLoadingTests] = useState(true);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [selectedTestForHistory, setSelectedTestForHistory] = useState<GeneratedTest | null>(null);
@@ -36,7 +36,7 @@ export default function AdminReportsPage() {
   const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [printReportData, setPrintReportData] = useState<{
     test: GeneratedTest;
-    attempts: Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null; rank?: number }>; // Include user and rank
+    attempts: Array<TestResultSummary & { user?: Omit<UserProfile, 'password'> | null; rank?: number }>;
   } | null>(null);
 
 
@@ -60,7 +60,7 @@ export default function AdminReportsPage() {
   useEffect(() => {
     let currentTests = allTests;
     if (selectedTestType !== 'all') {
-      currentTests = currentTests.filter(test => test.testType === selectedTestType);
+      currentTests = currentTests.filter(test => test.testseriesType === selectedTestType);
     }
     if (searchTerm) {
       currentTests = currentTests.filter(test =>
@@ -74,27 +74,24 @@ export default function AdminReportsPage() {
 
   const handleViewHistory = async (test: GeneratedTest) => {
     setSelectedTestForHistory(test);
-    setIsHistoryDialogOpen(true); // Dialog will handle fetching its own data
+    setIsHistoryDialogOpen(true);
   };
 
   const handleViewRanking = async (test: GeneratedTest) => {
      setSelectedTestForRanking(test);
-     setIsRankingDialogOpen(true); // Dialog will handle fetching its own data
+     setIsRankingDialogOpen(true);
   };
 
   const handlePrintReport = async (test: GeneratedTest) => {
-    setIsLoadingDetails(true); // Indicate loading while preparing print data
-    setSelectedTestForPrint(test); // Keep track of which test is being printed
+    setIsLoadingDetails(true);
+    setSelectedTestForPrint(test);
     try {
-        // Fetch attempts WITH user details directly using the correct action
         const attemptsData = await getAllReportsForTest(test.test_code);
-
-        // Sort attempts by score for ranking in print preview
         const rankedAttempts = attemptsData
             .sort((a, b) => {
                 const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
                 if (scoreDiff !== 0) return scoreDiff;
-                return (a.timeTakenMinutes ?? Infinity) - (b.timeTakenMinutes ?? Infinity); // Use time taken for tie-breaking
+                return (a.timeTakenMinutes ?? Infinity) - (b.timeTakenMinutes ?? Infinity);
              })
             .map((att, index) => ({ ...att, rank: index + 1 }));
 
@@ -160,7 +157,7 @@ export default function AdminReportsPage() {
                 ) : filteredTests.length > 0 ? (
                   filteredTests.map((test) => (
                     <TableRow key={test.test_code}>
-                      <TableCell className="font-mono text-xs">{test.test_code}</TableCell><TableCell className="font-medium">{test.name}</TableCell><TableCell className="capitalize">{test.testType.replace('_', ' ')}</TableCell><TableCell>{test.total_questions}</TableCell><TableCell>{test.duration} min</TableCell><TableCell className="text-right space-x-2">
+                      <TableCell className="font-mono text-xs">{test.test_code}</TableCell><TableCell className="font-medium">{test.name}</TableCell><TableCell className="capitalize">{test.testseriesType ? test.testseriesType.replace('_', ' ') : 'N/A'}</TableCell><TableCell>{test.total_questions}</TableCell><TableCell>{test.duration} min</TableCell><TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleViewHistory(test)}>
                           <Users className="mr-1.5 h-3.5 w-3.5" /> History
                         </Button>
@@ -197,7 +194,6 @@ export default function AdminReportsPage() {
           isOpen={isHistoryDialogOpen}
           onClose={() => { setIsHistoryDialogOpen(false); setSelectedTestForHistory(null);}}
           test={selectedTestForHistory}
-          // Pass the correct action to fetch attempts with user details
           fetchTestAttempts={getAllReportsForTest}
         />
       )}
@@ -206,7 +202,6 @@ export default function AdminReportsPage() {
           isOpen={isRankingDialogOpen}
           onClose={() => { setIsRankingDialogOpen(false); setSelectedTestForRanking(null);}}
           test={selectedTestForRanking}
-          // Pass the correct action to fetch attempts with user details
           fetchTestAttempts={getAllReportsForTest}
         />
       )}
@@ -219,5 +214,3 @@ export default function AdminReportsPage() {
     </div>
   );
 }
-
-    
