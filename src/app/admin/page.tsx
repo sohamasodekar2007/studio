@@ -1,5 +1,6 @@
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle } from "lucide-react";
+import { Activity, Users, BookOpen, DollarSign, ClipboardList, FileText, LineChart, Edit, PlusCircle, Gift } from "lucide-react"; // Added Gift icon
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 // Removed getTests import as it's obsolete
@@ -142,6 +143,11 @@ export default async function AdminDashboardPage() {
                 <DollarSign className="h-4 w-4" /> Manage Payments
                 </Button>
            </Link>
+           <Link href="/admin/referrals" passHref legacyBehavior>
+                <Button variant="outline" className="w-full justify-start gap-2">
+                <Gift className="h-4 w-4" /> Manage Referrals
+                </Button>
+           </Link>
            {/* Add more actions as needed */}
         </CardContent>
       </Card>
@@ -151,3 +157,4 @@ export default async function AdminDashboardPage() {
     </div>
   );
 }
+
