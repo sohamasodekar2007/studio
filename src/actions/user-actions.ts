@@ -1,3 +1,4 @@
+
 // src/actions/user-actions.ts
 'use server';
 
@@ -347,3 +348,384 @@ export async function findUserByTelegramIdInternal(telegramId: string): Promise<
         const users = await internalReadUsersWithPasswords();
         return users.find(u => u.telegramId === telegramId) || null;
     } catch (error: any) {
+        console.error(`Error finding user by Telegram ID (internal) ${telegramId}:`, error.message);
+        if (error.message.startsWith("User data system initialization failed:")) throw error;
+        return null;
+    }
+}
+
+/**
+ * Adds a new user to users.json. Hashes the password before saving.
+ * @param newUserProfileData User profile data including a plain text password.
+ * @returns Promise resolving to the newly created UserProfile (without password) or null on failure.
+ */
+export async function addUserToJson(
+  newUserProfileData: Omit<UserProfile, 'id' | 'createdAt' | 'avatarUrl' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername'> & { password: string; referredByCode?: string | null }
+): Promise<{ success: boolean; user?: Omit<UserProfile, 'password'>; message?: string }> {
+  try {
+    const users = await internalReadUsersWithPasswords(); // Load existing users, ensures initialization
+
+    // Check if email already exists
+    const existingUser = users.find(u => u.email?.toLowerCase() === newUserProfileData.email.toLowerCase());
+    if (existingUser) {
+      console.error(`addUserToJson: Email ${newUserProfileData.email} already exists.`);
+      return { success: false, message: 'This email address is already registered.' };
+    }
+
+    const hashedPassword = await bcrypt.hash(newUserProfileData.password, SALT_ROUNDS);
+    const newUserId = uuidv4();
+    const newUserReferralCode = generateReferralCode();
+
+    const newUser: UserProfile = {
+      id: newUserId,
+      ...newUserProfileData, // Spread the provided data
+      password: hashedPassword,
+      role: getRoleFromEmail(newUserProfileData.email), // Determine role based on email
+      createdAt: new Date().toISOString(),
+      avatarUrl: null, // Default avatar
+      referralCode: newUserReferralCode,
+      referralStats: { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 },
+      totalPoints: 0,
+      telegramId: null,
+      telegramUsername: null,
+    };
+
+    // Update referrer's stats if referredByCode is present
+    if (newUser.referredByCode) {
+        const referrerIndex = users.findIndex(u => u.referralCode === newUser.referredByCode);
+        if (referrerIndex !== -1) {
+            const referrer = users[referrerIndex];
+            if (!referrer.referralStats) { // Initialize if undefined
+                referrer.referralStats = { referred_free: 0, referred_chapterwise: 0, referred_full_length: 0, referred_combo: 0 };
+            }
+            switch (newUser.model) {
+                case 'free': referrer.referralStats.referred_free++; break;
+                case 'chapterwise': referrer.referralStats.referred_chapterwise++; break;
+                case 'full_length': referrer.referralStats.referred_full_length++; break;
+                case 'combo': referrer.referralStats.referred_combo++; break;
+            }
+             users[referrerIndex] = referrer; // Update the referrer in the users array
+        } else {
+            console.warn(`Referrer with code ${newUser.referredByCode} not found.`);
+        }
+    }
+
+
+    users.push(newUser);
+    const writeSuccess = await writeUsersToFile(users);
+
+    if (writeSuccess) {
+      const { password, ...userWithoutPassword } = newUser;
+      return { success: true, user: userWithoutPassword };
+    } else {
+      return { success: false, message: 'Failed to save new user to file.' };
+    }
+  } catch (error: any) {
+    console.error('Error adding user to JSON:', error);
+     // If it's a critical initialization error, propagate it
+    if (error.message?.startsWith("User data system initialization failed:")) throw error;
+    return { success: false, message: error.message || 'An unexpected error occurred while adding the user.' };
+  }
+}
+
+export async function getUserById(userId: string): Promise<Omit<UserProfile, 'password'> | null> {
+  try {
+    const users = await internalReadUsersWithPasswords();
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  } catch (error: any) {
+     console.error(`Error fetching user by ID ${userId}:`, error.message);
+     if (error.message.startsWith("User data system initialization failed:")) throw error;
+     return null;
+  }
+}
+
+/**
+ * Updates an existing user's profile in users.json.
+ * Can handle avatar uploads, removal, and other profile field updates.
+ * Password and role changes should be handled by dedicated functions.
+ * @param userId ID of the user to update.
+ * @param updatedData Partial UserProfile data (excluding password, role).
+ * @param avatarFile Optional new avatar file.
+ * @param removeAvatar Flag to indicate avatar removal.
+ * @returns Promise with success status, updated user profile (without password), and optional message.
+ */
+export async function updateUserInJson(
+  userId: string,
+  updatedData: Partial<Omit<UserProfile, 'id' | 'password' | 'createdAt' | 'role' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername' | 'avatarUrl'>> & {email?: string},
+  avatarFile?: File | null,
+  removeAvatar?: boolean
+): Promise<{ success: boolean; user?: Omit<UserProfile, 'password'>; message?: string }> {
+  try {
+    const users = await internalReadUsersWithPasswords();
+    const userIndex = users.findIndex(u => u.id === userId);
+
+    if (userIndex === -1) {
+      return { success: false, message: 'User not found.' };
+    }
+
+    let userToUpdate = { ...users[userIndex] };
+    let changesMade = false;
+
+    // Handle avatar update
+    if (avatarFile) {
+      await ensureDirExists(publicAvatarsPath);
+      const oldAvatarPath = userToUpdate.avatarUrl ? path.join(publicAvatarsPath, userToUpdate.avatarUrl) : null;
+
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const hash = crypto.createHash('sha256').update(Buffer.from(await avatarFile.arrayBuffer())).digest('hex').substring(0, 8);
+      const extension = path.extname(avatarFile.name) || '.png'; // Default to .png if no extension
+      const uniqueFilename = `avatar-${userId}-${timestamp}-${hash}${extension}`;
+      const newAvatarPath = path.join(publicAvatarsPath, uniqueFilename);
+
+      try {
+        await fs.writeFile(newAvatarPath, Buffer.from(await avatarFile.arrayBuffer()));
+        userToUpdate.avatarUrl = uniqueFilename; // Store only filename
+        changesMade = true;
+        console.log(`New avatar ${uniqueFilename} saved for user ${userId}.`);
+        // Delete old avatar if it exists
+        if (oldAvatarPath && userToUpdate.avatarUrl !== path.basename(oldAvatarPath)) { // Check if it's actually a new avatar
+             try { await fs.unlink(oldAvatarPath); console.log(`Old avatar ${path.basename(oldAvatarPath)} deleted.`); }
+             catch (delError: any) { if (delError.code !== 'ENOENT') console.error("Error deleting old avatar:", delError); }
+        }
+      } catch (uploadError) {
+        console.error("Avatar upload failed:", uploadError);
+        return { success: false, message: "Failed to upload avatar." };
+      }
+    } else if (removeAvatar && userToUpdate.avatarUrl) {
+      const avatarToRemovePath = path.join(publicAvatarsPath, userToUpdate.avatarUrl);
+      try {
+         await fs.unlink(avatarToRemovePath); console.log(`Avatar ${userToUpdate.avatarUrl} removed for user ${userId}.`);
+         userToUpdate.avatarUrl = null;
+         changesMade = true;
+      } catch (delError: any) {
+          if (delError.code !== 'ENOENT') console.error("Error removing avatar:", delError);
+          else { userToUpdate.avatarUrl = null; changesMade = true; } // Still set to null if file not found
+      }
+    }
+    
+    // Update other profile fields
+    // Ensure not to overwrite 'email' if it's not in updatedData or if it's the primary admin email being changed
+    if (updatedData.email && userToUpdate.email?.toLowerCase() !== primaryAdminEmail.toLowerCase()) {
+      // Check if new email is already taken by another user
+      const existingUserWithNewEmail = users.find(u => u.id !== userId && u.email?.toLowerCase() === updatedData.email!.toLowerCase());
+      if (existingUserWithNewEmail) {
+        return { success: false, message: 'Email address is already in use by another account.' };
+      }
+      if(userToUpdate.email !== updatedData.email) {
+        userToUpdate.email = updatedData.email;
+        changesMade = true;
+      }
+    }
+
+
+    // Fields like name, class, targetYear, model, expiry_date
+    (Object.keys(updatedData) as Array<keyof typeof updatedData>).forEach(key => {
+      if (key !== 'email' && key !== 'avatarUrl' && updatedData[key] !== undefined && (userToUpdate as any)[key] !== updatedData[key]) {
+        (userToUpdate as any)[key] = updatedData[key];
+        changesMade = true;
+      }
+    });
+    
+    // Ensure model and expiry date consistency if role is User
+    if (userToUpdate.role === 'User') {
+        if (userToUpdate.model === 'free' && userToUpdate.expiry_date !== null) {
+            userToUpdate.expiry_date = null;
+            changesMade = true;
+        } else if (userToUpdate.model !== 'free' && !userToUpdate.expiry_date) {
+            // This case implies a paid model without an expiry date, which is problematic.
+            // The Zod schema should catch this, but as a fallback:
+            // Option 1: Set to a default far future date
+            // userToUpdate.expiry_date = new Date('2099-12-31T00:00:00.000Z').toISOString();
+            // Option 2: Revert to free if expiry is missing (safer default)
+            // userToUpdate.model = 'free';
+            // userToUpdate.expiry_date = null;
+            // changesMade = true;
+            console.warn(`User ${userId} has model ${userToUpdate.model} but no expiry_date. Ensure this is handled.`);
+        }
+    }
+
+
+    if (!changesMade) {
+      const { password, ...userWithoutPassword } = userToUpdate;
+      return { success: true, user: userWithoutPassword, message: 'No changes detected.' };
+    }
+
+    users[userIndex] = userToUpdate;
+    const writeSuccess = await writeUsersToFile(users);
+
+    if (writeSuccess) {
+      const { password, ...userWithoutPassword } = userToUpdate;
+      return { success: true, user: userWithoutPassword };
+    } else {
+      return { success: false, message: 'Failed to save user updates to file.' };
+    }
+  } catch (error: any) {
+    console.error(`Error updating user ${userId}:`, error);
+    if (error.message?.startsWith("User data system initialization failed:")) throw error;
+    return { success: false, message: error.message || 'An unexpected error occurred while updating user.' };
+  }
+}
+
+
+export async function deleteUserFromJson(userId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const users = await internalReadUsersWithPasswords();
+        const userToDelete = users.find(u => u.id === userId);
+
+        if (!userToDelete) {
+            return { success: false, message: "User not found." };
+        }
+        // Prevent deletion of primary admin
+        if (userToDelete.email?.toLowerCase() === primaryAdminEmail.toLowerCase()) {
+            return { success: false, message: "Primary admin account cannot be deleted." };
+        }
+
+        const updatedUsers = users.filter(u => u.id !== userId);
+        const success = await writeUsersToFile(updatedUsers);
+        return { success, message: success ? undefined : 'Failed to write users file after deletion.' };
+    } catch (error: any) {
+        console.error(`Error deleting user ${userId} from JSON:`, error);
+        if (error.message?.startsWith("User data system initialization failed:")) throw error;
+        return { success: false, message: error.message || 'An unexpected error occurred.' };
+    }
+}
+
+export async function updateUserPasswordInJson(userId: string, newPasswordPlainText: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const users = await internalReadUsersWithPasswords();
+        const userIndex = users.findIndex(u => u.id === userId);
+        if (userIndex === -1) {
+            return { success: false, message: "User not found." };
+        }
+        const newHashedPassword = await bcrypt.hash(newPasswordPlainText, SALT_ROUNDS);
+        users[userIndex].password = newHashedPassword;
+        const success = await writeUsersToFile(users);
+        return { success, message: success ? undefined : 'Failed to write users file with new password.' };
+    } catch (error: any) {
+        console.error(`Error updating password for user ${userId}:`, error);
+        if (error.message?.startsWith("User data system initialization failed:")) throw error;
+        return { success: false, message: error.message || 'An unexpected error occurred.' };
+    }
+}
+
+export async function updateUserRole(
+  userId: string,
+  newRole: 'Admin' | 'User'
+): Promise<{ success: boolean; user?: Omit<UserProfile, 'password'>; message?: string }> {
+  try {
+    const users = await internalReadUsersWithPasswords();
+    const userIndex = users.findIndex(u => u.id === userId);
+
+    if (userIndex === -1) {
+      return { success: false, message: "User not found." };
+    }
+
+    let userToUpdate = users[userIndex];
+    const oldRole = userToUpdate.role;
+
+    // Prevent changing role of primary admin if trying to make them User
+    if (userToUpdate.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && newRole === 'User') {
+        return { success: false, message: "Cannot change the role of the primary admin account." };
+    }
+
+    // Validate email pattern for Admin promotion
+    if (newRole === 'Admin' && userToUpdate.email?.toLowerCase() !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(userToUpdate.email!.toLowerCase())) {
+         return { success: false, message: "Cannot promote to Admin. Email must end with '-admin@edunexus.com' or be the primary admin." };
+    }
+    
+    // Prevent demotion if email pattern is admin-specific, UNLESS it's the primary admin (which can't be demoted anyway by above check)
+    // This prevents a user with "user-admin@edunexus.com" from being set to 'User' role.
+    if (newRole === 'User' && adminEmailPattern.test(userToUpdate.email!.toLowerCase()) && userToUpdate.email?.toLowerCase() !== primaryAdminEmail.toLowerCase()) {
+        return { success: false, message: "Cannot demote to User if email format is for Admins. Please change email first if intended." };
+    }
+
+
+    if (oldRole === newRole) {
+      const { password, ...userWithoutPassword } = userToUpdate;
+      return { success: true, user: userWithoutPassword, message: "Role is already set to this value." };
+    }
+
+    userToUpdate.role = newRole;
+    // Adjust model and expiry if role changes
+    if (newRole === 'Admin') {
+        userToUpdate.model = 'combo';
+        userToUpdate.expiry_date = new Date('2099-12-31T00:00:00.000Z').toISOString();
+    } else if (newRole === 'User' && oldRole === 'Admin') {
+        // When demoting from Admin to User, set to 'free' and null expiry by default
+        // Consider if you want to restore a previous plan or have specific logic here.
+        userToUpdate.model = 'free';
+        userToUpdate.expiry_date = null;
+    }
+
+    users[userIndex] = userToUpdate;
+    const writeSuccess = await writeUsersToFile(users);
+
+    if (writeSuccess) {
+      const { password, ...userWithoutPassword } = userToUpdate;
+      return { success: true, user: userWithoutPassword };
+    } else {
+      return { success: false, message: 'Failed to save user role update to file.' };
+    }
+  } catch (error: any) {
+    console.error(`Error updating role for user ${userId}:`, error);
+    if (error.message?.startsWith("User data system initialization failed:")) throw error;
+    return { success: false, message: error.message || 'An unexpected error occurred.' };
+  }
+}
+
+// This function is specifically for saving a full UserProfile object,
+// typically used when creating a user via Telegram or other non-form methods.
+// It ensures the password gets hashed if provided.
+export async function saveUserToJson(
+    userProfile: UserProfile
+): Promise<boolean> {
+    try {
+        let users = await internalReadUsersWithPasswords();
+        const userIndex = users.findIndex(u => u.id === userProfile.id || (userProfile.email && u.email === userProfile.email)); // Also check by email for updates
+
+        let userToSave = { ...userProfile };
+
+        // Hash password if it's present and not already a hash
+        if (userToSave.password && !userToSave.password.startsWith('$2a$') && !userToSave.password.startsWith('$2b$')) {
+            userToSave.password = await bcrypt.hash(userToSave.password, SALT_ROUNDS);
+        } else if (!userToSave.password && userIndex !== -1) {
+             // If updating and password field is missing/empty, retain old password
+            userToSave.password = users[userIndex].password;
+        } else if (!userToSave.password) {
+            // New user and no password - this should ideally not happen if password is required for new users
+            const randomPassword = uuidv4(); 
+            userToSave.password = await bcrypt.hash(randomPassword, SALT_ROUNDS);
+        }
+
+        if (userIndex !== -1) {
+            // Preserve fields that might not be in userProfile object if it's a partial update
+            users[userIndex] = { ...users[userIndex], ...userToSave }; 
+        } else {
+            users.push(userToSave); // Add new user
+        }
+        return await writeUsersToFile(users);
+    } catch (error) {
+        console.error('Error saving user to users.json:', error);
+        return false;
+    }
+}
+
+// Exported function to find user by email, returns profile without password
+export async function findUserByEmail(email: string | null): Promise<Omit<UserProfile, 'password'> | null> {
+    if (!email) return null;
+    try {
+      const users = await internalReadUsersWithPasswords();
+      const user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (!user) return null;
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    } catch (error: any) {
+      console.error(`Error finding user by email ${email}:`, error.message);
+      if (error.message.startsWith("User data system initialization failed:")) throw error;
+      return null;
+    }
+}
