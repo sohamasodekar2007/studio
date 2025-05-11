@@ -18,7 +18,9 @@ import {
   Globe,
   PieChart,
   BookOpen,
-  Gift 
+  Gift,
+  ShoppingBag,
+  Package
 } from 'lucide-react';
 import {
   Sidebar,
@@ -79,37 +81,31 @@ export function AdminSidebar() {
   }
 
   return (
-    <Sidebar side="left" variant="sidebar" collapsible="none" className="hidden sm:flex peer"> {/* Changed collapsible to "none" */}
-      <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
+    <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
+      <SidebarHeader className="flex items-center justify-between p-4"> 
         <Link
           href="/admin"
           className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
           aria-label="Admin Dashboard Home"
         >
-          {/* EduNexus Logo */}
             <Image
-                src="/EduNexus-logo-black.jpg" // Use black for light theme
+                src="/EduNexus-logo-black.jpg" 
                 alt="EduNexus Admin Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 dark:hidden" // Hide on dark mode
+                className="h-8 w-8 dark:hidden" 
                 unoptimized
             />
              <Image
-                src="/EduNexus-logo-white.jpg" // Use white for dark theme
+                src="/EduNexus-logo-white.jpg" 
                 alt="EduNexus Admin Logo"
                 width={30}
                 height={30}
-                className="h-8 w-8 hidden dark:block" // Show on dark mode
+                className="h-8 w-8 hidden dark:block" 
                 unoptimized
             />
-           {/* Updated Name */}
           <h1 className="text-lg font-semibold">EduNexus Admin</h1>
         </Link>
-        {/* Desktop trigger is less relevant if not icon-collapsible, but context might still use it for mobile sheet state if logic is shared.
-            Keeping it for now, but it won't collapse the desktop sidebar to icons.
-            If it causes confusion, it can be conditionally rendered or removed.
-        */}
         <SidebarTrigger className="hidden sm:flex mr-1" />
       </SidebarHeader>
 
