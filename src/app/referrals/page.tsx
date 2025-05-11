@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Copy, Check, Gift, Users, Share2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { readUsers, getUserById } from '@/actions/user-actions'; // Assuming getUserById can fetch limited profile
-import { getReferralOffers } from '@/actions/referral-offers-actions'; // Action to fetch offers
+import { readUsers, getUserById } from '@/actions/user-actions'; 
+import { getReferralOffers } from '@/actions/referral-offers-actions'; 
 import type { UserProfile, ReferralOffer, UserReferralStats } from '@/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label'; // Import Label component
 
 export default function ReferralsPage() {
   const { user, loading: authLoading, refreshUser } = useAuth();
@@ -38,9 +39,9 @@ export default function ReferralsPage() {
     if (user?.id) {
       setIsLoading(true);
       Promise.all([
-        getUserById(user.id), // To get the user's own referral code and stats
-        getReferralOffers(true), // Fetch only active offers
-        readUsers() // Fetch all users to find who was referred by the current user
+        getUserById(user.id), 
+        getReferralOffers(true), 
+        readUsers() 
       ]).then(([currentUserProfile, offers, allUsers]) => {
         if (currentUserProfile) {
           setReferralCode(currentUserProfile.referralCode || null);
@@ -138,6 +139,7 @@ export default function ReferralsPage() {
                     <Input value={referralCode} readOnly className="font-mono text-lg h-11 flex-grow" />
                     <Button variant="outline" size="icon" onClick={handleCopyReferralCode} disabled={!referralCode}>
                       {copied ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
+                      <span className="sr-only">Copy Referral Code</span>
                     </Button>
                   </div>
                   <p className="text-sm text-muted-foreground">Share this code with your friends. When they sign up using your code, you both might get rewards based on current offers!</p>
