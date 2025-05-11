@@ -17,6 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -430,7 +431,7 @@ interface ReferralOfferDialogProps {
 }
 
 function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading, allUsers }: ReferralOfferDialogProps) {
-    const { toast } = useToast(); // Added toast import
+    const { toast } = useToast(); 
     const [name, setName] = useState(offer?.name || '');
     const [description, setDescription] = useState(offer?.description || '');
     const [benefitsForReferrer, setBenefitsForReferrer] = useState(offer?.benefitsForReferrer || '');
