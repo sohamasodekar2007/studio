@@ -42,16 +42,10 @@ export default function AdminLayoutContent({
 
   return (
       <div className="flex min-h-screen bg-muted/40">
-        <AdminSidebar /> {/* This is the <Sidebar> which is the 'peer' */}
+        <AdminSidebar /> {/* This is the <Sidebar> which is part of the flex flow */}
         <div
           className={cn(
-            "flex flex-col flex-1 transition-[margin-left] duration-300 ease-in-out",
-            // If AdminSidebar is collapsible="none", it's always full width on desktop.
-            // The peer-data-state selectors for collapsed state won't apply as intended for icon-only state.
-            // So, simply set the margin for the full width sidebar.
-            "sm:ml-[var(--sidebar-width)]"
-            // The following line is for icon-collapsible sidebars, might not be needed if AdminSidebar is collapsible="none"
-            // "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]" 
+            "flex flex-col flex-1" // Main content takes remaining space. Removed explicit margin and transition.
           )}
          >
           <AdminHeader />
