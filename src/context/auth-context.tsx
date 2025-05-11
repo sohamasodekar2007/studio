@@ -8,16 +8,16 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    internalReadUsersWithPasswords, // Use the internal function to get hash
-    saveUserToJson, // For direct UserProfile object saving
+    readUsersWithPasswordsInternal, // Corrected import name
+    saveUserToJson, 
     readUsers,
     getUserById,
-    addUserToJson, // For creating new users via signup form
+    addUserToJson, 
     updateUserInJson, 
     deleteUserFromJson, 
     updateUserPasswordInJson, 
     updateUserRole, 
-    findUserByEmailInternal, // Renamed from findUserByEmail for clarity
+    findUserByEmailInternal, 
     findUserByReferralCode,
 } from '@/actions/user-actions'; 
 
@@ -25,10 +25,7 @@ import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email s
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
-// Removed import of firebaseInitializationError as Firebase is no longer used.
-// import { firebaseInitializationError as localError } from '@/lib/firebase';
 
 
 interface AuthContextProps {
@@ -51,13 +48,12 @@ interface AuthContextProps {
   setUser: React.Dispatch<React.SetStateAction<ContextUser>>; 
   setLoading: React.Dispatch<React.SetStateAction<boolean>>; 
   mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; 
-
 }
 
 const AuthContext = createContext<AuthContextProps>({
   user: null,
   loading: true,
-  initializationError: null, // Initialize with null as Firebase error is removed
+  initializationError: null,
   login: async () => { console.warn('Auth: Login not implemented'); },
   logout: async () => { console.warn('Auth: Logout not implemented'); },
   signUp: async () => { console.warn('Auth: SignUp not implemented'); },
@@ -71,8 +67,6 @@ const AuthContext = createContext<AuthContextProps>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ContextUser>(null);
   const [loading, setLoading] = useState(true);
-  // Initialize initializationError to null since Firebase is removed.
-  // It will be set if local storage logic encounters a critical issue.
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
@@ -125,9 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkUserSession = async () => {
         setLoading(true);
-        setInitializationError(null); // Clear previous init errors
+        setInitializationError(null);
         try {
-            await internalReadUsersWithPasswords(); 
+            // Ensure users.json is initialized/validated first
+            await readUsersWithPasswordsInternal(); // Corrected function name
 
             const storedUserJson = localStorage.getItem('loggedInUser');
             if (!storedUserJson) {
@@ -163,22 +158,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
              const updatedContextUser = mapUserProfileToContextUser(latestProfile);
              setUser(updatedContextUser);
-             localStorage.setItem('loggedInUser', JSON.stringify(latestProfile)); 
+             localStorage.setItem('loggedInUser', JSON.stringify(latestProfile));
 
         } catch (e: any) {
              console.error("AuthProvider: Error during session check:", e);
-             // This error will now be from local storage/file operations, not Firebase.
              setInitializationError(`Critical error initializing user data: ${e.message}. Some features might not work.`);
         } finally {
             setLoading(false);
         }
     };
-    checkUserSession();
-  }, [isMounted, mapUserProfileToContextUser, logoutCallback]); 
+    if (!initializationError) { // Only run if there's no existing critical init error
+        checkUserSession();
+    }
+  }, [isMounted, initializationError, logoutCallback, mapUserProfileToContextUser]);
 
 
   const refreshUser = useCallback(async () => {
     if (!user || !user.id || !isMounted) return;
+    if (initializationError) {
+        toast({ variant: 'destructive', title: 'System Error', description: 'Cannot refresh user data due to an initialization error.' });
+        return;
+    }
 
     setLoading(true);
     try {
@@ -197,13 +197,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
        setLoading(false);
     }
-  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback]);
+  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback, initializationError]);
 
 
  const login = useCallback(async (email: string, passwordInput?: string) => {
     if (!isMounted) {
         console.warn("Login attempt before component mount.");
         throw new Error("Component not mounted.");
+    }
+    if (initializationError) {
+        toast({ variant: 'destructive', title: 'System Error', description: initializationError, duration: 7000 });
+        throw new Error(initializationError);
     }
     if (!passwordInput) {
         toast({ variant: 'destructive', title: 'Login Failed', description: 'Password is required.' });
@@ -232,13 +236,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Login failed: Invalid email or password.');
         }
     } catch (error: any) {
-      console.error("Login failed (AuthContext):", error.message);
+      console.error("Simulated login failed:", error);
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
       throw error;
     } finally {
       setLoading(false);
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
 
 
   const signUp = useCallback(async (
@@ -254,6 +258,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        console.warn("Signup attempt before component mount.");
        throw new Error("Component not mounted.");
      }
+    if (initializationError) {
+        toast({ variant: 'destructive', title: 'System Error', description: initializationError, duration: 7000 });
+        throw new Error(initializationError);
+    }
     if (!password) {
         toast({ variant: 'destructive', title: 'Signup Failed', description: 'Password is required.' });
         throw new Error('Password is required.');
@@ -295,23 +303,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
 
 
   useEffect(() => {
-    if (loading || !isMounted) return;
+    if (loading || !isMounted || initializationError) return;
 
     const isAuthPage = pathname.startsWith('/auth');
     const isAdminRoute = pathname.startsWith('/admin');
-    const publicRoutes = [
-        '/', '/help', '/terms', '/privacy', '/tests', '/dpp', '/pyq-dpps', '/take-test',
-        '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review',
-        '/challenge-test', '/challenge-test-result', '/challenge-test-review', '/packages',
-    ];
-     const isPublicRoute = publicRoutes.some(route => {
-         if (pathname.startsWith(route + '/') && route !== '/') return true;
-         return pathname === route;
-     });
+    // More specific public routes, ensure / and /tests are distinct
+    const publicExactRoutes = ['/', '/help', '/terms', '/privacy', '/packages'];
+    const publicPrefixRoutes = ['/tests', '/dpp', '/pyq-dpps', '/take-test', '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review', '/challenge-test', '/challenge-test-result', '/challenge-test-review'];
+
+    const isPublicRoute = publicExactRoutes.includes(pathname) || publicPrefixRoutes.some(route => pathname.startsWith(route + '/') || pathname === route);
+
 
     if (user) {
       const isAdmin = user.role === 'Admin';
@@ -327,7 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.push(`/auth/login${redirectQuery}`);
       }
     }
-  }, [user, loading, pathname, router, isMounted, toast]);
+  }, [user, loading, pathname, router, isMounted, toast, initializationError]);
 
   const updateUserData = (updatedUser: Omit<UserProfile, 'password'>) => {
     if (user && user.id === updatedUser.id && isMounted) { 
@@ -337,7 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-   if (loading && isMounted && !pathname.startsWith('/auth') && !user) {
+   if (loading && isMounted && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth') && !user) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-background">
          <div className="space-y-4 w-full max-w-md p-4">
@@ -349,9 +354,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      );
    }
 
-   // Display initializationError if it's set and not on an auth page
-   // This ensures the app doesn't get stuck if local storage ops fail critically.
-   if (initializationError && !loading && !pathname.startsWith('/auth') && isMounted) {
+   if (initializationError && !loading && isMounted && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
      return (
        <div className="flex items-center justify-center min-h-screen bg-destructive/10 text-destructive-foreground p-6">
          <Alert variant="destructive">
