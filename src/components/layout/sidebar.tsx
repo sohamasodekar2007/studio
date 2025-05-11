@@ -14,7 +14,6 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
   useSidebar,
-  SidebarMenuBadge
 } from '@/components/ui/sidebar';
 import {
   Home,
@@ -40,8 +39,8 @@ import {
   Moon,
   Swords,
   Bell,
-  Gift,
-  ShoppingBag // Added ShoppingBag for packages
+  Gift, // Added Gift icon
+  ShoppingBag // Added ShoppingBag icon
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -61,6 +60,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from 'next-themes';
 import type { ChallengeInvite } from '@/types';
+import { Badge } from '@/components/ui/badge'; // Imported Badge
+
 
 // Define Tutorial Steps Configuration
 const tutorialSteps: Step[] = [
@@ -131,7 +132,7 @@ const tutorialSteps: Step[] = [
     disableBeacon: true,
   },
   {
-    target: '#tutorial-target-packages', // Target for the new packages link
+    target: '#tutorial-target-packages', 
     content: 'View and manage your subscription plans here.',
     placement: 'right',
     disableBeacon: true,
@@ -178,10 +179,7 @@ export function AppSidebar() {
 
   useEffect(() => {
     fetchPendingInvitesCount();
-    // Optionally, set an interval to refresh this count if it needs to be highly real-time,
-    // or rely on AppHeader to update localStorage which might trigger a re-render if this component
-    // is sensitive to localStorage changes (not directly, but if parent re-renders).
-    const intervalId = setInterval(fetchPendingInvitesCount, 30000); // Poll every 30s
+    const intervalId = setInterval(fetchPendingInvitesCount, 30000); 
     return () => clearInterval(intervalId);
   }, [fetchPendingInvitesCount]);
 
@@ -204,16 +202,14 @@ export function AppSidebar() {
         '/challenge/create',
         '/challenges/invites',
         '/referrals',
-        '/packages', // Added packages
+        '/packages', 
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
     }
-    // For nested routes like /tests/[testCode], match the base path /tests
-    if (href.endsWith('/') && href.length > 1) { // Check if it's a base path and not just "/"
+    if (href.endsWith('/') && href.length > 1) { 
         return pathname.startsWith(href);
     }
-    // For other specific parent routes that might not end with '/' but have children
     const parentRoutesWithChildren = ['/tests', '/dpp', '/pyq-dpps', '/notebooks', '/challenge'];
     if (parentRoutesWithChildren.includes(href)) {
         return pathname.startsWith(href + '/');
@@ -264,7 +260,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="hidden sm:flex peer">
-        <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
+        <SidebarHeader className="flex items-center justify-between p-4">
           <Link
             href="/"
             className="flex items-center gap-2 group-data-[state=collapsed]:hidden"
@@ -293,7 +289,6 @@ export function AppSidebar() {
 
         <SidebarContent className="flex-1 mt-2">
           <SidebarMenu>
-            {/* Main Navigation */}
             <SidebarGroup>
               <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Main Navigation</SidebarGroupLabel>
               <SidebarMenuItem>
@@ -364,7 +359,6 @@ export function AppSidebar() {
 
             <SidebarSeparator className="my-3" />
 
-            {/* Friends & Challenges Group */}
             <SidebarGroup id="tutorial-target-friends-group">
                   <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Connect & Compete</SidebarGroupLabel>
                   <SidebarMenuItem>
@@ -381,7 +375,9 @@ export function AppSidebar() {
                                 <Bell />
                                 <span className="group-data-[state=collapsed]:hidden">Challenge Invites</span>
                                 {actualPendingInvitesCount > 0 && (
-                                    <SidebarMenuBadge>{actualPendingInvitesCount}</SidebarMenuBadge>
+                                    <Badge variant="destructive" className="absolute top-1 right-1 h-4 w-4 p-0 flex items-center justify-center text-xs group-data-[state=expanded]:right-2 group-data-[state=expanded]:top-1.5">
+                                       {actualPendingInvitesCount}
+                                    </Badge>
                                 )}
                             </SidebarMenuButton>
                         </Link>
@@ -434,28 +430,6 @@ export function AppSidebar() {
               </SidebarMenuItem>
             </SidebarGroup>
             
-            <SidebarSeparator className="my-3" />
-             <SidebarGroup>
-                 <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Advanced</SidebarGroupLabel>
-                 <SidebarMenuItem>
-                     <Link href="/referrals" passHref legacyBehavior>
-                         <SidebarMenuButton as="a" isActive={isActive('/referrals')} tooltip="Referrals" id="tutorial-target-referrals">
-                             <Gift />
-                             <span className="group-data-[state=collapsed]:hidden">Referrals</span>
-                         </SidebarMenuButton>
-                     </Link>
-                 </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/packages" passHref legacyBehavior>
-                        <SidebarMenuButton as="a" isActive={isActive('/packages')} tooltip="Upgrade Plan" id="tutorial-target-packages">
-                            <ShoppingBag />
-                            <span className="group-data-[state=collapsed]:hidden">Upgrade Plan</span>
-                        </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-             </SidebarGroup>
-
-
             {isAdmin && (
               <>
                 <SidebarSeparator className="my-3" />
@@ -496,6 +470,19 @@ export function AppSidebar() {
                 >
                     <DropdownMenuLabel>Options</DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                     <DropdownMenuItem asChild>
+                        <Link href="/packages">
+                            <ShoppingBag className="mr-2 h-4 w-4" />
+                            <span>Upgrade Plan</span>
+                        </Link>
+                     </DropdownMenuItem>
+                     <DropdownMenuItem asChild>
+                         <Link href="/referrals">
+                             <Gift className="mr-2 h-4 w-4" />
+                             <span>Referrals</span>
+                         </Link>
+                     </DropdownMenuItem>
+                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
                         {theme === 'light' ? <Moon className="mr-2 h-4 w-4" /> : <Sun className="mr-2 h-4 w-4" />}
                         <span>Toggle Theme</span>
