@@ -17,8 +17,8 @@ import {
   List,
   Globe,
   PieChart,
-  BookOpen, // Adding BookOpen for consistency if used for general Tests or similar
-  Gift // Added Gift icon for referrals
+  BookOpen,
+  Gift 
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,7 +34,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/context/auth-context';
-import Image from 'next/image'; // Import Image
+import Image from 'next/image';
 
 // Define navigation items for the admin sidebar
 const mainNavItems = [
@@ -54,7 +54,7 @@ const platformManagementItems = [
   { href: '/admin/payments', label: 'Payments', icon: Banknote },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/admin/reports', label: 'Reports', icon: PieChart }, 
-  { href: '/admin/referrals', label: 'Referrals', icon: Gift }, // Added Referrals link
+  { href: '/admin/referrals', label: 'Referrals', icon: Gift },
 ];
 
 const settingsNavItem = { href: '/admin/settings', label: 'Settings', icon: Settings };
