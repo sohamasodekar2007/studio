@@ -18,7 +18,7 @@ import { format } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, type UserModel, academicStatuses, type AcademicStatus } from '@/types';
 import { addUserToJson } from '@/actions/user-actions'; 
-import { v4 as uuidv4 } from 'uuid';
+import { ScrollArea } from '@/components/ui/scroll-area'; // Import ScrollArea
 
 
 const userRoles = ['User', 'Admin'] as const;
@@ -67,7 +67,7 @@ const addUserSchema = z.object({
 
 
 type AddUserFormValues = z.infer<typeof addUserSchema>;
-type DisplayUserProfile = Omit<UserProfile, 'password'>; // For callback
+type DisplayUserProfile = Omit<UserProfile, 'password'>;
 
 interface AddUserDialogProps {
   isOpen: boolean;
@@ -101,28 +101,21 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
   const emailValue = form.watch("email");
 
   useEffect(() => {
-    // Auto-adjust role based on email pattern if not Admin
     if (selectedRole !== 'Admin') {
         const derivedRole = (emailValue.toLowerCase() === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailValue.toLowerCase())) ? 'Admin' : 'User';
         if (derivedRole === 'Admin' && selectedRole === 'User') {
-           // This can cause an infinite loop if not careful.
-           // The Zod schema should catch this.
-           // If schema allows 'User' role for admin-pattern emails, this is fine.
-           // But schema now prevents User role for admin-pattern emails, so this block might not be needed.
         }
-        setEffectiveRole(derivedRole); // Store the derived role
+        setEffectiveRole(derivedRole);
     } else {
-        setEffectiveRole('Admin'); // If Admin selected, stick to it
+        setEffectiveRole('Admin'); 
     }
   }, [emailValue, selectedRole]);
 
 
   const onSubmit = async (data: AddUserFormValues) => {
     setIsLoading(true);
-    console.log("AddUserDialog: Submitting data:", data);
     try {
-      
-      const finalRole = data.role; // The role from the form is now validated by Zod
+      const finalRole = data.role; 
 
       let finalModel = data.model;
       let finalExpiryDate = data.expiry_date;
@@ -146,11 +139,9 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
         targetYear: data.targetYear || null,
       };
 
-      console.log("AddUserDialog: Prepared data for action:", newUserProfileForAction);
       const result = await addUserToJson(newUserProfileForAction);
 
       if (!result.success || !result.user) {
-        console.error("AddUserDialog: addUserToJson failed:", result.message);
         throw new Error(result.message || 'Failed to add new user.');
       }
 
@@ -164,7 +155,6 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
       onClose(); 
 
     } catch (error: any) {
-      console.error('AddUserDialog: Failed to add user:', error);
       toast({
         variant: 'destructive',
         title: 'Add User Failed',
@@ -177,74 +167,75 @@ export default function AddUserDialog({ isOpen, onClose, onUserAdded }: AddUserD
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
             Create a new user account. Select the role and fill in the details.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
+        <ScrollArea className="flex-grow pr-6 -mr-6"> {/* Add ScrollArea here */}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
 
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem className="sm:col-span-2">
-                  <FormLabel>User Role *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {userRoles.map((roleOption) => (
-                        <SelectItem key={roleOption} value={roleOption}>
-                          {roleOption}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>User Role *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {userRoles.map((roleOption) => (
+                          <SelectItem key={roleOption} value={roleOption}>
+                            {roleOption}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Full Name *</FormLabel><FormControl><Input {...field} placeholder="John Doe" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email Address *</FormLabel><FormControl><Input type="email" {...field} placeholder="user@example.com or name-admin@edunexus.com" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number *</FormLabel><FormControl><Input type="tel" {...field} placeholder="9876543210" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="password" render={({ field }) => ( <FormItem><FormLabel>Password *</FormLabel><FormControl><Input type="password" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
+              <FormField control={form.control} name="confirmPassword" render={({ field }) => ( <FormItem><FormLabel>Confirm Password *</FormLabel><FormControl><Input type="password" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
+
+              {selectedRole === 'User' && (
+              <>
+                  <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)} value={field.value === null ? '_none_' : (field.value || '_none_')} disabled={isLoading} ><FormControl><SelectTrigger><SelectValue placeholder="Select status (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{academicStatuses.map((status) => ( <SelectItem key={status} value={status}>{status}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
+                  <FormField control={form.control} name="targetYear" render={({ field }) => ( <FormItem><FormLabel>Target Year</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : (field.value || '_none_')} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select target year (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{yearOptions.map((year) => ( <SelectItem key={year} value={year}>{year}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
+                  <FormField control={form.control} name="model" render={({ field }) => ( <FormItem><FormLabel>Subscription Model *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger></FormControl><SelectContent>{userModels.map((model) => ( <SelectItem key={model} value={model} className="capitalize">{model.replace('_', ' ')}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
+                  {selectedModel !== 'free' && (
+                      <FormField control={form.control} name="expiry_date" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>Expiry Date {selectedModel !== 'free' ? '*' : ''}</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground" )} disabled={isLoading}><CalendarIcon className="ml-auto h-4 w-4 opacity-50" />{field.value ? ( format(field.value, "PPP") ) : ( <span>Pick an expiry date</span> )}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading } initialFocus /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
+                  )}
+              </>
               )}
-            />
+              {selectedRole === 'Admin' && (
+                  <div className="sm:col-span-2 text-sm text-muted-foreground p-3 border rounded-md bg-secondary/20">
+                      Admin accounts are automatically assigned the 'Combo' plan with maximum expiry.
+                  </div>
+              )}
 
-            <FormField control={form.control} name="name" render={({ field }) => ( <FormItem><FormLabel>Full Name *</FormLabel><FormControl><Input {...field} placeholder="John Doe" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="email" render={({ field }) => ( <FormItem><FormLabel>Email Address *</FormLabel><FormControl><Input type="email" {...field} placeholder="user@example.com or name-admin@edunexus.com" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="phone" render={({ field }) => ( <FormItem><FormLabel>Phone Number *</FormLabel><FormControl><Input type="tel" {...field} placeholder="9876543210" disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="password" render={({ field }) => ( <FormItem><FormLabel>Password *</FormLabel><FormControl><Input type="password" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-            <FormField control={form.control} name="confirmPassword" render={({ field }) => ( <FormItem><FormLabel>Confirm Password *</FormLabel><FormControl><Input type="password" {...field} disabled={isLoading} /></FormControl><FormMessage /></FormItem> )} />
-
-            {selectedRole === 'User' && (
-             <>
-                <FormField control={form.control} name="class" render={({ field }) => ( <FormItem><FormLabel>Academic Status</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)} value={field.value === null ? '_none_' : (field.value || '_none_')} disabled={isLoading} ><FormControl><SelectTrigger><SelectValue placeholder="Select status (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{academicStatuses.map((status) => ( <SelectItem key={status} value={status}>{status}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
-                 <FormField control={form.control} name="targetYear" render={({ field }) => ( <FormItem><FormLabel>Target Year</FormLabel><Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value === null ? '_none_' : (field.value || '_none_')} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select target year (Optional)" /></SelectTrigger></FormControl><SelectContent><SelectItem value="_none_">-- None --</SelectItem>{yearOptions.map((year) => ( <SelectItem key={year} value={year}>{year}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
-                 <FormField control={form.control} name="model" render={({ field }) => ( <FormItem><FormLabel>Subscription Model *</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={isLoading}><FormControl><SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger></FormControl><SelectContent>{userModels.map((model) => ( <SelectItem key={model} value={model} className="capitalize">{model.replace('_', ' ')}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
-                 {selectedModel !== 'free' && (
-                     <FormField control={form.control} name="expiry_date" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>Expiry Date {selectedModel !== 'free' ? '*' : ''}</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground" )} disabled={isLoading}><CalendarIcon className="ml-auto h-4 w-4 opacity-50" />{field.value ? ( format(field.value, "PPP") ) : ( <span>Pick an expiry date</span> )}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || isLoading } initialFocus /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
-                 )}
-            </>
-            )}
-            {selectedRole === 'Admin' && (
-                <div className="sm:col-span-2 text-sm text-muted-foreground p-3 border rounded-md bg-secondary/20">
-                    Admin accounts are automatically assigned the 'Combo' plan with maximum expiry.
-                </div>
-            )}
-
-             <DialogFooter className="sm:col-span-2 mt-4">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
-                <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Add User
-                </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+              <DialogFooter className="sm:col-span-2 mt-4">
+                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
+                  <Button type="submit" disabled={isLoading}>
+                      {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Add User
+                  </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
 }
-
