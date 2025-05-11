@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import type { ChallengeInvite } from '@/types';
-import { Badge } from '@/components/ui/badge'; // Imported Badge
+import { Badge } from '@/components/ui/badge'; 
 
 // Helper function to request notification permission
 const requestNotificationPermission = async () => {
@@ -185,10 +185,10 @@ export function AppHeader() {
         <div className="flex items-center gap-2 md:gap-3">
           {/* Upgrade Button */}
           {user.model !== 'combo' && (
-            <Button asChild size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
+            <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary h-8 px-2.5 text-xs rounded-md">
               <Link href="/packages">
-                <Sparkles className="mr-1.5 h-4 w-4" />
-                Upgrade Now
+                <Sparkles className="mr-1 h-3 w-3" />
+                Upgrade
               </Link>
             </Button>
           )}
