@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    readUsersWithPasswordsInternal,
+    internalReadUsersWithPasswords, // Use the internal function to get hash
     saveUserToJson, 
     readUsers,
     getUserById,
@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import bcrypt from 'bcryptjs';
+import { Button } from '@/components/ui/button';
 
 
 interface AuthContextProps {
@@ -34,7 +35,7 @@ interface AuthContextProps {
   loading: boolean;
   initializationError: string | null;
   login: (email: string, password?: string) => Promise<void>;
-  logout: (message?: string) => Promise<void>;
+  logout: (message?: string, redirectPath?: string) => Promise<void>;
   signUp: (
     email: string,
     password?: string,
@@ -45,7 +46,7 @@ interface AuthContextProps {
     referralCodeUsed?: string | null
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
-  updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void; // To update context user from other parts of app
+  updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void; 
   setUser: React.Dispatch<React.SetStateAction<ContextUser>>; 
   setLoading: React.Dispatch<React.SetStateAction<boolean>>; 
   mapUserProfileToContextUser: (userProfile: Omit<UserProfile, 'password'> | null) => ContextUser; 
@@ -80,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const mapUserProfileToContextUser = useCallback((userProfile: Omit<UserProfile, 'password'> | null): ContextUser => {
       if (!userProfile) return null;
-      // Ensure all fields expected by ContextUser are present
       return {
           id: userProfile.id,
           email: userProfile.email,
@@ -102,9 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logoutCallback = useCallback(async (message?: string, redirectPath: string = '/auth/login') => {
-     if (!isMounted) return;
-    setLoading(true);
+    if (!isMounted) return;
+    setLoading(true); 
+
     setUser(null);
+    setInitializationError(null); 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('loggedInUser');
     }
@@ -113,9 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
         toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
+    setLoading(false); 
     router.push(redirectPath);
-    setLoading(false);
-  }, [router, toast, isMounted]);
+  }, [router, toast, isMounted, setLoading, setUser, setInitializationError]);
 
 
   useEffect(() => {
@@ -123,13 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkUserSession = async () => {
         setLoading(true);
-        setInitializationError(null);
+        setInitializationError(null); 
         console.log("AuthProvider: Starting session check...");
         try {
-            // Ensure users.json is initialized/validated first by attempting a read.
-            // This helps catch critical file system issues early.
             console.log("AuthProvider: Attempting to initialize user data store...");
-            await readUsersWithPasswordsInternal(); 
+            await internalReadUsersWithPasswords(); 
             console.log("AuthProvider: User data store initialized/validated.");
 
             let storedUserJson: string | null = null;
@@ -155,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
 
-
             if (!storedUser || !storedUser.id || !storedUser.email) {
                  console.warn("AuthProvider: Stored user data is invalid. Logging out.");
                  await logoutCallback("Invalid session data. Please log in again.");
@@ -164,15 +163,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             
             console.log(`AuthProvider: Fetching latest profile for user ID: ${storedUser.id}`);
-             const latestProfile = await getUserById(storedUser.id); 
+            const latestProfile = await getUserById(storedUser.id); 
 
-             if (!latestProfile) {
+            if (!latestProfile) {
                   console.warn(`AuthProvider: User ID ${storedUser.id} not found in backend. Logging out.`);
                   await logoutCallback("Your account could not be found. Please log in again.");
                   setLoading(false);
                   return;
-             }
-             console.log("AuthProvider: Latest profile fetched:", latestProfile.email, "Role:", latestProfile.role, "Model:", latestProfile.model);
+            }
+            console.log("AuthProvider: Latest profile fetched:", latestProfile.email, "Role:", latestProfile.role, "Model:", latestProfile.model);
 
             const profileChangedCritically = 
                 storedUser.model !== latestProfile.model ||
@@ -185,29 +184,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   setLoading(false);
                   return;
             }
-             const updatedContextUser = mapUserProfileToContextUser(latestProfile);
-             setUser(updatedContextUser);
-             if (typeof window !== 'undefined') {
+            const updatedContextUser = mapUserProfileToContextUser(latestProfile);
+            setUser(updatedContextUser);
+            if (typeof window !== 'undefined') {
                 localStorage.setItem('loggedInUser', JSON.stringify(latestProfile));
-             }
-             console.log("AuthProvider: Session validated and user set.", updatedContextUser?.email);
+            }
+            console.log("AuthProvider: Session validated and user set.", updatedContextUser?.email);
 
         } catch (e: any) {
              console.error("AuthProvider: Critical error during session check/initialization:", e);
              setInitializationError(`Critical error initializing user data: ${e.message}. Ensure 'users.json' exists and is accessible or try clearing browser data.`);
-             // Potentially logout or prevent app usage if this is truly critical
         } finally {
             setLoading(false);
             console.log("AuthProvider: Session check complete. Loading set to false.");
         }
     };
-    if (!initializationError) { 
-        checkUserSession();
-    } else {
-      setLoading(false); // Ensure loading stops if there's an init error
+    
+    if (initializationError && !pathname.startsWith('/auth')) {
+        // If there's a critical error and we're not on an auth page, stop loading.
+        // The error UI will be shown by the main return.
+        setLoading(false);
+    } else if (initializationError && pathname.startsWith('/auth')) {
+        // If there's a critical error but we ARE on an auth page, allow auth page to render.
+        // Still stop loading so the auth page itself doesn't show its own loader indefinitely.
+        setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMounted, mapUserProfileToContextUser, logoutCallback]); // Removed initializationError from deps to prevent re-check loops on this error
+    else {
+        // No prior initialization error, proceed with session check.
+        checkUserSession();
+    }
+  }, [isMounted, pathname]); // Rerun if isMounted changes or if pathname changes (to handle initial load correctly)
 
 
   const refreshUser = useCallback(async () => {
@@ -236,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
        setLoading(false);
     }
-  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback, initializationError]);
+  }, [user, toast, isMounted, mapUserProfileToContextUser, logoutCallback, initializationError, setLoading, setUser]);
 
 
  const login = useCallback(async (email: string, passwordInput?: string) => {
@@ -268,8 +274,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 const isAdmin = contextUser?.role === 'Admin';
                 const redirectPath = isAdmin ? '/admin' : '/';
-                router.push(redirectPath);
                 toast({ title: "Login Successful", description: `Welcome back, ${contextUser?.name || contextUser?.email}!` });
+                setLoading(false); 
+                router.push(redirectPath);
              } else {
                  console.warn(`AuthProvider: Password mismatch for ${email}.`);
                  throw new Error('Login failed: Invalid email or password.'); 
@@ -281,11 +288,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error("Login failed:", error);
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
+      setLoading(false); 
       throw error; 
-    } finally {
-      setLoading(false);
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError, setLoading, setUser]);
 
 
   const signUp = useCallback(async (
@@ -339,19 +345,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
       toast({ title: "Account Created!", description: `Welcome to EduNexus! You are now logged in.` });
+      setLoading(false); 
       router.push('/'); 
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Sign Up Failed', description: error.message });
+      setLoading(false); 
       throw error; 
-    } finally {
-      setLoading(false);
     }
-  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError]);
+  }, [router, toast, isMounted, mapUserProfileToContextUser, initializationError, setLoading, setUser]);
 
 
   useEffect(() => {
     if (!isMounted || initializationError) return;
-    if (loading) return; // Wait until initial loading/session check is complete
+    if (loading) return; 
 
 
     const isAuthPage = pathname.startsWith('/auth');
@@ -368,16 +374,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user) {
       const isAdmin = user.role === 'Admin';
       if (isAuthPage) {
-        console.log("User is on auth page, redirecting...", isAdmin ? '/admin' : '/');
+        console.log("AuthProvider: User is logged in and on auth page, redirecting...", isAdmin ? '/admin' : '/');
         router.push(isAdmin ? '/admin' : '/');
       } else if (isAdminRoute && !isAdmin) {
-        console.log("User is not admin but on admin route, redirecting to /");
+        console.log("AuthProvider: User is not admin but on admin route, redirecting to /");
         toast({ variant: "destructive", title: "Access Denied", description: "You do not have permission to access the admin panel." });
         router.push('/');
       }
-    } else { // No user
+    } else { 
       if (!isAuthPage && !isPublicRoute) {
-        console.log("User not logged in and not on public/auth page, redirecting to login. Current pathname:", pathname);
+        console.log("AuthProvider: User not logged in and not on public/auth page, redirecting to login. Current pathname:", pathname);
         const redirectQuery = pathname && pathname !== '/' ? `?redirect=${encodeURIComponent(pathname)}` : '';
         router.push(`/auth/login${redirectQuery}`);
       }
@@ -385,8 +391,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, loading, pathname, router, isMounted, toast, initializationError]);
 
   const updateUserData = (updatedUser: Omit<UserProfile, 'password'>) => {
-    // This function is called when user data is updated elsewhere (e.g., settings page)
-    // to ensure the context and localStorage are in sync immediately for the current user.
     if (user && user.id === updatedUser.id && isMounted) { 
         const contextUser = mapUserProfileToContextUser(updatedUser);
         setUser(contextUser);
@@ -396,21 +400,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-   // Enhanced Loading and Error UI
    if (!isMounted) {
-    // Minimal loader for very initial phase, or nothing to avoid flash
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-   }
-
-   if (loading) { // loading is true during session check
-     return (
-       <div className="flex items-center justify-center min-h-screen bg-background">
-         <div className="space-y-4 w-full max-w-md p-4 text-center">
-           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-           <p className="text-muted-foreground">Loading EduNexus...</p>
-         </div>
-       </div>
-     );
    }
 
    if (initializationError && !pathname.startsWith('/auth')) {
@@ -421,10 +412,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
            <AlertTitle className="font-semibold">Application Initialization Error</AlertTitle>
            <AlertDescription className="text-sm">
              {initializationError}
-             <p className="mt-2 text-xs">Please ensure your browser settings allow local storage and try clearing your browser's cache or site data. If the issue persists, contact support.</p>
+             <p className="mt-2 text-xs">Please ensure required setup is complete (e.g., .env file, data files). Clearing browser data or restarting the server might help. If the issue persists, contact support.</p>
             </AlertDescription>
          </Alert>
-         <Button onClick={() => router.push('/auth/login')} className="mt-6">Go to Login</Button>
+         <Button onClick={() => {
+             if(typeof window !== 'undefined') localStorage.removeItem('loggedInUser'); 
+             window.location.href = '/auth/login'; 
+         }} className="mt-6">Go to Login</Button>
+       </div>
+     );
+   }
+
+   if (loading) {
+     return (
+       <div className="flex items-center justify-center min-h-screen bg-background">
+         <div className="space-y-4 w-full max-w-md p-4 text-center">
+           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+           <p className="text-muted-foreground">Loading EduNexus...</p>
+         </div>
        </div>
      );
    }
@@ -437,4 +442,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
-
+```

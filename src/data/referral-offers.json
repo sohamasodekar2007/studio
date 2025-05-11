@@ -7,6 +7,9 @@
     "expiryDate": "2025-05-13T18:30:00.000Z",
     "isActive": true,
     "id": "16727bc8-5e27-4d30-af68-0edd3baf36f3",
-    "createdAt": "2025-05-11T09:29:22.791Z"
+    "createdAt": "2025-05-11T09:29:22.791Z",
+    "discountAmount": 50,
+    "discountType": "percentage",
+    "beneficiaryUserId": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
   }
 ]
