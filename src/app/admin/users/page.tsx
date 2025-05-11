@@ -26,6 +26,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger, // Added AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/context/auth-context';
@@ -48,7 +49,7 @@ export default function AdminUsersPage() {
 
   const [dialogState, setDialogState] = useState<{
     type: 'edit' | 'reset' | 'add' | 'changeRole' | null;
-    user: DisplayUserProfile | null;
+    user: DisplayUserProfile | null; // Use DisplayUserProfile here as well
   }>({ type: null, user: null });
 
 
@@ -123,16 +124,19 @@ export default function AdminUsersPage() {
              const userToChange = users.find(u => u.id === userId);
              if (!userToChange) {
                 toast({ variant: "destructive", title: "Error", description: "User not found." });
+                setIsChangingRole(null); // Reset loading state
                 return;
              }
              if (userToChange.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && newRole === 'User') {
                  toast({ variant: "destructive", title: "Action Denied", description: "Cannot change the role of the primary admin account." });
+                 setIsChangingRole(null); // Reset loading state
                  return;
              }
             
             const emailLower = userToChange.email?.toLowerCase() || '';
             if (newRole === 'Admin' && emailLower !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(emailLower)) {
                  toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot promote to Admin. Email '${userToChange.email}' does not follow admin pattern ('username-admin@edunexus.com' or be the primary admin).` });
+                 setIsChangingRole(null); // Reset loading state
                  return;
             }
 
