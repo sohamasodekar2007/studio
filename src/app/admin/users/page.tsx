@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, UserCheck, User, Shield, Loader2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, Phone, Trash2, Edit, KeyRound, User, ShieldCheck, Loader2 } from "lucide-react";
 import { Skeleton } from '@/components/ui/skeleton';
-import type { UserProfile, UserModel, AcademicStatus } from '@/types';
+import type { UserProfile, UserModel, AcademicStatus, ContextUser } from '@/types'; // Ensure ContextUser is imported if used
 import { readUsers, deleteUserFromJson, updateUserRole } from '@/actions/user-actions';
 import { useToast } from '@/hooks/use-toast';
 import EditUserDialog from '@/components/admin/edit-user-dialog';
@@ -34,38 +34,37 @@ import { useAuth } from '@/context/auth-context';
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
 const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
 
-type UserProfileWithRole = Omit<UserProfile, 'password'>;
+// Use Omit<UserProfile, 'password'> consistently for user data displayed or managed in UI
+type DisplayUserProfile = Omit<UserProfile, 'password'>;
 
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
-  const { user: adminUser, loading: authLoading } = useAuth();
-  const [users, setUsers] = useState<UserProfileWithRole[]>([]);
+  const { user: adminUser, loading: authLoading, logout: contextLogout } = useAuth(); // Use contextLogout for potential forced logouts
+  const [users, setUsers] = useState<DisplayUserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isChangingRole, setIsChangingRole] = useState<string | null>(null);
 
-  const [dialogState, setDialogState] = useState<{
+  const [dialogState, setDialogState<{
     type: 'edit' | 'reset' | 'add' | 'changeRole' | null;
-    user: UserProfileWithRole | null;
+    user: DisplayUserProfile | null; // Use DisplayUserProfile
   }>({ type: null, user: null });
 
 
-  const fetchAllUsers = useCallback(() => {
+  const fetchAllUsers = useCallback(async () => {
      setIsLoading(true);
-     readUsers()
-      .then(data => {
-        setUsers(data as UserProfileWithRole[]);
-      })
-      .catch(error => {
+     try {
+        const data = await readUsers(); // This now returns Omit<UserProfile, 'password'>[]
+        setUsers(data);
+     } catch (error) {
         console.error("Failed to fetch users:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load users." });
         setUsers([]);
-      })
-      .finally(() => {
+     } finally {
         setIsLoading(false);
-      });
+     }
   }, [toast]);
 
 
@@ -98,7 +97,7 @@ export default function AdminUsersPage() {
        setIsDeleting(userId);
        try {
            const userToDelete = users.find(u => u.id === userId);
-            if (userToDelete?.email === primaryAdminEmail) {
+            if (userToDelete?.email?.toLowerCase() === primaryAdminEmail.toLowerCase()) {
                  toast({ variant: "destructive", title: "Action Denied", description: "Cannot delete the primary admin account." });
                  setIsDeleting(null);
                  return;
@@ -123,33 +122,37 @@ export default function AdminUsersPage() {
         setIsChangingRole(userId);
         try {
              const userToChange = users.find(u => u.id === userId);
-             if (userToChange?.email === primaryAdminEmail) {
+             if (!userToChange) {
+                toast({ variant: "destructive", title: "Error", description: "User not found." });
+                return;
+             }
+             if (userToChange.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && newRole !== 'Admin') {
                  toast({ variant: "destructive", title: "Action Denied", description: "Cannot change the role of the primary admin account." });
-                 setIsChangingRole(null);
-                 closeDialog();
                  return;
              }
-            // Additional validation on email format for role change
-            const emailLower = userToChange?.email?.toLowerCase() || '';
+            
+            const emailLower = userToChange.email?.toLowerCase() || '';
             if (newRole === 'Admin' && emailLower !== primaryAdminEmail.toLowerCase() && !adminEmailPattern.test(emailLower)) {
-                 toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot promote to Admin. Email '${userToChange?.email}' does not follow admin pattern ('username-admin@edunexus.com' or primary admin).` });
-                 setIsChangingRole(null);
-                 closeDialog();
+                 toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot promote to Admin. Email '${userToChange.email}' does not follow admin pattern ('username-admin@edunexus.com' or be the primary admin).` });
                  return;
             }
-            if (newRole === 'User' && (emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower))) {
-                 toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot demote to User. Email format '${userToChange?.email}' is reserved for Admins.`});
-                 setIsChangingRole(null);
-                 closeDialog();
-                 return;
-            }
+             // This validation might be too strict if an admin email was manually set for a user that should be demoted.
+             // Consider if admin pattern check should only be for promotion.
+            // if (newRole === 'User' && (emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower))) {
+            //      toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot demote to User. Email format '${userToChange.email}' is reserved for Admins.`});
+            //      return;
+            // }
 
             const result = await updateUserRole(userId, newRole);
             if (result.success && result.user) {
                  toast({ title: "Role Updated", description: `User role changed to ${newRole}.` });
                  setUsers(prevUsers =>
-                    prevUsers.map(u => (u.id === userId ? result.user as UserProfileWithRole : u))
+                    prevUsers.map(u => (u.id === userId ? result.user as DisplayUserProfile : u))
                  );
+                 // If current admin changed their own role to User, force logout
+                 if (adminUser?.id === userId && newRole === 'User') {
+                    await contextLogout("Your role has been changed. Please log in again.");
+                 }
             } else {
                 throw new Error(result.message || `Failed to change role to ${newRole}.`);
             }
@@ -162,22 +165,22 @@ export default function AdminUsersPage() {
         }
     };
 
-   const handleUserUpdate = (updatedUser: UserProfileWithRole) => {
+   const handleUserUpdate = (updatedUser: DisplayUserProfile) => {
         setUsers(prevUsers =>
             prevUsers.map(u => (u.id === updatedUser.id ? updatedUser : u))
         );
         closeDialog();
     };
 
-   const handleUserAdded = (newUser: UserProfileWithRole) => {
+   const handleUserAdded = (newUser: DisplayUserProfile) => { // Expect DisplayUserProfile
        setUsers(prevUsers => [newUser, ...prevUsers].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
        closeDialog();
    }
 
-   const openEditDialog = (user: UserProfileWithRole) => setDialogState({ type: 'edit', user });
-   const openResetDialog = (user: UserProfileWithRole) => setDialogState({ type: 'reset', user });
+   const openEditDialog = (user: DisplayUserProfile) => setDialogState({ type: 'edit', user });
+   const openResetDialog = (user: DisplayUserProfile) => setDialogState({ type: 'reset', user });
    const openAddDialog = () => setDialogState({ type: 'add', user: null });
-   const openChangeRoleDialog = (user: UserProfileWithRole) => setDialogState({ type: 'changeRole', user });
+   const openChangeRoleDialog = (user: DisplayUserProfile) => setDialogState({ type: 'changeRole', user });
    const closeDialog = () => setDialogState({ type: null, user: null });
 
    const getInitials = (name?: string | null, email?: string | null) => {
@@ -203,7 +206,7 @@ export default function AdminUsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isLoading || authLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={`skeleton-${index}`}>
                       <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
@@ -211,33 +214,33 @@ export default function AdminUsersPage() {
                     </TableRow>
                   ))
                 ) : filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => {
-                  const isCurrentUserPrimaryAdmin = user.email === primaryAdminEmail;
-                  const avatarSrc = user.avatarUrl ? `/avatars/${user.avatarUrl}` : `https://avatar.vercel.sh/${user.email || user.id}.png?size=40`;
+                  filteredUsers.map((u) => { // u is DisplayUserProfile here
+                  const isCurrentUserPrimaryAdmin = u.email?.toLowerCase() === primaryAdminEmail.toLowerCase();
+                  const avatarSrc = u.avatarUrl ? `/avatars/${u.avatarUrl}` : (u.email ? `https://avatar.vercel.sh/${u.email}.png?size=40` : undefined);
                     return (
-                    <TableRow key={user.id}>
-                      <TableCell><Avatar className="h-8 w-8"><AvatarImage src={avatarSrc} alt={user.name || 'User'} /><AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback></Avatar></TableCell>
-                      <TableCell className="font-medium">{user.name || 'N/A'} {isCurrentUserPrimaryAdmin ? '(Primary)' : ''}</TableCell>
-                      <TableCell>{user.email || 'N/A'}</TableCell>
-                      <TableCell>{user.phone ? (<span className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground"/>{user.phone}</span>) : ('N/A')}</TableCell>
-                      <TableCell><Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>{user.role}</Badge></TableCell>
-                      <TableCell className="capitalize">{user.model || 'N/A'}</TableCell>
-                      <TableCell>{user.class || 'N/A'}</TableCell>
-                      <TableCell>{user.targetYear || 'N/A'}</TableCell>
-                      <TableCell>{formatDate(user.expiry_date)}</TableCell>
-                      <TableCell>{formatDate(user.createdAt)}</TableCell>
+                    <TableRow key={u.id}>
+                      <TableCell><Avatar className="h-8 w-8"><AvatarImage src={avatarSrc} alt={u.name || 'User'} /><AvatarFallback>{getInitials(u.name, u.email)}</AvatarFallback></Avatar></TableCell>
+                      <TableCell className="font-medium">{u.name || 'N/A'} {isCurrentUserPrimaryAdmin ? '(Primary)' : ''}</TableCell>
+                      <TableCell>{u.email || 'N/A'}</TableCell>
+                      <TableCell>{u.phone ? (<span className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground"/>{u.phone}</span>) : ('N/A')}</TableCell>
+                      <TableCell><Badge variant={u.role === 'Admin' ? 'destructive' : 'secondary'}>{u.role}</Badge></TableCell>
+                      <TableCell className="capitalize">{u.model || 'N/A'}</TableCell>
+                      <TableCell>{u.class || 'N/A'}</TableCell>
+                      <TableCell>{u.targetYear || 'N/A'}</TableCell>
+                      <TableCell>{formatDate(u.expiry_date)}</TableCell>
+                      <TableCell>{formatDate(u.createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">Toggle menu</span></Button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => openEditDialog(user)}><Edit className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openResetDialog(user)} disabled={isCurrentUserPrimaryAdmin}><KeyRound className="mr-2 h-4 w-4" /> Reset Password</DropdownMenuItem>
-                            {!isCurrentUserPrimaryAdmin && (<DropdownMenuItem onClick={() => openChangeRoleDialog(user)} disabled={isChangingRole === user.id}>{isChangingRole === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Shield className="mr-2 h-4 w-4" />} Change Role</DropdownMenuItem>)}
+                            <DropdownMenuItem onClick={() => openEditDialog(u)}><Edit className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openResetDialog(u as UserProfile)} disabled={isCurrentUserPrimaryAdmin}><KeyRound className="mr-2 h-4 w-4" /> Reset Password</DropdownMenuItem>
+                            {!isCurrentUserPrimaryAdmin && (<DropdownMenuItem onClick={() => openChangeRoleDialog(u)} disabled={isChangingRole === u.id}>{isChangingRole === u.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Change Role</DropdownMenuItem>)}
                             <DropdownMenuSeparator />
                             <AlertDialog><AlertDialogTrigger asChild>
-                                  <Button variant="ghost" className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive" disabled={isCurrentUserPrimaryAdmin || !!isDeleting}>{isDeleting === user.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User</Button>
-                              </AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{user.email}</span> and remove their data.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteUser(user.id)} className="bg-destructive hover:bg-destructive/90">Yes, delete user</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+                                  <Button variant="ghost" className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive" disabled={isCurrentUserPrimaryAdmin || !!isDeleting}>{isDeleting === u.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User</Button>
+                              </AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{u.email}</span> and remove their data.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteUser(u.id)} className="bg-destructive hover:bg-destructive/90">Yes, delete user</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -252,10 +255,12 @@ export default function AdminUsersPage() {
         </CardContent>
         <CardFooter><div className="text-xs text-muted-foreground">Showing <strong>{filteredUsers.length}</strong> of <strong>{users.length}</strong> users</div></CardFooter>
       </Card>
-      {dialogState.type === 'edit' && dialogState.user && (<EditUserDialog user={dialogState.user} isOpen={dialogState.type === 'edit'} onClose={closeDialog} onUserUpdate={handleUserUpdate}/>)}
-      {dialogState.type === 'reset' && dialogState.user && (<ResetPasswordDialog user={dialogState.user} isOpen={dialogState.type === 'reset'} onClose={closeDialog}/>)}
-      {dialogState.type === 'add' && (<AddUserDialog isOpen={dialogState.type === 'add'} onClose={closeDialog} onUserAdded={handleUserAdded}/>)}
+      {/* Ensure dialogState.user passed to EditUserDialog is compatible */}
+      {dialogState.type === 'edit' && dialogState.user && (<EditUserDialog user={dialogState.user as UserProfileWithRole} isOpen={dialogState.type === 'edit'} onClose={closeDialog} onUserUpdate={handleUserUpdate}/>)}
+      {dialogState.type === 'reset' && dialogState.user && (<ResetPasswordDialog user={dialogState.user as UserProfile} isOpen={dialogState.type === 'reset'} onClose={closeDialog}/>)}
+      {dialogState.type === 'add' && (<AddUserDialog isOpen={dialogState.type === 'add'} onClose={closeDialog} onUserAdded={handleUserAdded as (newUser: UserProfile) => void}/>)}
       {dialogState.type === 'changeRole' && dialogState.user && (<ChangeRoleDialog user={dialogState.user} isOpen={dialogState.type === 'changeRole'} onClose={closeDialog} onRoleChange={handleRoleChangeSubmit} isLoading={isChangingRole === dialogState.user.id} />)}
     </div>
   );
 }
+

@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-'use client';
+'use client'; // AppLayout is client, so this can be client or server depending on AppLayout
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
@@ -21,7 +21,7 @@ export default function RootLayout({
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith('/admin');
   const isAuthRoute = pathname.startsWith('/auth');
-  const isTestInterfaceRoute = pathname.startsWith('/test-interface'); // Check for test interface
+  const isTestInterfaceRoute = pathname.startsWith('/test-interface') || pathname.startsWith('/chapterwise-test') || pathname.startsWith('/challenge-test');
 
   const showAppLayout = !isAdminRoute && !isAuthRoute && !isTestInterfaceRoute;
 
@@ -31,11 +31,12 @@ export default function RootLayout({
     };
 
     const handleSelectStart = (event: Event) => {
-      if (event.preventDefault) {
-        event.preventDefault();
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return; // Allow text selection in input fields
       }
+      event.preventDefault();
     };
-
+    
     document.addEventListener('contextmenu', handleContextMenu);
     document.addEventListener('selectstart', handleSelectStart); 
 
@@ -51,7 +52,7 @@ export default function RootLayout({
       <head>
         <title>EduNexus - MHT-CET, JEE, NEET Test Series</title>
         <meta name="description" content="Your ultimate destination for MHT-CET, JEE, and NEET exam preparation with EduNexus. Practice tests, DPPs, performance analysis, and more." />
-        {/* Updated favicon links */}
+        {/* Favicon links - ensure these files exist in the public directory */}
         <link rel="icon" href="/EduNexus-logo-black.jpg" type="image/jpeg" media="(prefers-color-scheme: light)" />
         <link rel="icon" href="/EduNexus-logo-white.jpg" type="image/jpeg" media="(prefers-color-scheme: dark)" />
 
@@ -67,18 +68,21 @@ export default function RootLayout({
                 fontCache: 'global'
               },
               options: {
-                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
               },
             };
           `}
         </Script>
+        {/* Ensure MathJax loads, consider 'afterInteractive' if 'lazyOnload' causes issues with initial render */}
         <Script
           id="mathjax-script"
-          strategy="lazyOnload"
+          strategy="afterInteractive" 
           src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
         />
       </head>
-      <body className={`antialiased font-sans bg-background text-foreground`}> {/* Moved bg-background and text-foreground here */}
+      <body className={`antialiased font-sans bg-background text-foreground`}>
          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
            <AuthProvider>
               {showAppLayout ? (

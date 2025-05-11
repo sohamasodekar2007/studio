@@ -22,7 +22,7 @@ import { getSubjects, getLessonsForSubject, getQuestionsForLesson } from '@/acti
 import { saveGeneratedTest } from '@/actions/generated-test-actions';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import Image from 'next/image';
-import Script from 'next/script';
+import Script from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import QuestionPreviewDialog from '@/components/admin/question-preview-dialog';
@@ -30,7 +30,6 @@ import { Badge } from '@/components/ui/badge';
 
 // --- Zod Schemas ---
 
-// Base schema for common fields
 const BaseTestSchema = z.object({
   testName: z.string().min(3, "Test Name must be at least 3 characters."),
   duration: z.coerce.number().min(1, "Duration must be at least 1 minute.").positive("Duration must be positive."),
@@ -39,7 +38,7 @@ const BaseTestSchema = z.object({
 });
 
 const ChapterwiseSchema = BaseTestSchema.extend({
-  testseriesType: z.literal('chapterwise'), // Discriminator field
+  testseriesType: z.literal('chapterwise'), 
   subject: z.string().min(1, "Subject is required."),
   lessons: z.array(z.string()).min(1, "Select at least one lesson."),
   selectedQuestionIds: z.array(z.string()).min(1, "Select at least one question.").max(100, "Max 100 questions for chapterwise."),
@@ -60,7 +59,7 @@ type SubjectConfigForm = z.infer<typeof SubjectConfigSchema>;
 
 
 const FullLengthSchema = BaseTestSchema.extend({
-  testseriesType: z.literal('full_length'), // Discriminator field
+  testseriesType: z.literal('full_length'), 
   exam: z.enum(exams, { required_error: "Target Exam is required." }),
   stream: z.enum(testStreams).optional().nullable().default(null),
   overallTotalQuestions: z.coerce.number().min(1, "Min 1 question.").max(200, "Max 200 questions."),
@@ -93,7 +92,7 @@ const FullLengthSchema = BaseTestSchema.extend({
 });
 
 // Discriminated union schema
-const TestCreationSchema = z.discriminatedUnion("testseriesType", [
+const TestCreationSchema = z.discriminatedUnion("testseriesType", [ // Changed "testType" to "testseriesType"
     ChapterwiseSchema,
     FullLengthSchema,
 ]);
@@ -110,9 +109,9 @@ const examSubjectMap: Record<ExamOption, string[]> = {
     "KCET": ["Physics", "Chemistry", "Mathematics", "Biology"],
     "BITSAT": ["Physics", "Chemistry", "Mathematics", "English Proficiency", "Logical Reasoning"],
     "VITEEE": ["Physics", "Chemistry", "Mathematics", "Biology", "English"],
-    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"], // Example, can be much wider
-    "AIEEE": ["Physics", "Chemistry", "Mathematics"], // Legacy, but for example
-    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"], // Generic fallback
+    "CUET": ["Physics", "Chemistry", "Mathematics", "Biology"], 
+    "AIEEE": ["Physics", "Chemistry", "Mathematics"], 
+    "Other": ["Physics", "Chemistry", "Mathematics", "Biology"], 
 };
 
 
@@ -132,17 +131,15 @@ export default function CreateTestPage() {
   const form = useForm<TestCreationFormValues>({
     resolver: zodResolver(TestCreationSchema),
     defaultValues: {
-      testseriesType: 'chapterwise',
+      testseriesType: 'chapterwise', // Changed from testType
       testName: '',
       duration: 60,
       accessType: 'FREE',
       audience: null,
-      // Chapterwise defaults
       subject: '',
       lessons: [],
       selectedQuestionIds: [],
       questionCount: 20,
-      // FullLength defaults
       exam: 'MHT-CET',
       stream: null,
       overallTotalQuestions: 50,
@@ -151,16 +148,16 @@ export default function CreateTestPage() {
   });
 
   const { fields: subjectConfigFields, replace: replaceSubjectConfigs } = useFieldArray({
-    control: form.control as any, // Cast control to any to resolve type issue with discriminated union
+    control: form.control as any, 
     name: "subjectsConfig",
   });
 
 
-  const testseriesType = form.watch('testseriesType');
-  const chapterwiseSubject = form.watch('subject' as 'subject'); // Watch specific path for chapterwise
-  const chapterwiseLessons = form.watch('lessons' as 'lessons'); // Watch specific path for chapterwise
-  const fullLengthExam = form.watch('exam' as 'exam'); // Watch specific path for full length
-  const fullLengthStream = form.watch('stream' as 'stream'); // Watch specific path for full length
+  const testseriesTypeValue = form.watch('testseriesType'); // Renamed from testType
+  const chapterwiseSubject = form.watch('subject' as 'subject'); 
+  const chapterwiseLessons = form.watch('lessons' as 'lessons'); 
+  const fullLengthExam = form.watch('exam' as 'exam'); 
+  const fullLengthStream = form.watch('stream' as 'stream'); 
   const overallTotalQuestions = form.watch('overallTotalQuestions' as 'overallTotalQuestions');
   const subjectsConfigValues = form.watch('subjectsConfig' as 'subjectsConfig');
 
@@ -201,18 +198,18 @@ export default function CreateTestPage() {
   }, [toast, lessonsBySubject, isLoadingLessons]);
 
   useEffect(() => {
-    if (testseriesType === 'chapterwise' && chapterwiseSubject) {
+    if (testseriesTypeValue === 'chapterwise' && chapterwiseSubject) { // Renamed from testType
         fetchAllLessonsForSubject(chapterwiseSubject);
-    } else if (testseriesType === 'full_length' && fullLengthExam) {
+    } else if (testseriesTypeValue === 'full_length' && fullLengthExam) { // Renamed from testType
         const subjectsForExam = examSubjectMap[fullLengthExam as ExamOption] || [];
         subjectsForExam.forEach(sub => {
            if(dbSubjects.includes(sub)) fetchAllLessonsForSubject(sub);
         });
     }
-  }, [testseriesType, chapterwiseSubject, fullLengthExam, dbSubjects, fetchAllLessonsForSubject]);
+  }, [testseriesTypeValue, chapterwiseSubject, fullLengthExam, dbSubjects, fetchAllLessonsForSubject]); // Renamed from testType
 
   useEffect(() => {
-    if (testseriesType === 'full_length' && fullLengthExam) {
+    if (testseriesTypeValue === 'full_length' && fullLengthExam) { // Renamed from testType
       let subjectsForStream = examSubjectMap[fullLengthExam as ExamOption] || [];
       if ((fullLengthExam === 'MHT-CET' || fullLengthExam === 'KCET' || fullLengthExam === 'VITEEE' || fullLengthExam === 'CUET') && fullLengthStream) {
         if (fullLengthStream === 'PCM') {
@@ -240,11 +237,11 @@ export default function CreateTestPage() {
     } else {
       replaceSubjectConfigs([]);
     }
-  }, [testseriesType, fullLengthExam, fullLengthStream, lessonsBySubject, dbSubjects, replaceSubjectConfigs, form]);
+  }, [testseriesTypeValue, fullLengthExam, fullLengthStream, lessonsBySubject, dbSubjects, replaceSubjectConfigs, form]); // Renamed from testType
 
 
   useEffect(() => {
-    if (testseriesType === 'full_length' && subjectsConfigValues && subjectsConfigValues.length > 0 && overallTotalQuestions && overallTotalQuestions > 0) {
+    if (testseriesTypeValue === 'full_length' && subjectsConfigValues && subjectsConfigValues.length > 0 && overallTotalQuestions && overallTotalQuestions > 0) { // Renamed from testType
         const totalWeightageSum = subjectsConfigValues.reduce((sum: number, config: SubjectConfigForm) => sum + (config.totalSubjectWeightage || 0), 0);
 
         let distributedQuestionsSum = 0;
@@ -252,7 +249,7 @@ export default function CreateTestPage() {
             let questionsForSubject = 0;
             if (totalWeightageSum > 0 && (config.totalSubjectWeightage || 0) > 0) {
                  questionsForSubject = Math.round(((config.totalSubjectWeightage || 0) / totalWeightageSum) * overallTotalQuestions);
-            } else if (totalWeightageSum === 0 && subjectsConfigValues.length > 0) { // Equal distribution if no weightages
+            } else if (totalWeightageSum === 0 && subjectsConfigValues.length > 0) { 
                 questionsForSubject = Math.floor(overallTotalQuestions / subjectsConfigValues.length);
             }
 
@@ -262,14 +259,14 @@ export default function CreateTestPage() {
             let lessonsQuestionsSumInSubject = 0;
             if (config.lessons && config.lessons.length > 0 && questionsForSubject > 0) {
                 const totalLessonWeightage = config.lessons.reduce((s: number, l: any) => s + (l.weightage || 0), 0);
-                if (totalLessonWeightage > 0) { // Distribute by lesson weightage
+                if (totalLessonWeightage > 0) { 
                     config.lessons.forEach((lesson: any, lessonIndex: number) => {
                         const lessonProportion = (lesson.weightage || 0) / totalLessonWeightage;
                         const questionsForLesson = Math.round(questionsForSubject * lessonProportion);
                         form.setValue(`subjectsConfig.${subjectIndex}.lessons.${lessonIndex}.questionCount` as any, questionsForLesson);
                         lessonsQuestionsSumInSubject += questionsForLesson;
                     });
-                } else { // Equal distribution among lessons if no lesson weightages
+                } else { 
                      const questionsPerLesson = Math.floor(questionsForSubject / config.lessons.length);
                      let remainder = questionsForSubject % config.lessons.length;
                      config.lessons.forEach((lesson: any, lessonIndex: number) => {
@@ -280,7 +277,6 @@ export default function CreateTestPage() {
                      });
                 }
 
-                 // Adjust sum for lessons if rounding caused mismatch
                  if (lessonsQuestionsSumInSubject !== questionsForSubject && config.lessons.length > 0) {
                      const diff = questionsForSubject - lessonsQuestionsSumInSubject;
                      const lastLessonIdx = config.lessons.length -1;
@@ -291,14 +287,12 @@ export default function CreateTestPage() {
             return { ...config, totalSubjectQuestions: questionsForSubject };
         });
 
-        // Adjust sum for subjects if rounding caused mismatch
         if (distributedQuestionsSum !== overallTotalQuestions && newConfigs.length > 0) {
             const diff = overallTotalQuestions - distributedQuestionsSum;
             const lastConfigIndex = newConfigs.length - 1;
             const currentTotal = form.getValues(`subjectsConfig.${lastConfigIndex}.totalSubjectQuestions` as any);
             form.setValue(`subjectsConfig.${lastConfigIndex}.totalSubjectQuestions` as any, Math.max(0, (currentTotal || 0) + diff));
 
-             // Re-distribute questions for the last subject's lessons based on its new total
              const lastSubjectConfig = form.getValues(`subjectsConfig.${lastConfigIndex}` as any);
              if (lastSubjectConfig && lastSubjectConfig.lessons && lastSubjectConfig.lessons.length > 0) {
                 const questionsForLastSubject = form.getValues(`subjectsConfig.${lastConfigIndex}.totalSubjectQuestions` as any) || 0;
@@ -312,11 +306,11 @@ export default function CreateTestPage() {
              }
         }
     }
-  }, [overallTotalQuestions, subjectsConfigValues, testseriesType, form]);
+  }, [overallTotalQuestions, subjectsConfigValues, testseriesTypeValue, form]); // Renamed from testType
 
 
   useEffect(() => {
-    if (testseriesType === 'chapterwise' && chapterwiseSubject && chapterwiseLessons && chapterwiseLessons.length > 0) {
+    if (testseriesTypeValue === 'chapterwise' && chapterwiseSubject && chapterwiseLessons && chapterwiseLessons.length > 0) { // Renamed from testType
       setIsLoadingQuestions(true);
       Promise.all(
         chapterwiseLessons.map((lesson: string) => getQuestionsForLesson({ subject: chapterwiseSubject, lesson }))
@@ -332,7 +326,7 @@ export default function CreateTestPage() {
     } else {
       setAvailableQuestions([]);
     }
-  }, [testseriesType, chapterwiseSubject, chapterwiseLessons, toast, typesetMathJax]);
+  }, [testseriesTypeValue, chapterwiseSubject, chapterwiseLessons, toast, typesetMathJax]); // Renamed from testType
 
   const constructPublicImagePath = (subject: string, lesson: string, filename: string | null | undefined): string | null => {
       if (!filename) return null;
@@ -348,8 +342,8 @@ export default function CreateTestPage() {
     try {
       const finalAudience = data.audience === "_any_" ? null : data.audience;
 
-      if (data.testseriesType === 'chapterwise') {
-        const chapterwiseData = data as Extract<TestCreationFormValues, { testseriesType: 'chapterwise' }>;
+      if (data.testseriesType === 'chapterwise') { // Renamed from testType
+        const chapterwiseData = data as Extract<TestCreationFormValues, { testseriesType: 'chapterwise' }>; // Renamed from testType
         if (chapterwiseData.selectedQuestionIds.length !== chapterwiseData.questionCount) {
             toast({variant: 'destructive', title: 'Question Count Mismatch', description: `Please select exactly ${chapterwiseData.questionCount} questions.`});
             setIsLoading(false);
@@ -376,7 +370,7 @@ export default function CreateTestPage() {
         }));
 
         testToSave = {
-          testseriesType: 'chapterwise',
+          testseriesType: 'chapterwise', // Renamed from testType
           name: chapterwiseData.testName,
           duration: chapterwiseData.duration,
           total_questions: chapterwiseData.questionCount,
@@ -389,7 +383,7 @@ export default function CreateTestPage() {
         } as Omit<ChapterwiseTestJsonType, 'test_code' | 'createdAt'>;
 
       } else { // FullLength
-        const fullLengthData = data as Extract<TestCreationFormValues, { testseriesType: 'full_length' }>;
+        const fullLengthData = data as Extract<TestCreationFormValues, { testseriesType: 'full_length' }>; // Renamed from testType
         let allSelectedQuestionsForFLT: TestQuestion[] = [];
         let physicsQs: TestQuestion[] = [];
         let chemistryQs: TestQuestion[] = [];
@@ -431,13 +425,13 @@ export default function CreateTestPage() {
         }
 
         testToSave = {
-          testseriesType: 'full_length',
+          testseriesType: 'full_length', // Renamed from testType
           name: fullLengthData.testName,
           duration: fullLengthData.duration,
-          total_questions: allSelectedQuestionsForFLT.length, // Use actual count
+          total_questions: allSelectedQuestionsForFLT.length, 
           type: fullLengthData.accessType,
           audience: finalAudience,
-          test_subject: fullLengthData.subjectsConfig?.map((s: SubjectConfigForm) => s.subjectName) || [],
+          test_subject: fullLengthData.subjectsConfig?.map((sc: SubjectConfigForm) => sc.subjectName) || [],
           stream: fullLengthData.stream!,
           examTypeTarget: fullLengthData.exam,
           physics_questions: physicsQs.length > 0 ? physicsQs : undefined,
@@ -461,7 +455,7 @@ export default function CreateTestPage() {
       if (result.success && result.test_code) {
         toast({ title: 'Test Created!', description: `Test "${testToSave.name}" (Code: ${result.test_code}) saved successfully.` });
         form.reset({
-            testseriesType: data.testseriesType,
+            testseriesType: data.testseriesType, // Renamed from testType
             testName: '', duration: 60, accessType: 'FREE' as PricingType, audience: null as AcademicStatus | null,
             subject: '', lessons: [], selectedQuestionIds: [], questionCount: 20,
             exam: 'MHT-CET', stream: null, overallTotalQuestions: 50, subjectsConfig: [],
@@ -516,7 +510,7 @@ export default function CreateTestPage() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <FormField
                         control={form.control}
-                        name="testseriesType"
+                        name="testseriesType" // Renamed from testType
                         render={({ field }) => (
                             <FormItem className="space-y-3">
                                 <FormLabel className="text-lg font-semibold">Select Test Type *</FormLabel>
@@ -526,9 +520,9 @@ export default function CreateTestPage() {
                                             const newTestType = value as 'chapterwise' | 'full_length';
                                             field.onChange(newTestType);
 
-                                            form.reset((prev: TestCreationFormValues) => { // Explicitly type prev
+                                            form.reset((prev: TestCreationFormValues) => { 
                                                 const baseDefaults = {
-                                                    testseriesType: newTestType,
+                                                    testseriesType: newTestType, // Renamed from testType
                                                     testName: '',
                                                     duration: 60,
                                                     accessType: 'FREE' as PricingType,
@@ -537,16 +531,16 @@ export default function CreateTestPage() {
                                                 if (newTestType === 'chapterwise') {
                                                     return {
                                                         ...baseDefaults,
-                                                        subject: (prev as Extract<TestCreationFormValues, {testseriesType: 'chapterwise'}>).subject || '',
-                                                        lessons: (prev as Extract<TestCreationFormValues, {testseriesType: 'chapterwise'}>).lessons || [],
+                                                        subject: (prev as Extract<TestCreationFormValues, {testseriesType: 'chapterwise'}>).subject || '', // Renamed from testType
+                                                        lessons: (prev as Extract<TestCreationFormValues, {testseriesType: 'chapterwise'}>).lessons || [], // Renamed from testType
                                                         selectedQuestionIds: [],
                                                         questionCount: 20,
                                                     };
-                                                } else { // full_length
+                                                } else { 
                                                     return {
                                                         ...baseDefaults,
-                                                        exam: (prev as Extract<TestCreationFormValues, {testseriesType: 'full_length'}>).exam || 'MHT-CET',
-                                                        stream: (prev as Extract<TestCreationFormValues, {testseriesType: 'full_length'}>).stream || null,
+                                                        exam: (prev as Extract<TestCreationFormValues, {testseriesType: 'full_length'}>).exam || 'MHT-CET', // Renamed from testType
+                                                        stream: (prev as Extract<TestCreationFormValues, {testseriesType: 'full_length'}>).stream || null, // Renamed from testType
                                                         overallTotalQuestions: 50,
                                                         subjectsConfig: [],
                                                     };
@@ -555,7 +549,7 @@ export default function CreateTestPage() {
                                             setAvailableQuestions([]);
                                             setLessonsBySubject({});
                                         }}
-                                        value={field.value}
+                                        value={field.value as string} // Ensure value is string for RadioGroup
                                         className="flex space-x-4"
                                     >
                                         <FormItem className="flex items-center space-x-2">
@@ -598,7 +592,7 @@ export default function CreateTestPage() {
                         </CardContent>
                     </Card>
 
-                    {testseriesType === 'chapterwise' && (form.getValues('testseriesType') === 'chapterwise') && (
+                    {testseriesTypeValue === 'chapterwise' && (form.getValues('testseriesType') === 'chapterwise') && ( // Renamed from testType
                         <Card>
                             <CardHeader><CardTitle>Chapterwise Setup</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
@@ -616,11 +610,12 @@ export default function CreateTestPage() {
                                                     <FormItem key={lesson} className="flex flex-row items-center space-x-3 space-y-0 py-1">
                                                         <FormControl>
                                                             <Checkbox
-                                                                checked={(field.value)?.includes(lesson)}
+                                                                checked={(field.value as string[])?.includes(lesson)} // Cast field.value
                                                                 onCheckedChange={(checked) => {
+                                                                    const currentValue = (field.value as string[]) || []; // Cast and provide default
                                                                     return checked
-                                                                    ? field.onChange([...(field.value || []), lesson])
-                                                                    : field.onChange((field.value)?.filter(value => value !== lesson))
+                                                                    ? field.onChange([...currentValue, lesson])
+                                                                    : field.onChange(currentValue?.filter(value => value !== lesson))
                                                                 }}
                                                             />
                                                         </FormControl>
@@ -648,13 +643,14 @@ export default function CreateTestPage() {
                                                         <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 hover:bg-muted/50 rounded">
                                                             <FormControl>
                                                                 <Checkbox
-                                                                    checked={(field.value)?.includes(q.id)}
+                                                                    checked={(field.value as string[])?.includes(q.id)} // Cast field.value
                                                                     onCheckedChange={(checked) => {
+                                                                        const currentValue = (field.value as string[]) || []; // Cast and provide default
                                                                         return checked
-                                                                        ? field.onChange([...(field.value || []), q.id])
-                                                                        : field.onChange((field.value)?.filter(value => value !== q.id))
+                                                                        ? field.onChange([...currentValue, q.id])
+                                                                        : field.onChange(currentValue?.filter(value => value !== q.id))
                                                                     }}
-                                                                     disabled={((field.value)?.length || 0) >= (form.getValues('questionCount') || 0) && !(field.value)?.includes(q.id)}
+                                                                     disabled={(((field.value as string[])?.length || 0) >= (form.getValues('questionCount') || 0) && !(field.value as string[])?.includes(q.id))} // Cast field.value
                                                                 />
                                                             </FormControl>
                                                             <FormLabel className="text-sm font-normal flex-grow cursor-pointer" onClick={() => {setPreviewQuestion(q); setIsPreviewDialogOpen(true);}}>
@@ -673,7 +669,7 @@ export default function CreateTestPage() {
                         </Card>
                     )}
 
-                    {testseriesType === 'full_length' && (form.getValues('testseriesType') === 'full_length') && (
+                    {testseriesTypeValue === 'full_length' && (form.getValues('testseriesType') === 'full_length') && ( // Renamed from testType
                         <Card>
                             <CardHeader><CardTitle>Full-Length Setup</CardTitle></CardHeader>
                             <CardContent className="space-y-6">
@@ -689,7 +685,7 @@ export default function CreateTestPage() {
                                 {subjectConfigFields.map((subjectField, subjectIndex) => (
                                     <div key={subjectField.id} className="space-y-3 p-3 border rounded-md">
                                         <div className="flex justify-between items-center">
-                                            <h4 className="font-medium text-primary">{subjectField.subjectName}</h4>
+                                            <h4 className="font-medium text-primary">{(subjectField as SubjectConfigForm).subjectName}</h4>
                                              <FormField
                                                 control={form.control}
                                                 name={`subjectsConfig.${subjectIndex}.totalSubjectWeightage`}
@@ -702,12 +698,12 @@ export default function CreateTestPage() {
                                                 )}
                                             />
                                         </div>
-                                        {subjectField.lessons && subjectField.lessons.length > 0 && (
+                                        {(subjectField as SubjectConfigForm).lessons && (subjectField as SubjectConfigForm).lessons.length > 0 && (
                                             <ScrollArea className="h-32 border rounded p-2 bg-muted/20">
-                                                <FormDescription className="text-xs px-1 pb-1">Set lesson weightages for {subjectField.subjectName} (must sum to 100% if used). If not set, questions are picked equally.</FormDescription>
-                                                {subjectField.lessons.map((lessonItem: any, lessonIndex: number) => (
+                                                <FormDescription className="text-xs px-1 pb-1">Set lesson weightages for {(subjectField as SubjectConfigForm).subjectName} (must sum to 100% if used). If not set, questions are picked equally.</FormDescription>
+                                                {(subjectField as SubjectConfigForm).lessons.map((lessonItem: any, lessonIndex: number) => (
                                                      <FormField
-                                                        key={`${subjectField.subjectName}-${lessonItem.lessonName}-${lessonIndex}`}
+                                                        key={`${(subjectField as SubjectConfigForm).subjectName}-${lessonItem.lessonName}-${lessonIndex}`}
                                                         control={form.control}
                                                         name={`subjectsConfig.${subjectIndex}.lessons.${lessonIndex}.weightage`}
                                                         render={({ field: lessonWeightField }) => (
@@ -723,7 +719,7 @@ export default function CreateTestPage() {
                                                 ))}
                                             </ScrollArea>
                                         )}
-                                        <p className="text-xs text-muted-foreground">Est. Questions for {subjectField.subjectName}: {form.watch(`subjectsConfig.${subjectIndex}.totalSubjectQuestions` as any)}</p>
+                                        <p className="text-xs text-muted-foreground">Est. Questions for {(subjectField as SubjectConfigForm).subjectName}: {form.watch(`subjectsConfig.${subjectIndex}.totalSubjectQuestions` as any)}</p>
                                         <FormMessage>{((form.formState.errors as any).subjectsConfig)?.[subjectIndex]?.totalSubjectWeightage?.message as React.ReactNode}</FormMessage>
                                         <FormMessage>{((form.formState.errors as any).subjectsConfig)?.[subjectIndex]?.lessons?.message as React.ReactNode}</FormMessage>
                                     </div>
