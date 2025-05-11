@@ -85,7 +85,7 @@
          if (!reportData) throw new Error(`Could not find results for this attempt.`);
 
          
-         if (testDefData && testDefData.testseriesType !== 'chapterwise') { // Renamed from testType
+         if (testDefData && testDefData.testseriesType !== 'chapterwise') { 
              console.warn("Viewing non-chapterwise results on chapterwise page. This page might need to be generalized or removed.");
          }
 
@@ -350,7 +350,8 @@
                                     }}
                                 />
                             </Pie>
-                         </ChartContainer>
+                         </PieChart>
+                     </ChartContainer>
                 </CardContent>
                  <CardFooter className="flex-col gap-2 text-sm pt-4"> 
                     <div className="flex items-center gap-2 font-medium leading-none">
@@ -406,22 +407,22 @@
                      <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-900/20">
                          <Edit3 className="h-5 w-5 text-blue-600 mx-auto mb-1"/>
                          <p className="font-semibold">{results.attempted} <span className="text-xs font-normal">of {totalQs}</span></p>
-                         <p className="text-xs text-muted-foreground">ATTEMPTED</p>
+                         <p className="text-xs text-muted-foreground uppercase">ATTEMPTED</p>
                      </div>
                      <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
                          <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1"/>
                          <p className="font-semibold">{results.correct} <span className="text-xs font-normal">of {results.attempted}</span></p>
-                         <p className="text-xs text-muted-foreground">CORRECT</p>
+                         <p className="text-xs text-muted-foreground uppercase">CORRECT</p>
                      </div>
                      <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
                          <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1"/>
                          <p className="font-semibold">{results.incorrect} <span className="text-xs font-normal">of {results.attempted}</span></p>
-                         <p className="text-xs text-muted-foreground">INCORRECT</p>
+                         <p className="text-xs text-muted-foreground uppercase">INCORRECT</p>
                      </div>
                      <div className="p-3 rounded-lg border bg-orange-50 dark:bg-orange-900/20">
                          <Timer className="h-5 w-5 text-orange-600 mx-auto mb-1"/>
                          <p className="font-semibold">{results.timeTakenMinutes} <span className="text-xs font-normal">min</span></p>
-                         <p className="text-xs text-muted-foreground">TIME TAKEN</p>
+                         <p className="text-xs text-muted-foreground uppercase">TIME TAKEN</p>
                      </div>
                  </div>
                 
@@ -444,19 +445,19 @@
                     <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
                          <CheckCircle className="h-5 w-5 text-green-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.correct} <span className="text-xs font-normal">of {totalQs}</span></p>
-                         <p className="text-xs text-muted-foreground">CORRECT</p>
+                         <p className="text-xs text-muted-foreground uppercase">CORRECT</p>
                     </div>
                     
                     <div className="p-3 rounded-lg border bg-red-50 dark:bg-red-900/20">
                          <XCircle className="h-5 w-5 text-red-600 mx-auto mb-1"/>
                         <p className="font-semibold">{results.incorrect} <span className="text-xs font-normal">of {totalQs}</span></p>
-                         <p className="text-xs text-muted-foreground">INCORRECT</p>
+                         <p className="text-xs text-muted-foreground uppercase">INCORRECT</p>
                     </div>
                      
                     <div className="p-3 rounded-lg border bg-gray-100 dark:bg-gray-800/20">
                          <HelpCircle className="h-5 w-5 text-gray-500 mx-auto mb-1"/>
                         <p className="font-semibold">{results.unanswered} <span className="text-xs font-normal">of {totalQs}</span></p>
-                         <p className="text-xs text-muted-foreground">UNATTEMPTED</p>
+                         <p className="text-xs text-muted-foreground uppercase">UNATTEMPTED</p>
                     </div>
                  </div>
              </CardContent>
