@@ -40,7 +40,8 @@ import {
   Moon,
   Swords,
   Bell,
-  Gift // Added Gift icon for referrals
+  Gift,
+  ShoppingBag // Added ShoppingBag for packages
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -130,6 +131,12 @@ const tutorialSteps: Step[] = [
     disableBeacon: true,
   },
   {
+    target: '#tutorial-target-packages', // Target for the new packages link
+    content: 'View and manage your subscription plans here.',
+    placement: 'right',
+    disableBeacon: true,
+  },
+  {
     target: '#tutorial-target-more-dropdown',
     content: 'Access Settings, Help, Tutorial and Theme options here.',
     placement: 'right',
@@ -196,7 +203,8 @@ export function AppSidebar() {
         '/pyq-dpps',
         '/challenge/create',
         '/challenges/invites',
-        '/referrals', // Added referrals
+        '/referrals',
+        '/packages', // Added packages
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
@@ -437,6 +445,14 @@ export function AppSidebar() {
                          </SidebarMenuButton>
                      </Link>
                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <Link href="/packages" passHref legacyBehavior>
+                        <SidebarMenuButton as="a" isActive={isActive('/packages')} tooltip="Upgrade Plan" id="tutorial-target-packages">
+                            <ShoppingBag />
+                            <span className="group-data-[state=collapsed]:hidden">Upgrade Plan</span>
+                        </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
              </SidebarGroup>
 
 
