@@ -95,11 +95,13 @@ export default function SignupPage() {
   const combinedLoading = isLoading || authLoading; 
 
   useEffect(() => {
-    (window as any).onTelegramAuth = (user: any) => {
-        const queryParams = new URLSearchParams(user).toString();
-        const redirectUri = process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI || "/auth/telegram/callback";
-        window.location.href = `${redirectUri}?${queryParams}`;
-    };
+    if (typeof window !== 'undefined' && (window as any).Telegram) {
+      (window as any).Telegram.Login.auth = (user: any) => {
+          const queryParams = new URLSearchParams(user).toString();
+          const redirectUri = process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI || "/auth/telegram/callback";
+          window.location.href = `${redirectUri}?${queryParams}`;
+      };
+    }
   }, []);
 
 

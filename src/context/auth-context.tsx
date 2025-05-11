@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 // Use local storage actions
 import {
-    readUsersWithPasswordsInternal,
+    readUsersWithPasswordsInternal, // Use the internal function to get hash
     saveUserToJson,
     readUsers,
     getUserById,
@@ -18,9 +18,9 @@ import {
     updateUserPasswordInJson, 
     updateUserRole, 
     findUserByEmailInternal,
-    findUserByReferralCode, // Import this new action
+    findUserByReferralCode,
 } from '@/actions/user-actions'; 
-import { sendWelcomeEmail } from '@/actions/otp-actions'; 
+import { sendWelcomeEmail } from '@/actions/otp-actions'; // For welcome email simulation
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -40,7 +40,7 @@ interface AuthContextProps {
     phoneNumber?: string | null,
     academicStatus?: UserAcademicStatus | null,
     targetYear?: string | null,
-    referralCodeUsed?: string | null // Added referralCodeUsed
+    referralCodeUsed?: string | null
   ) => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUserData: (updatedUser: Omit<UserProfile, 'password'>) => void;
@@ -94,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           telegramId: userProfile.telegramId,
           telegramUsername: userProfile.telegramUsername,
           totalPoints: userProfile.totalPoints,
-          referralCode: userProfile.referralCode, // Ensure referralCode is mapped
-          referralStats: userProfile.referralStats, // Ensure referralStats are mapped
+          referralCode: userProfile.referralCode,
+          referralStats: userProfile.referralStats,
       };
   }, []);
 
@@ -238,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phoneNumber?: string | null,
     academicStatus?: UserAcademicStatus | null,
     targetYear?: string | null,
-    referralCodeUsed?: string | null // Added referralCodeUsed
+    referralCodeUsed?: string | null
   ) => {
      if (!isMounted) return;
     if (!password) {
@@ -262,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: 'User', 
         expiry_date: null,
         targetYear: targetYear || null,
-        referredByCode: referralCodeUsed || null, // Pass the used referral code
+        referredByCode: referralCodeUsed || null,
       };
        const saveResult = await addUserToJson(newUserProfileData);
 
@@ -301,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         '/chapterwise-test', '/chapterwise-test-results', '/chapterwise-test-review',
         '/challenge-test', '/challenge-test-result', '/challenge-test-review',
         '/find-friends', '/friends-followers', '/friends-following', '/friends-compare',
-        '/notebooks', '/leaderboard', '/profile', // Added profile, notebooks, leaderboard as public access (content shown conditionally)
+        '/notebooks', '/leaderboard', '/profile', '/referrals' // Added /referrals
     ];
 
      const isPublicRoute = publicRoutes.some(route => {

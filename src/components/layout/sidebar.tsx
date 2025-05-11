@@ -14,7 +14,7 @@ import {
   SidebarSeparator,
   SidebarGroupLabel,
   useSidebar,
-  SidebarMenuBadge,
+  SidebarMenuBadge
 } from '@/components/ui/sidebar';
 import {
   Home,
@@ -40,6 +40,7 @@ import {
   Moon,
   Swords,
   Bell,
+  Gift // Added Gift icon for referrals
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -123,6 +124,12 @@ const tutorialSteps: Step[] = [
     disableBeacon: true,
   },
   {
+    target: '#tutorial-target-referrals',
+    content: 'Invite friends to EduNexus and earn rewards!',
+    placement: 'right',
+    disableBeacon: true,
+  },
+  {
     target: '#tutorial-target-more-dropdown',
     content: 'Access Settings, Help, Tutorial and Theme options here.',
     placement: 'right',
@@ -189,6 +196,7 @@ export function AppSidebar() {
         '/pyq-dpps',
         '/challenge/create',
         '/challenges/invites',
+        '/referrals', // Added referrals
     ];
     if (exactMatchRoutes.includes(href)) {
       return pathname === href;
@@ -417,6 +425,20 @@ export function AppSidebar() {
                 </Link>
               </SidebarMenuItem>
             </SidebarGroup>
+            
+            <SidebarSeparator className="my-3" />
+             <SidebarGroup>
+                 <SidebarGroupLabel className="group-data-[state=collapsed]:hidden">Advanced</SidebarGroupLabel>
+                 <SidebarMenuItem>
+                     <Link href="/referrals" passHref legacyBehavior>
+                         <SidebarMenuButton as="a" isActive={isActive('/referrals')} tooltip="Referrals" id="tutorial-target-referrals">
+                             <Gift />
+                             <span className="group-data-[state=collapsed]:hidden">Referrals</span>
+                         </SidebarMenuButton>
+                     </Link>
+                 </SidebarMenuItem>
+             </SidebarGroup>
+
 
             {isAdmin && (
               <>

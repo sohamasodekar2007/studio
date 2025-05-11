@@ -150,7 +150,7 @@ export interface TestQuestion {
 
 // Base interface for common generated test properties
 interface BaseGeneratedTest {
-    testseriesType: 'chapterwise' | 'full_length'; // Renamed from testType
+    testseriesType: 'chapterwise' | 'full_length'; 
     test_code: string;
     name: string;
     duration: number;
@@ -163,7 +163,7 @@ interface BaseGeneratedTest {
 
 // Interface for Chapterwise Test JSON (inherits BaseGeneratedTest)
 export interface ChapterwiseTestJson extends BaseGeneratedTest {
-    testseriesType: 'chapterwise'; // Renamed from testType
+    testseriesType: 'chapterwise';
     lessons: string[]; // Can now include multiple lessons for combined chapterwise tests
     examFilter?: ExamOption | 'all'; // Optional filter for questions
     questions: TestQuestion[]; // Array of actual question objects for the test
@@ -180,7 +180,7 @@ export interface ChapterwiseTestJson extends BaseGeneratedTest {
 
 // Interface for Full Length Test JSON (inherits BaseGeneratedTest)
 export interface FullLengthTestJson extends BaseGeneratedTest {
-    testseriesType: 'full_length'; // Renamed from testType
+    testseriesType: 'full_length';
     stream: TestStream; // PCM or PCB
     examTypeTarget: ExamOption; // The specific exam this full-length test targets (e.g., MHT-CET, JEE Main)
     
@@ -420,7 +420,7 @@ export interface UserChallengeHistory {
 // ---- Notification Types (Basic for now) ----
 export interface AppNotification {
     id: string;
-    type: 'challenge_invite' | 'general_update' | 'test_result' | 'referral_used'; // Added referral_used
+    type: 'challenge_invite' | 'general_update' | 'test_result' | 'referral_success';
     title: string;
     message: string;
     link?: string;
@@ -454,4 +454,16 @@ export interface TelegramAuthData {
     auth_date: string; // Unix timestamp string
     hash: string; // Verification hash
     phone?: string; // If requested and granted
+}
+
+// ---- Referral Offer Types ----
+export interface ReferralOffer {
+  id: string;
+  name: string;
+  description: string;
+  benefitsForReferrer: string; // Description of benefits
+  benefitsForReferred: string; // Description of benefits
+  expiryDate: string | null; // ISO Date string or null for ongoing
+  isActive: boolean;
+  createdAt: string;
 }
