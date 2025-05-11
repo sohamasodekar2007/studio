@@ -17,7 +17,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -25,15 +24,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO, isValid } from 'date-fns';
-import { CalendarIcon, Loader2, PlusCircle, Edit, Trash2, Users, Gift, Search, ArrowUpDown, Info } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, Edit, Trash2, Users, Gift, Search, ArrowUpDown, Info, DollarSign, UserCircle, Percent, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { readUsers } from '@/actions/user-actions';
 import { getReferralOffers, createReferralOffer, updateReferralOffer, deleteReferralOffer } from '@/actions/referral-offers-actions';
-import type { UserProfile, ReferralOffer, UserReferralStats } from '@/types';
+import type { UserProfile, ReferralOffer, UserReferralStats, DiscountType } from '@/types';
+import { discountTypes } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+
 
 type SortKey = 'user' | 'referralCode' | 'referred_free' | 'referred_chapterwise' | 'referred_full_length' | 'referred_combo' | 'referredBy' | 'signupDate';
 type SortOrder = 'asc' | 'desc';
@@ -205,9 +208,11 @@ export default function AdminReferralsPage() {
   const filteredOffers = useMemo(() => {
     return allOffers.filter(offer =>
       offer.name.toLowerCase().includes(searchTermOffers.toLowerCase()) ||
-      offer.description.toLowerCase().includes(searchTermOffers.toLowerCase())
-    );
-  }, [allOffers, searchTermOffers]);
+      offer.description.toLowerCase().includes(searchTermOffers.toLowerCase()) ||
+      (offer.beneficiaryUserId && allUsers.find(u => u.id === offer.beneficiaryUserId)?.name?.toLowerCase().includes(searchTermOffers.toLowerCase())) ||
+      (offer.beneficiaryUserId && allUsers.find(u => u.id === offer.beneficiaryUserId)?.email?.toLowerCase().includes(searchTermOffers.toLowerCase()))
+    ).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allOffers, searchTermOffers, allUsers]);
 
   const requestSort = (key: SortKey) => {
     let order: SortOrder = 'asc';
@@ -339,25 +344,33 @@ export default function AdminReferralsPage() {
                 <Button onClick={() => handleOpenOfferDialog()}><PlusCircle className="mr-2 h-4 w-4"/> Create Offer</Button>
             </CardHeader>
             <CardContent>
-              <Input placeholder="Search offers by name or description..." value={searchTermOffers} onChange={e => setSearchTermOffers(e.target.value)} className="mb-4 max-w-sm"/>
+              <Input placeholder="Search offers by name, description, beneficiary..." value={searchTermOffers} onChange={e => setSearchTermOffers(e.target.value)} className="mb-4 max-w-sm"/>
               <ScrollArea className="h-[60vh]">
                  {filteredOffers.length === 0 ? (
                      <p className="text-muted-foreground text-center py-6">No referral offers found.</p>
                  ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {filteredOffers.map(offer => (
+                        {filteredOffers.map(offer => {
+                            const beneficiaryUser = offer.beneficiaryUserId ? allUsers.find(u => u.id === offer.beneficiaryUserId) : null;
+                            return (
                             <Card key={offer.id} className={cn(!offer.isActive && "opacity-60 border-dashed")}>
                                 <CardHeader>
                                     <CardTitle className="text-lg">{offer.name}
-                                      <Badge variant={offer.isActive ? "default" : "outline"} className={cn("ml-2", offer.isActive ? "bg-green-500" : "bg-gray-400 text-white")}>
+                                      <Badge variant={offer.isActive ? "default" : "outline"} className={cn("ml-2 text-xs", offer.isActive ? "bg-green-500" : "bg-gray-400 text-white")}>
                                         {offer.isActive ? "Active" : "Inactive"}
                                       </Badge>
                                     </CardTitle>
                                     <CardDescription>{offer.description}</CardDescription>
                                 </CardHeader>
                                 <CardContent className="text-xs space-y-1">
-                                    <p><strong>Referrer Gets:</strong> {offer.benefitsForReferrer}</p>
-                                    <p><strong>Referred Gets:</strong> {offer.benefitsForReferred}</p>
+                                    <p><strong>Referrer Gets:</strong> {offer.benefitsForReferrer || "N/A"}</p>
+                                    <p><strong>Referred Gets:</strong> {offer.benefitsForReferred || "N/A"}</p>
+                                    {offer.discountAmount != null && offer.discountType && (
+                                        <p><strong>Discount for New User:</strong> {offer.discountType === 'percentage' ? `${offer.discountAmount}% off` : `₹${offer.discountAmount} off`}</p>
+                                    )}
+                                    {beneficiaryUser && (
+                                        <p><strong>Points To:</strong> {beneficiaryUser.name || beneficiaryUser.email}</p>
+                                    )}
                                     <p><strong>Expires:</strong> {offer.expiryDate ? new Date(offer.expiryDate).toLocaleDateString() : "Never"}</p>
                                     <p className="text-muted-foreground">Created: {new Date(offer.createdAt).toLocaleDateString()}</p>
                                 </CardContent>
@@ -382,7 +395,8 @@ export default function AdminReferralsPage() {
                                     </AlertDialog>
                                 </CardFooter>
                             </Card>
-                        ))}
+                        );
+                        })}
                     </div>
                  )}
               </ScrollArea>
@@ -398,6 +412,7 @@ export default function AdminReferralsPage() {
             offer={editingOffer}
             onSubmit={handleOfferSubmit}
             isLoading={isSubmittingOffer}
+            allUsers={allUsers}
         />
       )}
     </div>
@@ -411,15 +426,23 @@ interface ReferralOfferDialogProps {
     offer: ReferralOffer | null;
     onSubmit: (formData: Omit<ReferralOffer, 'id' | 'createdAt'>) => Promise<void>;
     isLoading: boolean;
+    allUsers: Omit<UserProfile, 'password'>[];
 }
 
-function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading }: ReferralOfferDialogProps) {
+function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading, allUsers }: ReferralOfferDialogProps) {
+    const { toast } = useToast(); // Added toast import
     const [name, setName] = useState(offer?.name || '');
     const [description, setDescription] = useState(offer?.description || '');
     const [benefitsForReferrer, setBenefitsForReferrer] = useState(offer?.benefitsForReferrer || '');
     const [benefitsForReferred, setBenefitsForReferred] = useState(offer?.benefitsForReferred || '');
     const [expiryDate, setExpiryDate] = useState<Date | undefined>(offer?.expiryDate ? parseISO(offer.expiryDate) : undefined);
     const [isActive, setIsActive] = useState(offer?.isActive ?? true);
+    const [discountAmount, setDiscountAmount] = useState<number | undefined>(offer?.discountAmount ?? undefined);
+    const [discountType, setDiscountType] = useState<DiscountType | undefined>(offer?.discountType ?? undefined);
+    const [beneficiaryUserId, setBeneficiaryUserId] = useState<string | null>(offer?.beneficiaryUserId || null);
+    const [userSearch, setUserSearch] = useState('');
+    const [beneficiaryPopoverOpen, setBeneficiaryPopoverOpen] = useState(false);
+
 
     useEffect(() => {
         if (offer) {
@@ -429,66 +452,150 @@ function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading }: Re
             setBenefitsForReferred(offer.benefitsForReferred);
             setExpiryDate(offer.expiryDate ? parseISO(offer.expiryDate) : undefined);
             setIsActive(offer.isActive);
+            setDiscountAmount(offer.discountAmount ?? undefined);
+            setDiscountType(offer.discountType ?? undefined);
+            setBeneficiaryUserId(offer.beneficiaryUserId || null);
         } else {
             setName(''); setDescription(''); setBenefitsForReferrer(''); setBenefitsForReferred('');
             setExpiryDate(undefined); setIsActive(true);
+            setDiscountAmount(undefined); setDiscountType(undefined); setBeneficiaryUserId(null);
         }
     }, [offer, isOpen]);
 
     const handleSubmit = () => {
         if (!name.trim()) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Offer name is required."});
+            toast({ variant: "destructive", title: "Validation Error", description: "Offer name/code is required."});
             return;
         }
+         if ((discountAmount && discountAmount > 0) && !discountType) {
+            toast({ variant: "destructive", title: "Validation Error", description: "Please select a discount type if amount is specified."});
+            return;
+        }
+         if (discountType && (!discountAmount || discountAmount <= 0)) {
+            toast({ variant: "destructive", title: "Validation Error", description: "Please specify a valid discount amount for the selected type."});
+            return;
+        }
+
         onSubmit({
             name, description, benefitsForReferrer, benefitsForReferred,
+            discountAmount: discountAmount || null,
+            discountType: discountType || null,
+            beneficiaryUserId: beneficiaryUserId || null,
             expiryDate: expiryDate ? expiryDate.toISOString() : null,
             isActive
         });
     };
     
+    const selectedBeneficiaryName = useMemo(() => {
+        if (!beneficiaryUserId) return "Select Beneficiary (Optional)";
+        const foundUser = allUsers.find(u => u.id === beneficiaryUserId);
+        return foundUser ? (foundUser.name || foundUser.email) : "Select Beneficiary (Optional)";
+    }, [beneficiaryUserId, allUsers]);
+
     return (
          <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{offer ? "Edit Referral Offer" : "Create New Referral Offer"}</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="offer-name">Offer Name *</Label>
-                        <Input id="offer-name" value={name} onChange={(e) => setName(e.target.value)} disabled={isLoading} />
+                <ScrollArea className="max-h-[60vh] p-1 pr-4 -mr-4">
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="offer-name">Offer Code/Name *</Label>
+                            <Input id="offer-name" value={name} onChange={(e) => setName(e.target.value)} disabled={isLoading} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="offer-desc">Description</Label>
+                            <Textarea id="offer-desc" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isLoading} rows={2}/>
+                        </div>
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="offer-discount-type">Discount Type</Label>
+                                <Select value={discountType || ''} onValueChange={(value) => setDiscountType(value as DiscountType || undefined)} disabled={isLoading}>
+                                    <SelectTrigger id="offer-discount-type"><SelectValue placeholder="Select Type" /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="">None</SelectItem>
+                                        {discountTypes.map(dt => <SelectItem key={dt} value={dt} className="capitalize">{dt}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="offer-discount-amount">Discount Amount</Label>
+                                <div className="flex items-center gap-1">
+                                {discountType === 'percentage' && <Percent className="h-4 w-4 text-muted-foreground" />}
+                                {discountType === 'fixed' && <DollarSign className="h-4 w-4 text-muted-foreground" />}
+                                <Input 
+                                    id="offer-discount-amount" 
+                                    type="number" 
+                                    placeholder={discountType === 'percentage' ? "e.g., 10 for 10%" : "e.g., 50 for ₹50"}
+                                    value={discountAmount === null || discountAmount === undefined ? '' : discountAmount} 
+                                    onChange={(e) => setDiscountAmount(e.target.value ? parseFloat(e.target.value) : undefined)} 
+                                    disabled={isLoading || !discountType}
+                                    className="pl-7"
+                                />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="offer-bene-referrer">Benefits for Referrer (Description)</Label>
+                            <Input id="offer-bene-referrer" placeholder="e.g., 100 points" value={benefitsForReferrer} onChange={(e) => setBenefitsForReferrer(e.target.value)} disabled={isLoading} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="offer-bene-referred">Benefits for Referred User (Description)</Label>
+                            <Input id="offer-bene-referred" placeholder="e.g., Access to a premium test" value={benefitsForReferred} onChange={(e) => setBenefitsForReferred(e.target.value)} disabled={isLoading} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="beneficiary-user">Points Beneficiary (Optional)</Label>
+                             <Popover open={beneficiaryPopoverOpen} onOpenChange={setBeneficiaryPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" role="combobox" aria-expanded={beneficiaryPopoverOpen} className="w-full justify-between text-sm font-normal">
+                                        {selectedBeneficiaryName}
+                                        <UserCircle className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                     <Command shouldFilter={false}> {/* Manual filtering */}
+                                        <CommandInput placeholder="Search user..." value={userSearch} onValueChange={setUserSearch} />
+                                        <CommandList>
+                                            <CommandEmpty>No user found.</CommandEmpty>
+                                            <CommandGroup>
+                                                 <CommandItem key="none-beneficiary" value="" onSelect={() => {setBeneficiaryUserId(null); setBeneficiaryPopoverOpen(false); setUserSearch('');}}>
+                                                    <Check className={cn("mr-2 h-4 w-4", beneficiaryUserId === null ? "opacity-100" : "opacity-0")}/>
+                                                    None
+                                                </CommandItem>
+                                                {allUsers.filter(u => (u.name || u.email || '').toLowerCase().includes(userSearch.toLowerCase())).slice(0, 10).map(u => (
+                                                    <CommandItem key={u.id} value={u.id} onSelect={() => {setBeneficiaryUserId(u.id); setBeneficiaryPopoverOpen(false); setUserSearch('');}}>
+                                                        <Check className={cn("mr-2 h-4 w-4", beneficiaryUserId === u.id ? "opacity-100" : "opacity-0")}/>
+                                                        {u.name || u.email}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground">If selected, points/benefits from this offer will go to this user.</p>
+                        </div>
+                        <div className="space-y-1.5">
+                             <Label htmlFor="offer-expiry">Expiry Date (Optional)</Label>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !expiryDate && "text-muted-foreground")} disabled={isLoading}>
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {expiryDate ? format(expiryDate, "PPP") : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={expiryDate} onSelect={setExpiryDate} initialFocus disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1 ))}/>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="offer-active" checked={isActive} onCheckedChange={(checked) => setIsActive(!!checked)} disabled={isLoading} />
+                            <Label htmlFor="offer-active" className="text-sm font-medium leading-none">Active</Label>
+                        </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="offer-desc">Description</Label>
-                        <Textarea id="offer-desc" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isLoading} rows={2}/>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="offer-bene-referrer">Benefits for Referrer</Label>
-                        <Input id="offer-bene-referrer" value={benefitsForReferrer} onChange={(e) => setBenefitsForReferrer(e.target.value)} disabled={isLoading} />
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="offer-bene-referred">Benefits for Referred User</Label>
-                        <Input id="offer-bene-referred" value={benefitsForReferred} onChange={(e) => setBenefitsForReferred(e.target.value)} disabled={isLoading} />
-                    </div>
-                    <div className="space-y-1.5">
-                         <Label htmlFor="offer-expiry">Expiry Date (Optional)</Label>
-                         <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !expiryDate && "text-muted-foreground")} disabled={isLoading}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {expiryDate ? format(expiryDate, "PPP") : <span>Pick a date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={expiryDate} onSelect={setExpiryDate} initialFocus disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1 ))}/>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="offer-active" checked={isActive} onCheckedChange={(checked) => setIsActive(!!checked)} disabled={isLoading} />
-                        <Label htmlFor="offer-active" className="text-sm font-medium leading-none">Active</Label>
-                    </div>
-                </div>
+                </ScrollArea>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isLoading}>Cancel</Button>
                     <Button onClick={handleSubmit} disabled={isLoading}>

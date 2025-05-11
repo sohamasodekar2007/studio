@@ -4,7 +4,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { ReferralOffer } from '@/types';
+import type { ReferralOffer, DiscountType } from '@/types';
 
 const offersFilePath = path.join(process.cwd(), 'src', 'data', 'referral-offers.json');
 const dataDir = path.join(process.cwd(), 'src', 'data');
@@ -61,6 +61,10 @@ export async function createReferralOffer(
       ...offerData,
       id: uuidv4(),
       createdAt: new Date().toISOString(),
+      // Ensure new fields have defaults if not provided
+      discountAmount: offerData.discountAmount ?? null,
+      discountType: offerData.discountType ?? null,
+      beneficiaryUserId: offerData.beneficiaryUserId ?? null,
     };
     const offers = await readOffersFile();
     offers.push(newOffer);
@@ -85,7 +89,16 @@ export async function updateReferralOffer(
     if (offerIndex === -1) {
       return { success: false, message: "Referral offer not found." };
     }
-    const updatedOffer = { ...offers[offerIndex], ...updatedData };
+    // Merge existing offer with updated data, explicitly handling new fields
+    const existingOffer = offers[offerIndex];
+    const updatedOffer: ReferralOffer = {
+      ...existingOffer,
+      ...updatedData,
+      discountAmount: updatedData.discountAmount !== undefined ? updatedData.discountAmount : existingOffer.discountAmount,
+      discountType: updatedData.discountType !== undefined ? updatedData.discountType : existingOffer.discountType,
+      beneficiaryUserId: updatedData.beneficiaryUserId !== undefined ? updatedData.beneficiaryUserId : existingOffer.beneficiaryUserId,
+    };
+
     offers[offerIndex] = updatedOffer;
     const success = await writeOffersFile(offers);
     if (success) {

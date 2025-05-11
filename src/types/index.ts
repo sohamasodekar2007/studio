@@ -457,12 +457,18 @@ export interface TelegramAuthData {
 }
 
 // ---- Referral Offer Types ----
+export const discountTypes = ["fixed", "percentage"] as const;
+export type DiscountType = typeof discountTypes[number];
+
 export interface ReferralOffer {
   id: string;
-  name: string;
+  name: string; // This could be the offer code itself, e.g., "SUMMER20"
   description: string;
-  benefitsForReferrer: string; // Description of benefits
-  benefitsForReferred: string; // Description of benefits
+  benefitsForReferrer: string; // Description of benefits for the person whose *personal* referral code is used
+  benefitsForReferred: string; // Description of benefits for the new user signing up
+  discountAmount?: number | null; // e.g., 50 (for Rs 50 off) or 10 (for 10% off)
+  discountType?: DiscountType | null; // 'fixed' for flat amount, 'percentage' for %
+  beneficiaryUserId?: string | null; // User ID who gets points/credit if THIS OFFER CODE is used (optional)
   expiryDate: string | null; // ISO Date string or null for ongoing
   isActive: boolean;
   createdAt: string;
