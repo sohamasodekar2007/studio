@@ -253,7 +253,7 @@ export default function SettingsPage() {
 
   const getInitials = (name?: string | null, email?: string | null) => {
     if (name) return name.charAt(0).toUpperCase();
-    if (email) return email.charAt(0).toUpperCase();
+    if (email) return email?.charAt(0).toUpperCase();
     return <User className="h-full w-full"/>;
   };
 
@@ -330,9 +330,12 @@ export default function SettingsPage() {
                 <FormField control={profileForm.control} name="academicStatus" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Academic Status</FormLabel>
-                    <Select onValueChange={(value) => field.onChange(value as AcademicStatus | null)} value={field.value || ""} disabled={isLoadingProfile}>
+                    <Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus)} value={field.value || '_none_'} disabled={isLoadingProfile}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select academic status" /></SelectTrigger></FormControl>
-                      <SelectContent>{academicStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        <SelectItem value="_none_">-- Not Set --</SelectItem>
+                        {academicStatuses.map(status => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
@@ -340,9 +343,12 @@ export default function SettingsPage() {
                 <FormField control={profileForm.control} name="targetYear" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Target Exam Year</FormLabel>
-                    <Select onValueChange={(value) => field.onChange(value)} value={field.value || ""} disabled={isLoadingProfile}>
+                    <Select onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} value={field.value || '_none_'} disabled={isLoadingProfile}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select target year" /></SelectTrigger></FormControl>
-                      <SelectContent>{yearOptions.map(year => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        <SelectItem value="_none_">-- Not Set --</SelectItem>
+                        {yearOptions.map(year => <SelectItem key={year} value={year}>{year}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>

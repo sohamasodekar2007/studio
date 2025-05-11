@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2, ShieldCheck, AlertTriangle, Phone, Edit, KeyRound, User } from "lucide-react"; // Removed UserCheck
+import { CalendarIcon, Loader2, ShieldCheck, AlertTriangle, Phone, Edit, KeyRound, User } from "lucide-react"; 
 import { format, isValid, parseISO } from "date-fns";
 import { useToast } from '@/hooks/use-toast';
 import { type UserProfile, userModels, academicStatuses, type AcademicStatus, type UserModel } from '@/types';
@@ -22,6 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const primaryAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'admin@edunexus.com';
+const adminEmailPattern = /^[a-zA-Z0-9._%+-]+-admin@edunexus\.com$/;
+
 
 const getCurrentAndFutureYears = (count = 5) => { 
   const currentYear = new Date().getFullYear();
@@ -43,13 +45,13 @@ const editUserSchema = z.object({
 });
 
 type EditUserFormValues = z.infer<typeof editUserSchema>;
-type UserProfileWithRole = UserProfile & { role?: 'Admin' | 'User' };
 
+// Adjusted to accept Omit<UserProfile, 'password'> as per the state in AdminUsersPage
 interface EditUserDialogProps {
-  user: UserProfileWithRole;
+  user: Omit<UserProfile, 'password'>;
   isOpen: boolean;
   onClose: () => void;
-  onUserUpdate: (updatedUser: UserProfileWithRole) => void;
+  onUserUpdate: (updatedUser: Omit<UserProfile, 'password'>) => void;
 }
 
 export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: EditUserDialogProps) {
@@ -61,8 +63,8 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
     setYearOptions(getCurrentAndFutureYears());
   }, []);
 
-  const isPrimaryAdminAccount = user.email === primaryAdminEmail;
-  const currentUserRole = user.role || 'User';
+  const isPrimaryAdminAccount = user.email?.toLowerCase() === primaryAdminEmail.toLowerCase();
+  const currentUserRole = user.role || 'User'; // Default to 'User' if role is undefined
 
   const form = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
@@ -105,24 +107,27 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
             }
         }
 
-         const userRole = user.role || 'User';
+         const userRoleToMaintain = user.role || 'User'; // Keep the existing role, don't change it here
          let finalModel = data.model;
          let finalExpiryDate = data.expiry_date;
 
-         if (userRole === 'Admin') {
+         if (userRoleToMaintain === 'Admin') { // If the user IS an Admin, enforce admin plan settings
              finalModel = 'combo';
              finalExpiryDate = new Date('2099-12-31T00:00:00.000Z');
-         } else if (finalModel === 'free') {
+         } else if (finalModel === 'free') { // If user is not admin and model is free
              finalExpiryDate = null;
-         } else if (!finalExpiryDate) {
+         } else if (!finalExpiryDate) { // For non-admin, paid plans require expiry
               form.setError("expiry_date", { message: "Expiry date is required for paid models." });
              throw new Error("Expiry date missing for paid plan.");
          }
 
        const expiryDateString = finalExpiryDate ? finalExpiryDate.toISOString() : null;
        
-       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername' | 'avatarUrl' | 'phone' | 'role' >> & {email?: string} = {
+       // Prepare payload for update. Only include fields that can be edited in this dialog.
+       // user-actions.ts should handle hashing if password were changed here (it's not).
+       const updatedDataPayload: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'password' | 'role' | 'referralCode' | 'referralStats' | 'totalPoints' | 'telegramId' | 'telegramUsername' | 'avatarUrl'>> & {email?: string} = {
          name: data.name,
+         phone: data.phone, 
          class: data.class,
          model: finalModel,
          expiry_date: expiryDateString,
@@ -145,7 +150,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
          description: `${result.user.email}'s details have been successfully updated.`,
        });
 
-       onUserUpdate({ ...result.user, role: userRole });
+       onUserUpdate({ ...result.user, role: userRoleToMaintain }); // Pass back the user with the original role
        onClose();
 
     } catch (error: any) {
@@ -162,7 +167,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
 
   const getInitials = (name?: string | null, email?: string | null) => {
     if (name) return name.charAt(0).toUpperCase();
-    if (email) return email.charAt(0).toUpperCase();
+    if (email) return email?.charAt(0).toUpperCase(); // Optional chaining for email
     return <User className="h-4 w-4"/>;
   }
 
@@ -173,7 +178,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
           <div className="flex items-center gap-4">
             <Avatar className="h-10 w-10"><AvatarImage src={user.avatarUrl ? `/avatars/${user.avatarUrl}` : (user.email ? `https://avatar.vercel.sh/${user.email}.png` : undefined)} alt={user.name || 'User Avatar'} /><AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback></Avatar>
             <div><DialogTitle>Edit User: {user.email}</DialogTitle><DialogDescription>Update details and plan. Role changes via 'Change Role'.</DialogDescription></div>
-            <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'} className="ml-auto text-xs">{user.role || 'User'}</Badge>
+            <Badge variant={currentUserRole === 'Admin' ? 'destructive' : 'secondary'} className="ml-auto text-xs">{currentUserRole}</Badge>
           </div>
            {isPrimaryAdminAccount && (<Badge variant="destructive" className="w-fit text-xs mt-2">Primary Admin (Limited Edit)</Badge>)}
         </DialogHeader>
@@ -188,7 +193,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
                 <FormLabel>Academic Status *</FormLabel>
                 <Select 
                   onValueChange={(value) => field.onChange(value === '_none_' ? null : value as AcademicStatus | null)} 
-                  value={field.value === null ? '_none_' : field.value ?? '_none_'} 
+                  value={field.value === null ? '_none_' : (field.value || '_none_')} 
                   disabled={isLoading}
                 >
                   <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
@@ -205,7 +210,7 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
                   <FormLabel>Target Exam Year *</FormLabel>
                   <Select 
                     onValueChange={(value) => field.onChange(value === '_none_' ? null : value)} 
-                    value={field.value === null ? '_none_' : field.value ?? '_none_'}
+                    value={field.value === null ? '_none_' : (field.value || '_none_')}
                     disabled={isLoading}
                   >
                     <FormControl><SelectTrigger><SelectValue placeholder="Select target year" /></SelectTrigger></FormControl>
@@ -241,3 +246,4 @@ export default function EditUserDialog({ user, isOpen, onClose, onUserUpdate }: 
     </Dialog>
   );
 }
+

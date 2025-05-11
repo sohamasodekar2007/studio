@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'; // Removed DialogClose as it's part of DialogContent now
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +17,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added AlertDialogTrigger
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -512,10 +512,10 @@ function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading, allU
                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="offer-discount-type">Discount Type</Label>
-                                <Select value={discountType || ''} onValueChange={(value) => setDiscountType(value as DiscountType || undefined)} disabled={isLoading}>
+                                <Select value={discountType || '_none_'} onValueChange={(value) => setDiscountType(value === '_none_' ? undefined : value as DiscountType)} disabled={isLoading}>
                                     <SelectTrigger id="offer-discount-type"><SelectValue placeholder="Select Type" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">None</SelectItem>
+                                        <SelectItem value="_none_">None</SelectItem>
                                         {discountTypes.map(dt => <SelectItem key={dt} value={dt} className="capitalize">{dt}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
@@ -607,3 +607,4 @@ function ReferralOfferDialog({ isOpen, onClose, offer, onSubmit, isLoading, allU
         </Dialog>
     );
 }
+
