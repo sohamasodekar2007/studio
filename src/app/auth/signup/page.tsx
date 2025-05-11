@@ -85,8 +85,10 @@ export default function SignupPage() {
         data.targetYear,
         data.referralCode || null // Pass referral code to signUp
       );
+      // Redirection and success toast handled by AuthContext/signUp function
     } catch (error: any) {
-      console.error("Signup page submission error:", error.message);
+      // Error toast is handled within AuthContext/signUp on failure
+      // console.error("Signup page submission error:", error.message); // Already logged in context
     } finally {
       setIsLoading(false);
     }
@@ -95,19 +97,34 @@ export default function SignupPage() {
   const combinedLoading = isLoading || authLoading; 
 
   useEffect(() => {
+    // This is a client-side effect, safe to use window
     if (typeof window !== 'undefined' && (window as any).Telegram) {
-      (window as any).Telegram.Login.auth = (user: any) => {
-          const queryParams = new URLSearchParams(user).toString();
-          const redirectUri = process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI || "/auth/telegram/callback";
-          window.location.href = `${redirectUri}?${queryParams}`;
-      };
+      // Configure Telegram Login Widget
+      // This setup assumes the Telegram script is already loaded (e.g., via <Script> tag)
+      // And that a div with id `telegram-login-widget-container` exists
+      const telegramLoginWidgetContainer = document.getElementById('telegram-login-widget-container');
+      if (telegramLoginWidgetContainer && process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME && process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI) {
+        // Clear previous widget if any
+        telegramLoginWidgetContainer.innerHTML = '';
+        // Create script element for Telegram widget
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute('data-telegram-login', process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME);
+        script.setAttribute('data-size', 'large');
+        script.setAttribute('data-radius', '6');
+        script.setAttribute('data-auth-url', process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI);
+        script.setAttribute('data-request-access', 'write');
+        telegramLoginWidgetContainer.appendChild(script);
+      }
     }
   }, []);
 
 
   return (
     <>
-    <Script src="https://telegram.org/js/telegram-widget.js?22" strategy="lazyOnload" />
+    {/* It's better to load the script in the head or body of _document.js or layout.tsx for Next.js,
+        but for a single page, this might work. Ensure it only runs client-side. */}
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1 text-center">
@@ -160,9 +177,17 @@ export default function SignupPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={combinedLoading}> {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign Up </Button>
+              <Button type="submit" className="w-full" disabled={combinedLoading}> {combinedLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Sign Up </Button>
               <div className="relative w-full my-2"> <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div> <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or continue with</span></div> </div>
-              <div id="telegram-login-widget-container" className="w-full flex justify-center"> {process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME && process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI ? ( <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-login={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME} data-size="large" data-radius="6" data-auth-url={process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI} data-request-access="write"></script> ) : ( <Button variant="outline" className="w-full" disabled><Bot className="mr-2 h-4 w-4" /> Telegram Login (Not Configured)</Button> )} </div>
+              {/* Container for Telegram Login Widget */}
+              <div id="telegram-login-widget-container" className="w-full flex justify-center">
+                {/* Telegram widget will be dynamically inserted here by useEffect */}
+                {!(process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME && process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI) && (
+                  <Button variant="outline" className="w-full" disabled>
+                     <Bot className="mr-2 h-4 w-4" /> Telegram Login (Not Configured)
+                  </Button>
+                )}
+              </div>
               <p className="px-8 text-center text-sm text-muted-foreground">By clicking continue, you agree to our{" "}<Link href="/terms" className="underline underline-offset-4 hover:text-primary">Terms of Service</Link>{" "}and{" "}<Link href="/privacy" className="underline underline-offset-4 hover:text-primary">Privacy Policy</Link>.</p>
               <div className="text-center text-sm">Already have an account?{" "}<Link href="/auth/login" className="underline">Log in</Link></div>
             </CardFooter>

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 export default function TelegramCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, setLoading: setAuthLoading, mapUserProfileToContextUser } = useAuth();
+  const { setUser, setLoading: setAuthLoading, mapUserProfileToContextUser } = useAuth(); // Use mapUserProfileToContextUser
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,10 +38,12 @@ export default function TelegramCallbackPage() {
           });
 
           setAuthLoading(true);
-          const contextUser = mapUserProfileToContextUser(result.user);
+          // Map the full user profile (which is Omit<UserProfile, 'password'> from processTelegramLogin)
+          // to the ContextUser type.
+          const contextUser = mapUserProfileToContextUser(result.user); 
           setUser(contextUser);
-          // Ensure result.user (which is Omit<UserProfile, 'password'>) is stringified
-          localStorage.setItem('loggedInUser', JSON.stringify(result.user));
+          // Store the full user profile (excluding password) in localStorage
+          localStorage.setItem('loggedInUser', JSON.stringify(result.user)); 
           setAuthLoading(false);
 
           if (result.needsProfileCompletion) {
@@ -84,6 +86,7 @@ export default function TelegramCallbackPage() {
     );
   }
 
+  // This state should ideally not be reached if redirection works correctly.
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <p className="text-muted-foreground">Redirecting...</p>

@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from "lucide-react"; // Removed GraduationCap
+import { Loader2, Bot } from "lucide-react"; 
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/context/auth-context';
-import Image from 'next/image'; // Import Image
+import Image from 'next/image';
+import Script from 'next/script';
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -55,6 +56,8 @@ export default function LoginPage() {
   const combinedLoading = isLoading || authLoading;
 
   return (
+    <>
+    <Script src="https://telegram.org/js/telegram-widget.js?22" strategy="lazyOnload" />
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="space-y-1 text-center">
@@ -119,6 +122,23 @@ export default function LoginPage() {
                 {combinedLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Log in
               </Button>
+               <div className="relative w-full my-2"> <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div> <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Or continue with</span></div> </div>
+              {/* Telegram Login Button */}
+              <div id="telegram-login-widget-container" className="w-full flex justify-center">
+                {process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME && process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI ? (
+                  <script async src="https://telegram.org/js/telegram-widget.js?22"
+                    data-telegram-login={process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME}
+                    data-size="large"
+                    data-radius="6"
+                    data-auth-url={process.env.NEXT_PUBLIC_TELEGRAM_REDIRECT_URI} // Use the one from .env.local
+                    data-request-access="write"
+                  ></script>
+                ) : (
+                  <Button variant="outline" className="w-full" disabled>
+                     <Bot className="mr-2 h-4 w-4" /> Telegram Login (Not Configured)
+                  </Button>
+                )}
+              </div>
               <div className="text-center text-sm mt-2">
                 Don&apos;t have an account?{" "}
                 <Link href="/auth/signup" className="underline">
@@ -130,5 +150,6 @@ export default function LoginPage() {
         </Form>
       </Card>
     </div>
+    </>
   );
 }
