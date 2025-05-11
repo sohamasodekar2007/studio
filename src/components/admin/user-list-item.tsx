@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, KeyRound, ShieldCheck, Trash2, Loader2, Phone, CalendarDays, ShoppingBag, Target, User as UserIcon } from 'lucide-react';
+import { MoreHorizontal, Edit, KeyRound, ShieldCheck, Trash2, Loader2, Phone, CalendarDays, ShoppingBag, Target, User as UserIcon, Users } from 'lucide-react'; // Changed UsersIcon to Users
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -99,7 +99,7 @@ export default function UserListItem({
         <div className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3"/> Phone: <span className="text-foreground">{u.phone || 'N/A'}</span></div>
         <div className="flex items-center gap-1 text-muted-foreground"><UserIcon className="h-3 w-3"/> Role: <Badge variant={u.role === 'Admin' ? 'destructive' : 'secondary'} className="text-xs px-1.5 py-0.5">{u.role}</Badge></div>
         <div className="flex items-center gap-1 text-muted-foreground"><ShoppingBag className="h-3 w-3"/> Model: <span className="text-foreground capitalize">{u.model || 'N/A'}</span></div>
-        <div className="flex items-center gap-1 text-muted-foreground"><UsersIcon className="h-3 w-3"/> Class: <span className="text-foreground">{u.class || 'N/A'}</span></div>
+        <div className="flex items-center gap-1 text-muted-foreground"><Users className="h-3 w-3"/> Class: <span className="text-foreground">{u.class || 'N/A'}</span></div>
         <div className="flex items-center gap-1 text-muted-foreground"><Target className="h-3 w-3"/> Target Year: <span className="text-foreground">{u.targetYear || 'N/A'}</span></div>
         <div className="flex items-center gap-1 text-muted-foreground"><CalendarDays className="h-3 w-3"/> Expiry: <span className="text-foreground">{formatDate(u.expiry_date)}</span></div>
         <div className="col-span-2 flex items-center gap-1 text-muted-foreground"><CalendarDays className="h-3 w-3"/> Created: <span className="text-foreground">{formatDate(u.createdAt)}</span></div>
