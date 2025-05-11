@@ -26,8 +26,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/context/auth-context';
 
@@ -47,9 +46,9 @@ export default function AdminUsersPage() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isChangingRole, setIsChangingRole] = useState<string | null>(null);
 
-  const [dialogState, setDialogState<{
+  const [dialogState, setDialogState] = useState<{
     type: 'edit' | 'reset' | 'add' | 'changeRole' | null;
-    user: DisplayUserProfile | null; // Use DisplayUserProfile
+    user: DisplayUserProfile | null;
   }>({ type: null, user: null });
 
 
@@ -126,7 +125,7 @@ export default function AdminUsersPage() {
                 toast({ variant: "destructive", title: "Error", description: "User not found." });
                 return;
              }
-             if (userToChange.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && newRole !== 'Admin') {
+             if (userToChange.email?.toLowerCase() === primaryAdminEmail.toLowerCase() && newRole === 'User') {
                  toast({ variant: "destructive", title: "Action Denied", description: "Cannot change the role of the primary admin account." });
                  return;
              }
@@ -136,12 +135,6 @@ export default function AdminUsersPage() {
                  toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot promote to Admin. Email '${userToChange.email}' does not follow admin pattern ('username-admin@edunexus.com' or be the primary admin).` });
                  return;
             }
-             // This validation might be too strict if an admin email was manually set for a user that should be demoted.
-             // Consider if admin pattern check should only be for promotion.
-            // if (newRole === 'User' && (emailLower === primaryAdminEmail.toLowerCase() || adminEmailPattern.test(emailLower))) {
-            //      toast({ variant: "destructive", title: "Role Change Failed", description: `Cannot demote to User. Email format '${userToChange.email}' is reserved for Admins.`});
-            //      return;
-            // }
 
             const result = await updateUserRole(userId, newRole);
             if (result.success && result.user) {
@@ -172,13 +165,13 @@ export default function AdminUsersPage() {
         closeDialog();
     };
 
-   const handleUserAdded = (newUser: DisplayUserProfile) => { // Expect DisplayUserProfile
+   const handleUserAdded = (newUser: DisplayUserProfile) => { 
        setUsers(prevUsers => [newUser, ...prevUsers].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
        closeDialog();
    }
 
    const openEditDialog = (user: DisplayUserProfile) => setDialogState({ type: 'edit', user });
-   const openResetDialog = (user: DisplayUserProfile) => setDialogState({ type: 'reset', user });
+   const openResetDialog = (user: DisplayUserProfile) => setDialogState({ type: 'reset', user: user as UserProfile });
    const openAddDialog = () => setDialogState({ type: 'add', user: null });
    const openChangeRoleDialog = (user: DisplayUserProfile) => setDialogState({ type: 'changeRole', user });
    const closeDialog = () => setDialogState({ type: null, user: null });
@@ -214,7 +207,7 @@ export default function AdminUsersPage() {
                     </TableRow>
                   ))
                 ) : filteredUsers.length > 0 ? (
-                  filteredUsers.map((u) => { // u is DisplayUserProfile here
+                  filteredUsers.map((u) => { 
                   const isCurrentUserPrimaryAdmin = u.email?.toLowerCase() === primaryAdminEmail.toLowerCase();
                   const avatarSrc = u.avatarUrl ? `/avatars/${u.avatarUrl}` : (u.email ? `https://avatar.vercel.sh/${u.email}.png?size=40` : undefined);
                     return (
@@ -238,9 +231,17 @@ export default function AdminUsersPage() {
                             <DropdownMenuItem onClick={() => openResetDialog(u as UserProfile)} disabled={isCurrentUserPrimaryAdmin}><KeyRound className="mr-2 h-4 w-4" /> Reset Password</DropdownMenuItem>
                             {!isCurrentUserPrimaryAdmin && (<DropdownMenuItem onClick={() => openChangeRoleDialog(u)} disabled={isChangingRole === u.id}>{isChangingRole === u.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Change Role</DropdownMenuItem>)}
                             <DropdownMenuSeparator />
-                            <AlertDialog><AlertDialogTrigger asChild>
-                                  <Button variant="ghost" className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive" disabled={isCurrentUserPrimaryAdmin || !!isDeleting}>{isDeleting === u.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User</Button>
-                              </AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{u.email}</span> and remove their data.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteUser(u.id)} className="bg-destructive hover:bg-destructive/90">Yes, delete user</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" className="w-full justify-start px-2 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 hover:bg-destructive/10 hover:text-destructive" disabled={isCurrentUserPrimaryAdmin || !!isDeleting}>
+                                      {isDeleting === u.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete User
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{u.email}</span> and remove their data.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteUser(u.id)} className="bg-destructive hover:bg-destructive/90">Yes, delete user</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -256,11 +257,10 @@ export default function AdminUsersPage() {
         <CardFooter><div className="text-xs text-muted-foreground">Showing <strong>{filteredUsers.length}</strong> of <strong>{users.length}</strong> users</div></CardFooter>
       </Card>
       {/* Ensure dialogState.user passed to EditUserDialog is compatible */}
-      {dialogState.type === 'edit' && dialogState.user && (<EditUserDialog user={dialogState.user as UserProfileWithRole} isOpen={dialogState.type === 'edit'} onClose={closeDialog} onUserUpdate={handleUserUpdate}/>)}
+      {dialogState.type === 'edit' && dialogState.user && (<EditUserDialog user={dialogState.user} isOpen={dialogState.type === 'edit'} onClose={closeDialog} onUserUpdate={handleUserUpdate}/>)}
       {dialogState.type === 'reset' && dialogState.user && (<ResetPasswordDialog user={dialogState.user as UserProfile} isOpen={dialogState.type === 'reset'} onClose={closeDialog}/>)}
       {dialogState.type === 'add' && (<AddUserDialog isOpen={dialogState.type === 'add'} onClose={closeDialog} onUserAdded={handleUserAdded as (newUser: UserProfile) => void}/>)}
       {dialogState.type === 'changeRole' && dialogState.user && (<ChangeRoleDialog user={dialogState.user} isOpen={dialogState.type === 'changeRole'} onClose={closeDialog} onRoleChange={handleRoleChangeSubmit} isLoading={isChangingRole === dialogState.user.id} />)}
     </div>
   );
 }
-
