@@ -79,7 +79,7 @@ export function AdminSidebar() {
   }
 
   return (
-    <Sidebar side="left" variant="sidebar" collapsible="icon">
+    <Sidebar side="left" variant="sidebar" collapsible="none" className="hidden sm:flex peer"> {/* Changed collapsible to "none" */}
       <SidebarHeader className="flex items-center justify-between p-4"> {/* Increased padding */}
         <Link
           href="/admin"
@@ -106,6 +106,10 @@ export function AdminSidebar() {
            {/* Updated Name */}
           <h1 className="text-lg font-semibold">EduNexus Admin</h1>
         </Link>
+        {/* Desktop trigger is less relevant if not icon-collapsible, but context might still use it for mobile sheet state if logic is shared.
+            Keeping it for now, but it won't collapse the desktop sidebar to icons.
+            If it causes confusion, it can be conditionally rendered or removed.
+        */}
         <SidebarTrigger className="hidden sm:flex mr-1" />
       </SidebarHeader>
 
@@ -117,7 +121,7 @@ export function AdminSidebar() {
               <Link href={homeNavItem.href} passHref legacyBehavior>
                 <SidebarMenuButton as="a" isActive={isActive(homeNavItem.href)} tooltip={homeNavItem.label}>
                   <homeNavItem.icon />
-                  <span>{homeNavItem.label}</span>
+                  <span className="group-data-[state=collapsed]:hidden">{homeNavItem.label}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -126,7 +130,7 @@ export function AdminSidebar() {
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive(item.href)} tooltip={item.label}>
                     <item.icon />
-                    <span>{item.label}</span>
+                    <span className="group-data-[state=collapsed]:hidden">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -142,7 +146,7 @@ export function AdminSidebar() {
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive(item.href)} tooltip={item.label}>
                     <item.icon />
-                    <span>{item.label}</span>
+                    <span className="group-data-[state=collapsed]:hidden">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
@@ -158,7 +162,7 @@ export function AdminSidebar() {
                 <Link href={item.href} passHref legacyBehavior>
                   <SidebarMenuButton as="a" isActive={isActive(item.href)} tooltip={item.label}>
                     <item.icon />
-                    <span>{item.label}</span>
+                    <span className="group-data-[state=collapsed]:hidden">{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>

@@ -1,3 +1,4 @@
+// src/components/admin/admin-layout.tsx
 'use client';
 
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
@@ -41,15 +42,16 @@ export default function AdminLayoutContent({
 
   return (
       <div className="flex min-h-screen bg-muted/40">
-        <AdminSidebar />
+        <AdminSidebar /> {/* This is the <Sidebar> which is the 'peer' */}
         <div
           className={cn(
             "flex flex-col flex-1 transition-[margin-left] duration-300 ease-in-out",
-            // Apply margin only on sm+ screens
-            // When sidebar is expanded (default state, or data-state=expanded)
-            "sm:ml-[var(--sidebar-width)]",
-             // When sidebar is collapsed (data-state=collapsed)
-            "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]"
+            // If AdminSidebar is collapsible="none", it's always full width on desktop.
+            // The peer-data-state selectors for collapsed state won't apply as intended for icon-only state.
+            // So, simply set the margin for the full width sidebar.
+            "sm:ml-[var(--sidebar-width)]"
+            // The following line is for icon-collapsible sidebars, might not be needed if AdminSidebar is collapsible="none"
+            // "peer-data-[state=collapsed]:sm:ml-[var(--sidebar-width-icon)]" 
           )}
          >
           <AdminHeader />
