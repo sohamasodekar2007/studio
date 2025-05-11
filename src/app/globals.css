@@ -92,3 +92,15 @@ body {
     @apply transition-colors duration-200;
   }
 }
+
+@layer utilities {
+  @keyframes wiggle {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    25% { transform: translateX(-3px) rotate(-1deg); }
+    50% { transform: translateX(3px) rotate(1deg); }
+    75% { transform: translateX(-3px) rotate(-1deg); }
+  }
+  .animate-wiggle {
+    animation: wiggle 0.4s ease-in-out;
+  }
+}

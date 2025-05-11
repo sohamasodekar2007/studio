@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress, getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, TrendingUp, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb, ArrowLeft } from 'lucide-react'; // Added ArrowLeft
+import { AlertTriangle, Filter, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb, ArrowLeft, PackageOpen } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -123,7 +123,7 @@ export default function DppLessonPage() {
           });
           setAllQuestions(fetchedQuestions);
           setCurrentQuestionIndex(0);
-          setUserAnswers({});
+          setUserAnswers({}); // Reset answers for the new lesson
           setShowSolution(false);
           setIsCorrect(null);
         } catch (err) {
@@ -146,6 +146,19 @@ export default function DppLessonPage() {
             getDppProgress(user.id, subject, lesson)
                 .then(progress => {
                     setDppProgress(progress);
+                     // Pre-fill userAnswers with last attempts if available
+                    if (progress && progress.questionAttempts) {
+                        const initialAnswers: Record<string, string | null> = {};
+                        Object.entries(progress.questionAttempts).forEach(([qId, attempts]) => {
+                            if (attempts.length > 0) {
+                                // Here, we only pre-fill if we want the UI to show previous *selection*.
+                                // For DPPs, it's usually better to start fresh for each question interaction
+                                // and use `dppProgress` to show *past attempt status* (Correct/Incorrect).
+                                // So, we might not pre-fill `userAnswers` here from `dppProgress`.
+                            }
+                        });
+                        // setUserAnswers(initialAnswers); // Decide if you want to pre-fill selections
+                    }
                 })
                 .catch(err => console.error("Failed to load DPP progress:", err))
                 .finally(() => setIsLoadingProgress(false));
@@ -172,16 +185,16 @@ export default function DppLessonPage() {
   const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
     setSelectedDifficulty(difficulty);
     setCurrentQuestionIndex(0);
-    setUserAnswers({});
+    setUserAnswers({}); // Clear selections when filter changes
     setShowSolution(false);
     setIsCorrect(null);
   };
 
   const handleOptionSelect = (questionId: string, selectedOption: string) => {
-      if (showSolution) return;
+      if (showSolution) return; // Don't allow changing answer after solution is shown
       setUserAnswers(prev => ({ ...prev, [questionId]: selectedOption }));
-      setIsCorrect(null);
-      setShowSolution(false);
+      setIsCorrect(null); // Reset correctness state as answer changed
+      setShowSolution(false); // Keep solution hidden
   };
 
   const checkDailyGoalAndNotify = useCallback(async () => {
@@ -193,16 +206,17 @@ export default function DppLessonPage() {
         return; 
     }
 
-    const todayStart = new Date(today + 'T00:00:00.000Z').toISOString();
-    const todayEnd = new Date(today + 'T23:59:59.999Z').toISOString();
+    const todayStartISO = new Date(today + 'T00:00:00.000Z').toISOString();
+    const todayEndISO = new Date(today + 'T23:59:59.999Z').toISOString();
     
     try {
-        const todayProgressData = await getDppProgressForDateRange(user.id, todayStart, todayEnd);
+        const todayProgressData = await getDppProgressForDateRange(user.id, todayStartISO, todayEndISO);
         let solvedTodayCount = 0;
         todayProgressData.forEach(lessonProg => {
             Object.values(lessonProg.questionAttempts).forEach(attemptsArray => {
-                if (attemptsArray.length > 0) { 
-                    solvedTodayCount++;
+                // Consider a question solved if it has any attempt today
+                if (attemptsArray.some(att => att.timestamp >= new Date(todayStartISO).getTime() && att.timestamp <= new Date(todayEndISO).getTime())) {
+                     solvedTodayCount++;
                 }
             });
         });
@@ -212,6 +226,7 @@ export default function DppLessonPage() {
                 title: "🎉 Daily Goal Achieved! 🎉",
                 description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} DPP questions. Keep it up!`,
                 duration: 7000,
+                className: 'bg-green-50 border-green-200 dark:bg-green-900/50 dark:border-green-700', // Custom styling for goal toast
             });
             localStorage.setItem(goalAchievedKey, 'true');
         }
@@ -235,11 +250,12 @@ export default function DppLessonPage() {
 
        const feedbackElement = document.getElementById('answer-feedback');
         if (feedbackElement) {
-            feedbackElement.classList.remove('animate-pulse', 'animate-bounce'); 
+            feedbackElement.classList.remove('animate-pulse', 'animate-bounce', 'animate-wiggle'); 
+            void feedbackElement.offsetWidth; // Trigger reflow
             if (correct) {
                 feedbackElement.classList.add('animate-bounce'); 
             } else {
-                feedbackElement.classList.add('animate-pulse'); 
+                feedbackElement.classList.add('animate-wiggle'); 
             }
         }
 
@@ -270,25 +286,11 @@ export default function DppLessonPage() {
 
   const navigateToQuestion = (newIndex: number) => {
     if (newIndex >= 0 && newIndex < filteredQuestions.length) {
-        const newQuestionId = filteredQuestions[newIndex]?.id;
-        
-        // Do NOT clear previous answer for the new question if it exists in userAnswers from a prior session in this DPP.
-        // Only clear the *current* question's user selection from this *session* if needed.
-        // For DPP, we want to allow users to see their previous correct/incorrect state if they've answered it.
-        // The userAnswers state is for the current interaction *before* checkAnswer.
-
-        // If we were to reset:
-        // setUserAnswers(prev => ({ ...prev, [currentQuestion.id]: null })); // Reset current
-        // if (newQuestionId && userAnswers[newQuestionId] === undefined) { // Only if truly unattempted in this session
-        //   setUserAnswers(prev => ({ ...prev, [newQuestionId]: null }));
-        // }
-        // For now, we'll persist the selected answer locally until "Check Answer"
-        // and let the fetched dppProgress handle display of past attempts.
-
         setCurrentQuestionIndex(newIndex);
-        setShowSolution(false); 
-        setIsCorrect(null);     
-        setAnimateCard(true);  
+        setShowSolution(false); // Hide solution for the new question
+        setIsCorrect(null);     // Reset correctness state for the new question
+        // setUserAnswers(prev => ({ ...prev, [filteredQuestions[newIndex].id]: null })); // Clear selection for new question
+        setAnimateCard(true);  // Trigger animation for the card
     }
   };
 
@@ -333,13 +335,13 @@ export default function DppLessonPage() {
 
     const renderOptions = (q: QuestionBankItem) => {
         const questionId = q.id;
-        const selectedOption = userAnswers[questionId];
+        const selectedOption = userAnswers[questionId]; // This is the user's *current session* selection
         const isAnswerChecked = showSolution;
         const correctOption = q.correct;
 
         return (
             <RadioGroup
-                value={selectedOption ?? undefined}
+                value={selectedOption ?? undefined} // Use undefined if null/undefined for no initial selection
                 onValueChange={(value) => handleOptionSelect(questionId, value)}
                 className="space-y-3 mt-6"
                 disabled={showSolution || isSaving}
@@ -355,7 +357,7 @@ export default function DppLessonPage() {
                         } else if (isSelected && !isCorrectOption) {
                              optionStyle = "border-red-500 bg-red-100 dark:bg-red-900/40 ring-2 ring-red-500 dark:ring-red-400 text-red-700 dark:text-red-300 font-semibold shadow-red-200/50 dark:shadow-red-800/40 shadow-md";
                         } else if (!isSelected && isCorrectOption) {
-                             optionStyle = "border-green-500 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
+                             optionStyle = "border-green-500 border-dashed bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 shadow-sm";
                         }
                     } else if (isSelected) {
                          optionStyle = "border-primary ring-2 ring-primary bg-primary/10 scale-[1.02] shadow-md";
@@ -522,7 +524,12 @@ export default function DppLessonPage() {
                     </Button>
                 ))} 
               </div>
-             <Card className="shadow-md"><CardContent className="p-10 text-center text-muted-foreground">No questions found matching the '{selectedDifficulty}' filter for this lesson.</CardContent></Card>
+             <Card className="shadow-md">
+                <CardContent className="p-10 text-center">
+                    <PackageOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No questions found matching the '{selectedDifficulty}' filter for this lesson.</p>
+                </CardContent>
+             </Card>
           </div>
      ); }
 
@@ -540,7 +547,7 @@ export default function DppLessonPage() {
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary h-8 w-8">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary h-8 w-8" onClick={() => { handleDifficultyFilter('All'); setUserAnswers({}); }}>
                            <Repeat className="h-4 w-4"/>
                         </Button>
                     </TooltipTrigger>
@@ -554,7 +561,7 @@ export default function DppLessonPage() {
             <p className="text-muted-foreground text-sm md:text-base">Subject: {subject}</p>
          </div>
          
-         <Progress value={dppCompletionPercentage} className="w-full h-2 bg-muted/50" />
+         <Progress value={dppCompletionPercentage} className="w-full h-2.5 bg-muted/50" />
 
          <div className="flex flex-wrap items-center justify-center gap-2 mb-6 rounded-lg bg-muted/20 dark:bg-card p-3 shadow-inner">
             <Filter className="h-5 w-5 text-muted-foreground" />
