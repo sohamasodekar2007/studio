@@ -33,7 +33,8 @@ export type SolveDoubtOutput = z.infer<typeof SolveDoubtOutputSchema>;
 // Exported wrapper function to call the flow
 export async function solveDoubtWithGemini(input: SolveDoubtInput): Promise<SolveDoubtOutput> {
   // Check if the Google AI plugin is configured
-  if (!ai.plugins().find(p => p.name === 'googleAI')) {
+  // Corrected: ai.plugins is an array, not a function.
+  if (!ai.plugins.find(p => p.name === 'googleAI')) {
     console.error("CustomDoubtSolvingFlow (Gemini): Google AI plugin not configured. GOOGLE_GENAI_API_KEY might be missing or invalid.");
     throw new Error("The AI doubt solving service is currently unavailable. Please ensure the AI service is correctly configured.");
   }
