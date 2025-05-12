@@ -10,10 +10,10 @@ import { Label } from "@/components/ui/label";
 import Image from 'next/image';
 import { Loader2, Upload, X, MessageSquareText, Info, AlertTriangle, ClipboardPaste } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getRapidApiDoubtAnswer, type RapidApiDoubtInput } from '@/actions/rapidapi-chat-action'; // Updated import
+import { solveDoubt, type SolveDoubtInput } from '@/ai/flows/custom-doubt-solving-flow'; // Updated import
 import { useAuth } from '@/context/auth-context';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // Added TooltipContent
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Constants for image handling
@@ -163,13 +163,12 @@ export default function DoubtSolvingPage() {
     }
     setIsLoading(true);
     setGeneratedAnswer('');
-    const input: RapidApiDoubtInput = {
+    const input: SolveDoubtInput = { // Updated type
       questionText: questionText || undefined,
       imageDataUri: imageDataUri || undefined,
     };
     try {
-      const result = await getRapidApiDoubtAnswer(input);
-      if (result.error) throw new Error(result.error);
+      const result = await solveDoubt(input); // Use the new Genkit flow action
       setGeneratedAnswer(result.answer);
       toast({ title: "Answer Generated!", description: "EduNexus by GODWIN has provided an answer."});
     } catch (error: any) {

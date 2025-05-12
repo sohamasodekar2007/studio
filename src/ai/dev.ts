@@ -1,8 +1,7 @@
 // This file can be used to register flows for local development testing with `genkit start`
 
 // Import flows to make them available in the Genkit Dev UI
-// import '@/ai/flows/study-tip-flow'; // Removed as study-tip-flow is deleted
-// import '@/ai/flows/doubt-solving-flow'; // Removed as doubt-solving-flow is deleted and replaced
-import '@/ai/flows/predict-rank-flow'; // Add the new rank prediction flow
+import '@/ai/flows/predict-rank-flow'; 
+import '@/ai/flows/custom-doubt-solving-flow'; // Added new doubt solving flow
 
-console.log("Rank prediction flow registered for dev environment.");
+console.log("Genkit flows (rank prediction, custom doubt solving) registered for dev environment.");
