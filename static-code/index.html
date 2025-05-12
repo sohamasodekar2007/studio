@@ -3,49 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduNexus - Welcome (Static Version)</title>
+    <title>EduNexus - MHT-CET, JEE, NEET Test Series (Static)</title>
     <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Placeholder for favicon -->
+    <link rel="icon" href="images/EduNexus-logo-black.jpg" type="image/jpeg">
 </head>
 <body>
     <header>
-        <h1>Welcome to EduNexus</h1>
+        <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+            <img src="images/EduNexus-logo-white.jpg" alt="EduNexus Logo" style="height: 40px; width: 40px; margin-right: 10px; border-radius: 50%;">
+            <h1>Welcome to EduNexus</h1>
+        </div>
         <nav>
+            <a href="index.html">Home</a>
+            <a href="tests.php">Test Series (Conceptual)</a>
             <a href="auth/login.php">Login</a>
             <a href="auth/signup.php">Sign Up</a>
-            <a href="admin/dashboard.php">Admin Panel (Requires Login)</a>
+            <!-- <a href="admin/dashboard.php">Admin Panel</a> Removed, login required -->
         </nav>
     </header>
     <main>
         <section id="hero">
             <h2>Prepare for Your Exams with Confidence</h2>
-            <p>Your ultimate destination for MHT-CET, JEE, and NEET exam preparation.</p>
+            <p>Your ultimate destination for MHT-CET, JEE, and NEET exam preparation. Access mock tests, daily practice problems, and detailed performance analysis.</p>
             <a href="auth/signup.php" class="cta-button">Get Started for Free</a>
         </section>
 
         <section id="features">
-            <h2>Key Features</h2>
+            <h2>Key Features of EduNexus</h2>
             <div class="feature-grid">
                 <div class="feature-item">
-                    <img src="https://picsum.photos/seed/test-series/100/100" alt="Test Series" data-ai-hint="exam paper">
+                    <!-- Icon placeholder, replace with actual icon or image -->
+                    <div style="font-size: 2.5rem; color: #1abc9c;">📚</div>
                     <h3>Comprehensive Test Series</h3>
-                    <p>Access a wide range of chapter-wise and full-length mock tests.</p>
+                    <p>Access a wide range of chapter-wise and full-length mock tests designed by experts.</p>
                 </div>
                 <div class="feature-item">
-                    <img src="https://picsum.photos/seed/dpp/100/100" alt="DPPs" data-ai-hint="practice sheet">
-                    <h3>Daily Practice Problems</h3>
-                    <p>Sharpen your skills with daily practice questions for consistent learning.</p>
+                     <div style="font-size: 2.5rem; color: #1abc9c;">📝</div>
+                    <h3>Daily Practice Problems (DPPs)</h3>
+                    <p>Sharpen your skills with daily topic-wise practice questions for consistent learning.</p>
                 </div>
                 <div class="feature-item">
-                    <img src="https://picsum.photos/seed/analysis/100/100" alt="Performance Analysis" data-ai-hint="graph chart">
+                     <div style="font-size: 2.5rem; color: #1abc9c;">📊</div>
                     <h3>Performance Analysis</h3>
-                    <p>Track your progress, identify weak areas, and improve your scores.</p>
+                    <p>Track your progress, identify weak areas, and improve your scores with detailed insights.</p>
+                </div>
+                <div class="feature-item">
+                     <div style="font-size: 2.5rem; color: #1abc9c;">💡</div>
+                    <h3>AI Doubt Solving</h3>
+                    <p>Get instant answers to your academic doubts with our AI-powered assistant (Premium).</p>
+                </div>
+                 <div class="feature-item">
+                     <div style="font-size: 2.5rem; color: #1abc9c;">🏆</div>
+                    <h3>Leaderboard & Challenges</h3>
+                    <p>Compete with peers, view your rank, and participate in exciting challenges.</p>
+                </div>
+                 <div class="feature-item">
+                     <div style="font-size: 2.5rem; color: #1abc9c;">🔖</div>
+                    <h3>Personalized Notebooks</h3>
+                    <p>Save important questions and notes for quick revision and focused study sessions.</p>
                 </div>
             </div>
         </section>
     </main>
     <footer>
-        <p>&copy; 2024 EduNexus. All rights reserved.</p>
+        <p>&copy; <?php echo date("Y"); ?> EduNexus. All rights reserved.</p>
     </footer>
-    <script src="js/script.js"></script>
+    <!-- <script src="js/script.js"></script> -->
 </body>
 </html>
