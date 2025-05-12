@@ -10,7 +10,7 @@ It uses local storage for client-side session persistence and a `users.json` fil
 *   User Profile Settings (Name, Password, Avatar)
 *   Help & Support Section
 *   Privacy Policy & Terms of Service Pages
-*   AI-Powered Doubt Solving (using Genkit) - Premium Feature
+*   AI-Powered Doubt Solving (using RapidAPI GPT-4o) - Premium Feature
 *   Admin Panel (Dashboard, User Management, Test Management, Settings)
 *   Daily Practice Problems (DPP) with progress tracking
 *   PYQ DPPs with tiered access:
@@ -32,11 +32,17 @@ It uses local storage for client-side session persistence and a `users.json` fil
     ```bash
     npm install
     ```
-3.  **Set up Google AI (for AI features):**
-    *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+3.  **Set up AI API Keys:**
+    *   **Google AI (for AI features like rank prediction):**
+        *   Obtain an API key for the Gemini API from Google AI Studio: [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+    *   **RapidAPI (for AI Doubt Solving using GPT-4o):**
+        *   Sign up on [RapidAPI](https://rapidapi.com/).
+        *   Subscribe to a GPT-4o API (or similar chat completion API) that you want to use. Example: Search for "GPT-4o".
+        *   Obtain your `X-RapidAPI-Key` from the API's dashboard on RapidAPI.
 4.  **Configure Environment Variables:**
     *   **CRITICAL:** Create a file named `.env.local` in the project root (if it doesn't exist). Do NOT use `.env.example` or just `.env` for Next.js public variables.
-    *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable. This is required for AI features.
+    *   Fill in the Google AI API key into the `GOOGLE_GENAI_API_KEY` variable.
+    *   Fill in your RapidAPI key into the `RAPIDAPI_KEY` variable. This is required for the AI Doubt Solving feature.
     *   Set `NEXT_PUBLIC_ADMIN_EMAIL` to the email address you want to use for admin access (e.g., `admin@edunexus.com`). This email will see the "Admin Panel" link in the sidebar after logging in. **This MUST match the email of the primary admin in `src/data/users.json`.**
     *   Set `ADMIN_PASSWORD` to a secure password for the default admin user (e.g., `Soham@1234`). This is used for the initial local admin setup in `users.json`. **This password will be hashed and stored in `users.json` on first run if the file is initialized.**
     *   Set `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` and `TELEGRAM_BOT_TOKEN` if using Telegram login.
@@ -44,6 +50,7 @@ It uses local storage for client-side session persistence and a `users.json` fil
     *   **Example `.env.local` content:**
         ```
         GOOGLE_GENAI_API_KEY=YOUR_GOOGLE_GENAI_API_KEY_HERE
+        RAPIDAPI_KEY=YOUR_RAPIDAPI_KEY_HERE
         NEXT_PUBLIC_ADMIN_EMAIL=admin@edunexus.com
         ADMIN_PASSWORD=Soham@1234
         NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=YourTelegramBotUsername # Replace with your bot's username
@@ -88,7 +95,7 @@ It uses local storage for client-side session persistence and a `users.json` fil
     ```
     **IMPORTANT:** You **MUST** restart the server after creating or modifying the `.env.local` file or `users.json` for the changes to take effect.
     The application will be available at `http://localhost:9002`.
-7.  **(Optional) Run Genkit locally for AI development:**
+7.  **(Optional) Run Genkit locally for AI development (if still using Genkit for other features):**
     ```bash
     npm run genkit:watch
     ```
@@ -100,7 +107,7 @@ It uses local storage for client-side session persistence and a `users.json` fil
 *   **`src/data/users.json`:** As mentioned above, this file **must be committed to your repository** and included in your build for authentication to work on Netlify/Render. The platform cannot reliably create or write to this file at runtime in a serverless environment.
 *   **Node.js Version:** The project includes a `.nvmrc` file and `netlify.toml` specifies `NODE_VERSION = "20"`. This helps ensure Netlify uses a consistent and compatible Node.js version. Render typically respects `.nvmrc` or allows setting Node version in its dashboard.
 *   **Go Version / `mise` errors:** If you encounter errors related to `mise` or Go during Netlify builds (e.g., "mise go@1.19 install"), it might be due to Netlify's build image auto-detecting Go. The included `.tool-versions` file, specifying `nodejs 20`, aims to prevent this by instructing `mise` (or `asdf`) to focus on Node.js. Ensure no other Go-specific files (like `go.mod`) are accidentally committed. If issues persist, check your Netlify site's build settings in the UI to ensure the build image is appropriate (e.g., a modern Ubuntu LTS) and that no conflicting language version environment variables (like `GO_VERSION`) are set.
-*   **Environment Variables:** Ensure all necessary environment variables (especially `GOOGLE_GENAI_API_KEY`, `NEXT_PUBLIC_ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, and the production `NEXT_PUBLIC_TELEGRAM_REDIRECT_URI`) are correctly configured in your Netlify/Render site settings.
+*   **Environment Variables:** Ensure all necessary environment variables (especially `GOOGLE_GENAI_API_KEY`, `RAPIDAPI_KEY`, `NEXT_PUBLIC_ADMIN_EMAIL`, `ADMIN_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`, and the production `NEXT_PUBLIC_TELEGRAM_REDIRECT_URI`) are correctly configured in your Netlify/Render site settings.
 
 ## Troubleshooting
 
@@ -124,10 +131,10 @@ It uses local storage for client-side session persistence and a `users.json` fil
 *   `src/lib/`: Utility functions, local auth configuration (`utils.ts`).
 *   `src/context/`: React context providers (e.g., `auth-context.tsx`).
 *   `src/hooks/`: Custom React hooks (`use-toast.ts`, `use-mobile.ts`).
-*   `src/ai/`: Genkit AI flows and configuration (`ai-instance.ts`, `dev.ts`, `flows/`).
+*   `src/ai/`: Genkit AI flows and configuration (`ai-instance.ts`, `dev.ts`, `flows/`) - may also contain non-Genkit AI actions.
 *   `src/types/`: TypeScript type definitions (`index.ts`).
 *   `src/data/`: Contains local data files like `users.json`, `question_bank`, `test_pages`. **Note:** Local file storage for `users.json` requires the file to be present in the deployment for platforms like Netlify/Render. Other data here is primarily for local dev or read-only purposes if deployed.
-*   `src/actions/`: Server Actions (e.g., `user-actions.ts`, `auth-actions.ts`).
+*   `src/actions/`: Server Actions (e.g., `user-actions.ts`, `auth-actions.ts`, `rapidapi-chat-action.ts`).
 *   `public/`: Static assets (e.g., `question_bank_images`, `avatars`, logos).
 *   `src/app/globals.css`: Global CSS styles and ShadCN theme variables.
 *   `.env.local`: Local environment variables (ignored by Git). **MUST BE CONFIGURED CORRECTLY & SERVER RESTARTED.**
@@ -140,9 +147,8 @@ It uses local storage for client-side session persistence and a `users.json` fil
 *   `npm run start`: Starts the production server.
 *   `npm run lint`: Lints the codebase.
 *   `npm run typecheck`: Runs TypeScript type checking.
-*   `npm run genkit:dev`: Starts the Genkit development server.
-*   `npm run genkit:watch`: Starts the Genkit development server with file watching.
+*   `npm run genkit:dev`: Starts the Genkit development server (if Genkit is used).
+*   `npm run genkit:watch`: Starts the Genkit development server with file watching (if Genkit is used).
 
 **Important Note on Local Storage Authentication:**
 This application now uses a simulated authentication system relying on local browser storage and a `users.json` file on the server-side for demonstration. This approach is **not secure for production environments and has limitations on serverless platforms like Netlify/Render if `users.json` is not part of the deployment.** For a production application, use a robust authentication service or a database.
-```
