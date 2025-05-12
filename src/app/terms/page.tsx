@@ -1,3 +1,4 @@
+// src/app/terms/page.tsx
 'use client'; // Needed for dynamic date
 
 import { useState, useEffect } from 'react';

@@ -24,7 +24,7 @@ import {
   MessageSquare,
   Activity,
   ClipboardCheck,
-  Notebook,
+  NotebookIcon as Notebook, // Renamed import to avoid conflict
   Trophy,
   UserPlus,
   Users,
@@ -39,8 +39,8 @@ import {
   Moon,
   Swords,
   Bell,
-  Gift, // Added Gift icon
-  ShoppingBag // Added ShoppingBag icon
+  Gift, 
+  ShoppingBag 
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -60,7 +60,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTheme } from 'next-themes';
 import type { ChallengeInvite } from '@/types';
-import { Badge } from '@/components/ui/badge'; // Imported Badge
+import { Badge } from '@/components/ui/badge'; 
 
 
 // Define Tutorial Steps Configuration
