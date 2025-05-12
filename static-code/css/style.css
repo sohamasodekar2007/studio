@@ -1,0 +1,261 @@
+body {
+    font-family: 'Poppins', sans-serif; /* Using a more modern font */
+    margin: 0;
+    padding: 0;
+    background-color: #f0f2f5; /* Light gray background */
+    color: #333;
+    line-height: 1.6;
+}
+
+header {
+    background: #5e35b1; /* Primary color from main app */
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+header nav {
+    margin-top: 0.5rem;
+}
+
+header nav a {
+    color: #fff;
+    margin: 0 15px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+header nav a:hover {
+    opacity: 0.8;
+}
+
+main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 2rem auto;
+}
+
+#hero {
+    text-align: center;
+    padding: 3rem 1rem;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    margin-bottom: 2rem;
+}
+
+#hero h2 {
+    font-size: 2.5rem;
+    color: #5e35b1;
+    margin-bottom: 1rem;
+}
+
+#hero p {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 1.5rem;
+}
+
+.cta-button {
+    display: inline-block;
+    background-color: #00acc1; /* Accent color */
+    color: white;
+    padding: 0.8rem 1.5rem;
+    text-decoration: none;
+    border-radius: 25px;
+    font-weight: 500;
+    transition: background-color 0.3s;
+}
+
+.cta-button:hover {
+    background-color: #00838f;
+}
+
+#features {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+#features h2 {
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.feature-item {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.feature-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.feature-item img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-bottom: 1rem;
+    border: 3px solid #5e35b130;
+}
+
+.feature-item h3 {
+    font-size: 1.25rem;
+    color: #5e35b1;
+    margin-bottom: 0.5rem;
+}
+
+.feature-item p {
+    font-size: 0.95rem;
+    color: #666;
+}
+
+
+footer {
+    text-align: center;
+    padding: 1.5rem;
+    background: #333;
+    color: #f4f4f4;
+    margin-top: 3rem;
+}
+
+/* Form styling (reused from previous login page) */
+.form-container {
+    max-width: 450px;
+    margin: 3rem auto;
+    padding: 2.5rem;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.form-container h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #5e35b1;
+    font-size: 1.8rem;
+}
+
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #4A5568;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"],
+.form-group input[type="tel"] { /* Added tel */
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1px solid #CBD5E0;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #5e35b1;
+    box-shadow: 0 0 0 2px rgba(94, 53, 177, 0.2);
+}
+
+.form-group button {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    background: #5e35b1;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.05rem;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.form-group button:hover {
+    background: #4a2b8d;
+}
+
+.form-link {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.form-link a {
+    color: #5e35b1;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.form-link a:hover {
+    text-decoration: underline;
+}
+
+/* Admin Nav specific styles */
+.admin-nav {
+    background: #444;
+    padding: 0.75rem 0;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+.admin-nav a {
+    color: white;
+    margin: 0 1rem;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.admin-nav a:hover {
+    text-decoration: underline;
+}
+
+/* Table styles */
+table {
+    width: 100%;
+    margin: 2rem 0;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    border-radius: 8px;
+    overflow: hidden;
+}
+th, td {
+    border: 1px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.9rem;
+}
+th {
+    background-color: #f8fafc;
+    font-weight: 600;
+    color: #4A5568;
+}
+tbody tr:hover {
+    background-color: #f7fafc90;
+}
