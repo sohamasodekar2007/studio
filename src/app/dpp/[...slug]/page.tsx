@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getQuestionsForLesson } from '@/actions/question-bank-query-actions';
 import { saveDppAttempt, getDppProgress, getDppProgressForDateRange } from '@/actions/dpp-progress-actions';
 import type { QuestionBankItem, DifficultyLevel, UserDppLessonProgress, DppAttempt, Notebook } from '@/types';
-import { AlertTriangle, Filter, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb, ArrowLeft, PackageOpen } from 'lucide-react';
+import { AlertTriangle, Filter, ArrowUpNarrowWide, CheckCircle, XCircle, Loader2, History, Bookmark, BookOpen, ChevronRight, Tag, HelpCircle, Sparkles, Repeat, FileText, ImageIcon, ThumbsUp, ThumbsDown, Lightbulb, ArrowLeft, PackageOpen } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -23,10 +23,10 @@ import { getUserNotebooks, addQuestionToNotebooks, createNotebook } from '@/acti
 import AddToNotebookDialog from '@/components/dpp/add-to-notebook-dialog';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress'; 
+import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const DAILY_DPP_GOAL = 10; 
+const DAILY_DPP_GOAL = 10;
 
 type DifficultyFilter = DifficultyLevel | 'All';
 
@@ -42,6 +42,54 @@ const difficultyButtonVariants: Record<DifficultyFilter, string> = {
     'Medium': 'bg-yellow-500 text-white hover:bg-yellow-600 ring-yellow-500/50',
     'Hard': 'bg-red-500 text-white hover:bg-red-600 ring-red-500/50',
 };
+
+// MathJax configuration
+const mathJaxConfig = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true,
+    packages: {'[+]': ['ams', 'color', 'boldsymbol']}
+  },
+  options: {
+    ignoreHtmlClass: 'tex2jax_ignore',
+    processHtmlClass: 'tex2jax_process',
+    renderActions: {
+      find: [10, function (doc: any) {
+        for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+          const display = !!node.type.match(/; *mode=display/);
+          const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
+          const text = document.createTextNode('');
+          if (node.parentNode) {
+            node.parentNode.replaceChild(text, node);
+            math.start = {node: text, delim: '', n: 0};
+            math.end = {node: text, delim: '', n: 0};
+            doc.math.push(math);
+          }
+        }
+      }, '']
+    }
+  },
+  loader: {load: ['[tex]/ams', '[tex]/color', '[tex]/boldsymbol']},
+  startup: {
+    ready: () => {
+      if (typeof window !== 'undefined' && (window as any).MathJax) {
+        (window as any).MathJax.startup.defaultReady();
+        // Queue typeset when MathJax is ready
+        (window as any).MathJax.startup.promise.then(() => {
+          // typesetMathJax(); // This will be called from useEffect instead
+        });
+      }
+    }
+  }
+};
+
+const MathJaxLoader = () => (
+  <div className="flex items-center justify-center py-4">
+    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    <p className="ml-2 text-muted-foreground">Loading Math Content...</p>
+  </div>
+);
 
 
 export default function DppLessonPage() {
@@ -70,19 +118,64 @@ export default function DppLessonPage() {
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
   const [animateCard, setAnimateCard] = useState(false);
+  const [isMathJaxLoading, setIsMathJaxLoading] = useState(true);
 
+
+  // Improved typeset function
   const typesetMathJax = useCallback(() => {
-    if (typeof window !== 'undefined' && (window as any).MathJax && typeof (window as any).MathJax.typesetPromise === 'function') {
-        const elements = document.querySelectorAll('.mathjax-content');
-        if (elements.length > 0) {
-            (window as any).MathJax.typesetPromise(Array.from(elements))
-                .catch((err: any) => console.error("MathJax typeset error (DPP elements):", err));
-        } else {
-            (window as any).MathJax.typesetPromise() 
-                .catch((err: any) => console.error("MathJax typeset error (DPP fallback):", err));
-        }
+    if (typeof window === 'undefined' || !(window as any).MathJax) {
+      setIsMathJaxLoading(true); // Still loading or not available
+      return;
+    }
+    setIsMathJaxLoading(false); // MathJax is available
+
+    try {
+      const MathJax = (window as any).MathJax;
+      
+      // First, clear any previous typeset
+      if (MathJax.typesetClear) { // Check if typesetClear exists
+          MathJax.typesetClear();
+      }
+      
+      // Process both regular content and any new dynamic content
+      const elements = document.querySelectorAll('.mathjax-content, [data-mathjax]');
+      
+      if (elements.length > 0) {
+        MathJax.typesetPromise(Array.from(elements))
+          .catch((err: any) => {
+            console.warn("MathJax typeset error (retrying):", err);
+            // Retry once after a short delay
+            setTimeout(() => {
+              MathJax.typesetPromise(Array.from(elements))
+                .catch((err2: any) => console.error("MathJax retry failed:", err2));
+            }, 500);
+          });
+      } else if (MathJax.typesetPromise) { // Check if typesetPromise exists
+        MathJax.typesetPromise()
+          .catch((err: any) => console.warn("MathJax full document typeset error:", err));
+      }
+    } catch (err) {
+      console.error("MathJax processing error:", err);
     }
   }, []);
+
+  // Improved math syntax conversion function
+  const convertMathSyntax = (text: string | null | undefined) => {
+    if (!text) return '';
+    
+    // First convert \( \) to $ $ for consistency
+    let converted = text.replace(/\\([()])/g, '$1') // Unescape escaped parentheses
+                       .replace(/\\\(/g, '$')       // Convert \( to $
+                       .replace(/\\\)/g, '$')       // Convert \) to $
+                       .replace(/\\\[/g, '$$')       // Convert \[ to $$
+                       .replace(/\\\]/g, '$$');      // Convert \] to $$
+
+    // Handle edge cases where $ might be used as actual currency
+    // This regex tries to avoid escaping already escaped dollar signs or those within math blocks
+    converted = converted.replace(/(?<!\\)\$(?![$\s\(])(?!\d)/g, '\\$');
+    
+    return converted;
+  };
 
   const filteredQuestions = useMemo(() => {
     if (selectedDifficulty === 'All') {
@@ -275,9 +368,6 @@ export default function DppLessonPage() {
         setCurrentQuestionIndex(newIndex);
         setShowSolution(false); 
         setIsCorrect(null);     
-        // Do not clear the answer for the new question automatically. 
-        // Let the user clear it if they want, or see their previous selection if they revisit.
-        // setUserAnswers(prev => ({ ...prev, [filteredQuestions[newIndex].id]: null }));
         setAnimateCard(true);  
     }
   };
@@ -314,7 +404,8 @@ export default function DppLessonPage() {
            return (
                 <div
                    className="prose dark:prose-invert max-w-none mathjax-content mb-4 text-base leading-relaxed"
-                   dangerouslySetInnerHTML={{ __html: q.question.text.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}
+                   dangerouslySetInnerHTML={{ __html: convertMathSyntax(q.question.text) }}
+                   data-mathjax
                 />
            );
        }
@@ -363,7 +454,10 @@ export default function DppLessonPage() {
                         >
                             <RadioGroupItem value={key} id={`${questionId}-${key}`} className="mt-1 border-muted-foreground data-[state=checked]:border-primary focus:ring-primary focus:ring-offset-2" />
                             <span className="font-semibold text-sm">{key}.</span>
-                            <div className="flex-1 mathjax-content text-sm" dangerouslySetInnerHTML={{ __html: value.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                            <div className="flex-1 mathjax-content text-sm" 
+                                 dangerouslySetInnerHTML={{ __html: convertMathSyntax(value) }}
+                                 data-mathjax
+                            ></div>
                               {isAnswerChecked && isCorrectOption && <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 ml-auto flex-shrink-0" />}
                               {isAnswerChecked && isSelected && !isCorrectOption && <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 ml-auto flex-shrink-0" />}
                           </Label>
@@ -390,7 +484,10 @@ export default function DppLessonPage() {
                   </CardHeader>
                   <CardContent className="pb-4">
                       {hasText && (
-                          <div className="prose dark:prose-invert max-w-none mathjax-content text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation.text!.replace(/\$(.*?)\$/g, '\\($1\\)').replace(/\$\$(.*?)\$\$/g, '\\[$1\\]') }}></div>
+                          <div className="prose dark:prose-invert max-w-none mathjax-content text-sm leading-relaxed" 
+                               dangerouslySetInnerHTML={{ __html: convertMathSyntax(q.explanation.text!) }}
+                               data-mathjax
+                          ></div>
                       )}
                       {hasImage && <div className="relative w-full max-w-md h-56 mx-auto mt-4 group hover:scale-105 transition-transform duration-300"><Image src={explanationImagePath!}  alt={`Explanation Image`} fill style={{objectFit:"contain"}} className="rounded-md border shadow-sm group-hover:shadow-lg" data-ai-hint="explanation diagram" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} unoptimized /></div>}
                   </CardContent>
@@ -524,7 +621,20 @@ export default function DppLessonPage() {
 
    return (
      <>
-       <Script id="mathjax-script-dpp" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" strategy="lazyOnload" onLoad={() => { typesetMathJax(); }} />
+       <Script 
+          id="MathJax-script"
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+          strategy="lazyOnload"
+          onLoad={() => {
+            // Initialize with our config
+            (window as any).MathJax = {
+              ...(window as any).MathJax,
+              ...mathJaxConfig
+            };
+            typesetMathJax();
+            setIsMathJaxLoading(false);
+          }}
+        />
        <div className="container mx-auto py-6 px-4 md:py-8 md:px-6 max-w-3xl space-y-8">
         <div className="flex justify-between items-center">
             <Button variant="outline" size="sm" asChild className="hover:bg-muted/50 transition-colors">
@@ -568,62 +678,63 @@ export default function DppLessonPage() {
             ))}
          </div>
 
-         {currentQuestion ? (
-             <Card key={currentQuestion.id} className={cn("shadow-xl hover:shadow-2xl transition-shadow duration-300 border-border overflow-hidden", animateCard && "animate-in fade-in-0 slide-in-from-bottom-5 duration-500")}>
-             <CardHeader className="p-4 md:p-6 bg-card border-b">
-                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                    <CardTitle className="text-lg font-semibold">Question {currentQuestionIndex + 1} <span className="text-muted-foreground font-normal text-sm">of {filteredQuestions.length}</span></CardTitle>
-                    <div className="flex items-center gap-2 flex-wrap"> {renderPyqInfo(currentQuestion)} <Badge variant="secondary" className="text-xs h-6">{currentQuestion.difficulty}</Badge> {renderPreviousAttemptStatus()} </div>
-                 </div>
-             </CardHeader>
-             <CardContent className="p-4 md:p-6 min-h-[200px]"> 
-                {renderQuestionContent(currentQuestion)}
-                {renderOptions(currentQuestion)}
-                
-                <div id="answer-feedback" className={cn(
-                    "transition-all duration-500 ease-out mt-6",
-                    showSolution && isCorrect !== null ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
-                )}>
-                    {showSolution && isCorrect !== null && (
-                        <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm shadow-md", isCorrect ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : "bg-red-50 border-red-300 dark:bg-red-900/30 dark:border-red-700")}>
-                            {isCorrect ? <ThumbsUp className="h-5 w-5" /> : <ThumbsDown className="h-5 w-5" />}
-                            <AlertTitle className={cn("font-semibold",isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
-                            {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
-                        </Alert>
-                    )}
-                </div>
+         {isMathJaxLoading && <MathJaxLoader />}
+         <div className={cn(isMathJaxLoading && "invisible")}>
+             {currentQuestion ? (
+                 <Card key={currentQuestion.id} className={cn("shadow-xl hover:shadow-2xl transition-shadow duration-300 border-border overflow-hidden", animateCard && "animate-in fade-in-0 slide-in-from-bottom-5 duration-500")}>
+                 <CardHeader className="p-4 md:p-6 bg-card border-b">
+                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <CardTitle className="text-lg font-semibold">Question {currentQuestionIndex + 1} <span className="text-muted-foreground font-normal text-sm">of {filteredQuestions.length}</span></CardTitle>
+                        <div className="flex items-center gap-2 flex-wrap"> {renderPyqInfo(currentQuestion)} <Badge variant="secondary" className="text-xs h-6">{currentQuestion.difficulty}</Badge> {renderPreviousAttemptStatus()} </div>
+                     </div>
+                 </CardHeader>
+                 <CardContent className="p-4 md:p-6 min-h-[200px]"> 
+                    {renderQuestionContent(currentQuestion)}
+                    {renderOptions(currentQuestion)}
+                    
+                    <div id="answer-feedback" className={cn(
+                        "transition-all duration-500 ease-out mt-6",
+                        showSolution && isCorrect !== null ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+                    )}>
+                        {showSolution && isCorrect !== null && (
+                            <Alert variant={isCorrect ? "default" : "destructive"} className={cn("text-sm shadow-md", isCorrect ? "bg-green-50 border-green-300 dark:bg-green-900/30 dark:border-green-700" : "bg-red-50 border-red-300 dark:bg-red-900/30 dark:border-red-700")}>
+                                {isCorrect ? <ThumbsUp className="h-5 w-5" /> : <ThumbsDown className="h-5 w-5" />}
+                                <AlertTitle className={cn("font-semibold",isCorrect ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>{isCorrect ? 'Correct!' : 'Incorrect!'}</AlertTitle>
+                                {!isCorrect && <AlertDescription className={cn("text-xs", isCorrect ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>The correct answer was {currentQuestion.correct}.</AlertDescription>}
+                            </Alert>
+                        )}
+                    </div>
 
-                <div className={cn(
-                    "transition-all duration-700 ease-out delay-200",
-                    showSolution && (currentQuestion.explanation.text || currentQuestion.explanation.image) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-                )}>
-                    {showSolution && renderExplanation(currentQuestion)}
-                </div>
-             </CardContent>
-             <CardFooter className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-3 bg-muted/30 border-t">
-                 <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-sm hover:shadow-md border-input">
-                    <Bookmark className="mr-2 h-4 w-4 text-primary" />{isSaving && notebooks.length === 0 ? "Saving..." : "Bookmark"}
-                 </Button>
-                 <div className="flex gap-2 w-full sm:w-auto">
-                    {!showSolution ? (
-                        <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
-                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer
-                        </Button>
-                    ) : (
-                         <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
-                            {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'} <ChevronRight className="ml-1 h-4 w-4"/>
-                         </Button>
-                    )}
-                 </div>
-             </CardFooter>
-             </Card>
-         ) : (
-              <Card className="shadow-md"><CardContent className="p-10 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="h-5 w-5 animate-spin"/>Loading question...</CardContent></Card>
-         )}
+                    <div className={cn(
+                        "transition-all duration-700 ease-out delay-200",
+                        showSolution && (currentQuestion.explanation.text || currentQuestion.explanation.image) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                    )}>
+                        {showSolution && renderExplanation(currentQuestion)}
+                    </div>
+                 </CardContent>
+                 <CardFooter className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-3 bg-muted/30 border-t">
+                     <Button variant="outline" size="sm" onClick={handleOpenNotebookModal} disabled={!user || isLoadingNotebooks || isSaving} className="w-full sm:w-auto transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-sm hover:shadow-md border-input">
+                        <Bookmark className="mr-2 h-4 w-4 text-primary" />{isSaving && notebooks.length === 0 ? "Saving..." : "Bookmark"}
+                     </Button>
+                     <div className="flex gap-2 w-full sm:w-auto">
+                        {!showSolution ? (
+                            <Button onClick={checkAnswer} disabled={userAnswers[currentQuestion.id] === null || userAnswers[currentQuestion.id] === undefined || isSaving} className="flex-1 sm:flex-initial bg-primary hover:bg-primary/90 text-primary-foreground transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
+                                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Check Answer
+                            </Button>
+                        ) : (
+                             <Button onClick={goToNextQuestion} disabled={isSaving} className="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 text-white transform transition-transform duration-150 ease-in-out hover:scale-105 active:scale-95 shadow-md hover:shadow-lg">
+                                {currentQuestionIndex === filteredQuestions.length - 1 ? 'Finish DPP' : 'Next Question'} <ChevronRight className="ml-1 h-4 w-4"/>
+                             </Button>
+                        )}
+                     </div>
+                 </CardFooter>
+                 </Card>
+             ) : (
+                  <Card className="shadow-md"><CardContent className="p-10 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="h-5 w-5 animate-spin"/>Loading question...</CardContent></Card>
+             )}
+        </div>
        </div>
         {currentQuestion && user && (<AddToNotebookDialog isOpen={isNotebookModalOpen} onClose={handleCloseNotebookModal} notebooks={notebooks} onSave={handleSaveToNotebooks} isLoading={isSaving} userId={user.id} onNotebookCreated={handleCreateNotebookCallback} />)}
      </>
    );
  }
-
-    
