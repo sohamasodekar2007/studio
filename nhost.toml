@@ -1,0 +1,36 @@
+# Nhost Configuration File
+# Defines how the Next.js application should be built and deployed on Nhost.
+version = 1
+
+# Serverless Functions configuration for the Next.js app
+# This tells Nhost to treat the entire Next.js application (all routes under "/")
+# as a serverless function, using Nhost's specialized Next.js handler.
+[functions."/"]
+  type = "serverless"
+  # Specify the Node.js runtime version. It's good practice to match this
+  # with the version used in development and other deployment environments (e.g., from .nvmrc or netlify.toml).
+  # The project's netlify.toml specifies NODE_VERSION = "20".
+  runtime = "nodejs20.x"
+  # "next-server" is Nhost's built-in handler for Next.js applications.
+  # It takes care of routing, SSR, API routes, etc.
+  handler = "next-server"
+
+# Build Command:
+# Nhost's Next.js integration typically detects `package.json` and automatically
+# runs `npm run build` (or `yarn build`) during the deployment process.
+# Therefore, `build_command` is usually not needed here for the main Next.js app.
+
+# Environment Variables:
+# It is highly recommended to configure environment variables (e.g., API keys,
+# database credentials, NEXT_PUBLIC_ADMIN_EMAIL, ADMIN_PASSWORD, GOOGLE_GENAI_API_KEY, etc.)
+# directly in the Nhost project dashboard under "Settings" > "Secrets".
+# This is more secure than hardcoding them in this file.
+# Example (for reference, but prefer dashboard):
+# [functions."/"."environment"]
+#   NODE_ENV = "production"
+#   # GOOGLE_GENAI_API_KEY = "your_google_api_key_here" # Better to set in Nhost dashboard
+#   # NEXT_PUBLIC_ADMIN_EMAIL = "admin@example.com"    # Better to set in Nhost dashboard
+
+# For more advanced configurations, such as custom serverless functions (API routes
+# separate from Next.js API routes), Hasura backend settings, or custom storage rules,
+# refer to the Nhost documentation: https://docs.nhost.io/platform/configuration
