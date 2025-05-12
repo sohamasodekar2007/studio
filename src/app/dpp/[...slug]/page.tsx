@@ -78,7 +78,7 @@ export default function DppLessonPage() {
             (window as any).MathJax.typesetPromise(Array.from(elements))
                 .catch((err: any) => console.error("MathJax typeset error (DPP elements):", err));
         } else {
-            (window as any).MathJax.typesetPromise()
+            (window as any).MathJax.typesetPromise() 
                 .catch((err: any) => console.error("MathJax typeset error (DPP fallback):", err));
         }
     }
@@ -123,7 +123,7 @@ export default function DppLessonPage() {
           });
           setAllQuestions(fetchedQuestions);
           setCurrentQuestionIndex(0);
-          setUserAnswers({}); // Reset answers for the new lesson
+          setUserAnswers({}); 
           setShowSolution(false);
           setIsCorrect(null);
         } catch (err) {
@@ -146,19 +146,6 @@ export default function DppLessonPage() {
             getDppProgress(user.id, subject, lesson)
                 .then(progress => {
                     setDppProgress(progress);
-                     // Pre-fill userAnswers with last attempts if available
-                    if (progress && progress.questionAttempts) {
-                        const initialAnswers: Record<string, string | null> = {};
-                        Object.entries(progress.questionAttempts).forEach(([qId, attempts]) => {
-                            if (attempts.length > 0) {
-                                // Here, we only pre-fill if we want the UI to show previous *selection*.
-                                // For DPPs, it's usually better to start fresh for each question interaction
-                                // and use `dppProgress` to show *past attempt status* (Correct/Incorrect).
-                                // So, we might not pre-fill `userAnswers` here from `dppProgress`.
-                            }
-                        });
-                        // setUserAnswers(initialAnswers); // Decide if you want to pre-fill selections
-                    }
                 })
                 .catch(err => console.error("Failed to load DPP progress:", err))
                 .finally(() => setIsLoadingProgress(false));
@@ -185,16 +172,16 @@ export default function DppLessonPage() {
   const handleDifficultyFilter = (difficulty: DifficultyFilter) => {
     setSelectedDifficulty(difficulty);
     setCurrentQuestionIndex(0);
-    setUserAnswers({}); // Clear selections when filter changes
+    setUserAnswers({}); 
     setShowSolution(false);
     setIsCorrect(null);
   };
 
   const handleOptionSelect = (questionId: string, selectedOption: string) => {
-      if (showSolution) return; // Don't allow changing answer after solution is shown
+      if (showSolution) return; 
       setUserAnswers(prev => ({ ...prev, [questionId]: selectedOption }));
-      setIsCorrect(null); // Reset correctness state as answer changed
-      setShowSolution(false); // Keep solution hidden
+      setIsCorrect(null); 
+      setShowSolution(false); 
   };
 
   const checkDailyGoalAndNotify = useCallback(async () => {
@@ -214,7 +201,6 @@ export default function DppLessonPage() {
         let solvedTodayCount = 0;
         todayProgressData.forEach(lessonProg => {
             Object.values(lessonProg.questionAttempts).forEach(attemptsArray => {
-                // Consider a question solved if it has any attempt today
                 if (attemptsArray.some(att => att.timestamp >= new Date(todayStartISO).getTime() && att.timestamp <= new Date(todayEndISO).getTime())) {
                      solvedTodayCount++;
                 }
@@ -226,7 +212,7 @@ export default function DppLessonPage() {
                 title: "🎉 Daily Goal Achieved! 🎉",
                 description: `Great job! You've completed your daily goal of ${DAILY_DPP_GOAL} DPP questions. Keep it up!`,
                 duration: 7000,
-                className: 'bg-green-50 border-green-200 dark:bg-green-900/50 dark:border-green-700', // Custom styling for goal toast
+                className: 'bg-green-50 border-green-200 dark:bg-green-900/50 dark:border-green-700', 
             });
             localStorage.setItem(goalAchievedKey, 'true');
         }
@@ -251,7 +237,7 @@ export default function DppLessonPage() {
        const feedbackElement = document.getElementById('answer-feedback');
         if (feedbackElement) {
             feedbackElement.classList.remove('animate-pulse', 'animate-bounce', 'animate-wiggle'); 
-            void feedbackElement.offsetWidth; // Trigger reflow
+            void feedbackElement.offsetWidth; 
             if (correct) {
                 feedbackElement.classList.add('animate-bounce'); 
             } else {
@@ -287,10 +273,12 @@ export default function DppLessonPage() {
   const navigateToQuestion = (newIndex: number) => {
     if (newIndex >= 0 && newIndex < filteredQuestions.length) {
         setCurrentQuestionIndex(newIndex);
-        setShowSolution(false); // Hide solution for the new question
-        setIsCorrect(null);     // Reset correctness state for the new question
-        // setUserAnswers(prev => ({ ...prev, [filteredQuestions[newIndex].id]: null })); // Clear selection for new question
-        setAnimateCard(true);  // Trigger animation for the card
+        setShowSolution(false); 
+        setIsCorrect(null);     
+        // Do not clear the answer for the new question automatically. 
+        // Let the user clear it if they want, or see their previous selection if they revisit.
+        // setUserAnswers(prev => ({ ...prev, [filteredQuestions[newIndex].id]: null }));
+        setAnimateCard(true);  
     }
   };
 
@@ -335,13 +323,13 @@ export default function DppLessonPage() {
 
     const renderOptions = (q: QuestionBankItem) => {
         const questionId = q.id;
-        const selectedOption = userAnswers[questionId]; // This is the user's *current session* selection
+        const selectedOption = userAnswers[questionId]; 
         const isAnswerChecked = showSolution;
         const correctOption = q.correct;
 
         return (
             <RadioGroup
-                value={selectedOption ?? undefined} // Use undefined if null/undefined for no initial selection
+                value={selectedOption ?? undefined} 
                 onValueChange={(value) => handleOptionSelect(questionId, value)}
                 className="space-y-3 mt-6"
                 disabled={showSolution || isSaving}
@@ -581,7 +569,7 @@ export default function DppLessonPage() {
          </div>
 
          {currentQuestion ? (
-             <Card className={cn("shadow-xl hover:shadow-2xl transition-shadow duration-300 border-border overflow-hidden", animateCard && "animate-in fade-in-0 slide-in-from-bottom-5 duration-500")}>
+             <Card key={currentQuestion.id} className={cn("shadow-xl hover:shadow-2xl transition-shadow duration-300 border-border overflow-hidden", animateCard && "animate-in fade-in-0 slide-in-from-bottom-5 duration-500")}>
              <CardHeader className="p-4 md:p-6 bg-card border-b">
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <CardTitle className="text-lg font-semibold">Question {currentQuestionIndex + 1} <span className="text-muted-foreground font-normal text-sm">of {filteredQuestions.length}</span></CardTitle>
@@ -637,3 +625,5 @@ export default function DppLessonPage() {
      </>
    );
  }
+
+    
