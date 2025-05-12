@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-'use client'; // AppLayout is client, so this can be client or server depending on AppLayout
+'use client'; 
 
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
@@ -32,7 +32,7 @@ export default function RootLayout({
 
     const handleSelectStart = (event: Event) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return; // Allow text selection in input fields
+        return; 
       }
       event.preventDefault();
     };
@@ -52,7 +52,6 @@ export default function RootLayout({
       <head>
         <title>EduNexus - MHT-CET, JEE, NEET Test Series</title>
         <meta name="description" content="Your ultimate destination for MHT-CET, JEE, and NEET exam preparation with EduNexus. Practice tests, DPPs, performance analysis, and more." />
-        {/* Favicon links - ensure these files exist in the public directory */}
         <link rel="icon" href="/EduNexus-logo-black.jpg" type="image/jpeg" media="(prefers-color-scheme: light)" />
         <link rel="icon" href="/EduNexus-logo-white.jpg" type="image/jpeg" media="(prefers-color-scheme: dark)" />
 
@@ -75,7 +74,6 @@ export default function RootLayout({
             };
           `}
         </Script>
-        {/* Ensure MathJax loads, consider 'afterInteractive' if 'lazyOnload' causes issues with initial render */}
         <Script
           id="mathjax-script"
           strategy="afterInteractive" 
@@ -83,8 +81,8 @@ export default function RootLayout({
         />
       </head>
       <body className={`antialiased font-sans bg-background text-foreground`}>
-         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-           <AuthProvider>
+        <AuthProvider>
+           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
               {showAppLayout ? (
                 <AppLayout>
                   {children}
@@ -93,8 +91,8 @@ export default function RootLayout({
                 <>{children}</> 
               )}
               <Toaster />
-           </AuthProvider>
-         </ThemeProvider>
+           </ThemeProvider>
+         </AuthProvider>
       </body>
     </html>
   );
