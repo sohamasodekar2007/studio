@@ -2,6 +2,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+// Add this near your other imports
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -43,7 +44,7 @@ const difficultyButtonVariants: Record<DifficultyFilter, string> = {
     'Hard': 'bg-red-500 text-white hover:bg-red-600 ring-red-500/50',
 };
 
-// MathJax configuration
+// MathJax configuration (add this before your component)
 const mathJaxConfig = {
   tex: {
     inlineMath: [['$', '$'], ['\\(', '\\)']],
@@ -52,20 +53,20 @@ const mathJaxConfig = {
     packages: {'[+]': ['ams', 'color', 'boldsymbol']}
   },
   options: {
-    ignoreHtmlClass: 'tex2jax_ignore',
-    processHtmlClass: 'tex2jax_process',
+    ignoreHtmlClass: 'tex2jax_ignore', // Avoid processing elements with this class
+    processHtmlClass: 'tex2jax_process', // Process elements with this class
     renderActions: {
       find: [10, function (doc: any) {
         for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
           const display = !!node.type.match(/; *mode=display/);
           const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display);
           const text = document.createTextNode('');
-          if (node.parentNode) {
+          if (node.parentNode) { // Ensure node has a parent before replacing
             node.parentNode.replaceChild(text, node);
-            math.start = {node: text, delim: '', n: 0};
-            math.end = {node: text, delim: '', n: 0};
-            doc.math.push(math);
           }
+          math.start = {node: text, delim: '', n: 0};
+          math.end = {node: text, delim: '', n: 0};
+          doc.math.push(math);
         }
       }, '']
     }
@@ -75,10 +76,6 @@ const mathJaxConfig = {
     ready: () => {
       if (typeof window !== 'undefined' && (window as any).MathJax) {
         (window as any).MathJax.startup.defaultReady();
-        // Queue typeset when MathJax is ready
-        (window as any).MathJax.startup.promise.then(() => {
-          // typesetMathJax(); // This will be called from useEffect instead
-        });
       }
     }
   }
@@ -121,36 +118,30 @@ export default function DppLessonPage() {
   const [isMathJaxLoading, setIsMathJaxLoading] = useState(true);
 
 
-  // Improved typeset function
+  // Corrected typesetMathJax function
   const typesetMathJax = useCallback(() => {
-    if (typeof window === 'undefined' || !(window as any).MathJax) {
-      setIsMathJaxLoading(true); // Still loading or not available
+    if (typeof window === 'undefined' || !(window as any).MathJax || !(window as any).MathJax.typesetPromise) {
+      setIsMathJaxLoading(true);
       return;
     }
-    setIsMathJaxLoading(false); // MathJax is available
+    setIsMathJaxLoading(false);
 
     try {
       const MathJax = (window as any).MathJax;
-      
-      // First, clear any previous typeset
-      if (MathJax.typesetClear) { // Check if typesetClear exists
-          MathJax.typesetClear();
+      if (MathJax.typesetClear) {
+        MathJax.typesetClear();
       }
-      
-      // Process both regular content and any new dynamic content
       const elements = document.querySelectorAll('.mathjax-content, [data-mathjax]');
-      
       if (elements.length > 0) {
         MathJax.typesetPromise(Array.from(elements))
           .catch((err: any) => {
             console.warn("MathJax typeset error (retrying):", err);
-            // Retry once after a short delay
             setTimeout(() => {
               MathJax.typesetPromise(Array.from(elements))
                 .catch((err2: any) => console.error("MathJax retry failed:", err2));
             }, 500);
           });
-      } else if (MathJax.typesetPromise) { // Check if typesetPromise exists
+      } else {
         MathJax.typesetPromise()
           .catch((err: any) => console.warn("MathJax full document typeset error:", err));
       }
@@ -159,23 +150,19 @@ export default function DppLessonPage() {
     }
   }, []);
 
-  // Improved math syntax conversion function
-  const convertMathSyntax = (text: string | null | undefined) => {
+  // Corrected convertMathSyntax function
+  const convertMathSyntax = (text: string | null | undefined): string => {
     if (!text) return '';
-    
-    // First convert \( \) to $ $ for consistency
-    let converted = text.replace(/\\([()])/g, '$1') // Unescape escaped parentheses
-                       .replace(/\\\(/g, '$')       // Convert \( to $
-                       .replace(/\\\)/g, '$')       // Convert \) to $
-                       .replace(/\\\[/g, '$$')       // Convert \[ to $$
-                       .replace(/\\\]/g, '$$');      // Convert \] to $$
-
-    // Handle edge cases where $ might be used as actual currency
-    // This regex tries to avoid escaping already escaped dollar signs or those within math blocks
-    converted = converted.replace(/(?<!\\)\$(?![$\s\(])(?!\d)/g, '\\$');
-    
+    let converted = text;
+    // Convert \(...\) to $...$
+    converted = converted.replace(/\\\(/g, '$').replace(/\\\)/g, '$');
+    // Convert \[...\] to $$...$$
+    converted = converted.replace(/\\\[/g, '$$').replace(/\\\]/g, '$$');
+    // IMPORTANT: Do NOT add other replaces like `text.replace(/\\([()])/g, '$1')`
+    // as that breaks valid LaTeX like `\text{...}` by removing the backslash.
     return converted;
   };
+
 
   const filteredQuestions = useMemo(() => {
     if (selectedDifficulty === 'All') {
@@ -189,15 +176,15 @@ export default function DppLessonPage() {
   }, [filteredQuestions, currentQuestionIndex]);
 
   useEffect(() => {
-    if (!isLoading && currentQuestion) {
+    if (!isLoading && currentQuestion && !isMathJaxLoading) { 
         setAnimateCard(true); 
         const timerId = setTimeout(() => {
             typesetMathJax();
             setAnimateCard(false); 
-        }, 50); 
+        }, 100); // Increased delay slightly
         return () => clearTimeout(timerId);
     }
-  }, [isLoading, currentQuestion, showSolution, typesetMathJax]);
+  }, [isLoading, currentQuestion, showSolution, typesetMathJax, isMathJaxLoading]);
 
   useEffect(() => {
     if (Array.isArray(slug) && slug.length === 2) {
@@ -365,10 +352,22 @@ export default function DppLessonPage() {
 
   const navigateToQuestion = (newIndex: number) => {
     if (newIndex >= 0 && newIndex < filteredQuestions.length) {
+        const prevSelectedAnswer = userAnswers[currentQuestion.id];
+        if(!showSolution && prevSelectedAnswer !== undefined && prevSelectedAnswer !== null){
+            // If an answer was selected for the current question but not submitted, mark as unanswered if navigating away
+            //This logic might be too aggressive or not desired, depends on exact UX goal
+            //For now, let's keep it simple and just clear the selection display
+        }
+
         setCurrentQuestionIndex(newIndex);
-        setShowSolution(false); 
-        setIsCorrect(null);     
-        setAnimateCard(true);  
+        // Reset states for the new question
+        const nextQuestionId = filteredQuestions[newIndex]?.id;
+        if (nextQuestionId && userAnswers[nextQuestionId] === undefined) { // If new question hasn't been answered yet
+            setUserAnswers(prev => ({ ...prev, [nextQuestionId]: null })); // Mark as not having a selection
+        }
+        setShowSolution(false);
+        setIsCorrect(null);
+        setAnimateCard(true);
     }
   };
 
@@ -621,21 +620,27 @@ export default function DppLessonPage() {
 
    return (
      <>
-       <Script 
-          id="MathJax-script"
-          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
-          strategy="lazyOnload"
-          onLoad={() => {
-            // Initialize with our config
-            (window as any).MathJax = {
-              ...(window as any).MathJax,
-              ...mathJaxConfig
-            };
-            typesetMathJax();
-            setIsMathJaxLoading(false);
-          }}
-        />
-       <div className="container mx-auto py-6 px-4 md:py-8 md:px-6 max-w-3xl space-y-8">
+      <Script 
+        id="MathJax-script"
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        strategy="lazyOnload"
+        onLoad={() => {
+          if (typeof window !== 'undefined' && (window as any).MathJax) {
+              (window as any).MathJax.config = {
+                  ...(window as any).MathJax.config,
+                  ...mathJaxConfig
+              };
+              (window as any).MathJax.startup.promise.then(() => {
+                  console.log("MathJax fully loaded and configured from Script onLoad.");
+                  setIsMathJaxLoading(false);
+                  typesetMathJax(); 
+              });
+          } else {
+               setIsMathJaxLoading(false); // MathJax couldn't be found, stop loading state
+          }
+        }}
+      />
+       <div className={cn("container mx-auto py-6 px-4 md:py-8 md:px-6 max-w-3xl space-y-8", isMathJaxLoading && "invisible")}>
         <div className="flex justify-between items-center">
             <Button variant="outline" size="sm" asChild className="hover:bg-muted/50 transition-colors">
                 <Link href="/dpp" className="inline-flex items-center gap-1.5">
